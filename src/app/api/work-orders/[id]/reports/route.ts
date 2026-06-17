@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createReport } from '@/lib/mes-service';
+import { createReport, getWorkOrder } from '@/lib/mes-service';
 import { recomputeDailyQualityReport } from '@/lib/daily-quality-service';
 
 export async function POST(
@@ -9,6 +9,10 @@ export async function POST(
   try {
     const { id } = await params;
     const body = await request.json();
+
+    // 兜底：报工产线信息从工单取
+    const woWrap = await getWorkOrder(id);
+    const wo = woWrap?.workOrder;
 
     const operatorName = body.operator_name ?? body.operator;
     if (!operatorName || !body.process_name || !body.line_code || !body.batch_no) {
@@ -31,8 +35,9 @@ export async function POST(
       operation_id: body.operation_id ?? body.process_id,
       process_name: body.process_name,
       operator_name: operatorName,
-      line_code: body.line_code,
-      line_name: body.line_name,
+      // line_code/line_name 兜底从工单取，避免历史数据 / 前端没传时丢失
+      line_code: body.line_code || wo?.line_code,
+      line_name: body.line_name || wo?.line_name,
       shift_no: body.shift_no ?? '白班',
       good_quantity: good,
       scrap_quantity: scrap,

@@ -304,7 +304,8 @@ export async function createWorkOrder(input: CreateWorkOrderInput) {
 
   const orderNo = input.order_no?.trim() || generateOrderNo();
   const priority = Math.max(1, Math.min(5, input.priority ?? 3));
-  const finalLineName = lineName ?? (line as { name: string }).name;
+  // 注意：lineName 可能为空字符串，需用 || 兜底，?? 不会因为空字符串触发
+  const finalLineName = lineName || (line as { name: string }).name;
   const ws = line as { workshop_code: string; workshop_name: string };
   const productName = input.product_name?.trim() || (prod as { name: string }).name;
   const productSpec = input.specification ?? (prod as { specification?: string | null }).specification ?? null;
