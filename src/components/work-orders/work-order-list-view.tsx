@@ -35,8 +35,8 @@ export function WorkOrderListView() {
   const router = useRouter();
   const [orders, setOrders] = useState<WorkOrder[] | null>(null);
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [lineFilter, setLineFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<Set<string>>(new Set(["开立", "下发", "生产中", "暂停"]));
+  const [lineFilter, setLineFilter] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
@@ -69,8 +69,8 @@ export function WorkOrderListView() {
   const filtered = useMemo(() => {
     if (!orders) return [];
     const list = orders.filter((o) => {
-      if (statusFilter !== "all" && o.status !== statusFilter) return false;
-      if (lineFilter !== "all" && o.line_name !== lineFilter) return false;
+      if (statusFilter.size > 0 && !statusFilter.has(o.status)) return false;
+      if (lineFilter.size > 0 && !lineFilter.has(o.line_name ?? "")) return false;
       if (search) {
         const s = search.toLowerCase();
         return (
@@ -163,17 +163,67 @@ export function WorkOrderListView() {
                 className="border-slate-800 bg-slate-950 pl-8 text-slate-200 placeholder:text-slate-600"
               />
             </div>
-            <div className="flex flex-wrap gap-1.5">
-              <FilterChip label="全部状态" active={statusFilter === "all"} onClick={() => setStatusFilter("all")} />
-              {(["开立", "下发", "生产中", "暂停", "完工", "超期完工"] as const).map((s) => (
-                <FilterChip key={s} label={WO_STATUS_LABELS[s]} active={statusFilter === s} onClick={() => setStatusFilter(s)} />
-              ))}
+            <div className="flex flex-wrap items-center gap-3 border border-slate-800 bg-slate-950/40 px-2 py-1.5">
+              <span className="font-mono text-[10px] uppercase tracking-wider text-slate-500">状态</span>
+              {(["开立", "下发", "生产中", "暂停", "完工", "超期完工"] as const).map((s) => {
+                const checked = statusFilter.has(s);
+                return (
+                  <label key={s} className="flex cursor-pointer items-center gap-1 font-mono text-[11px] text-slate-300 hover:text-slate-100">
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => {
+                        setStatusFilter((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(s)) next.delete(s);
+                          else next.add(s);
+                          return next;
+                        });
+                      }}
+                      className="h-3 w-3 cursor-pointer accent-orange-500"
+                    />
+                    {WO_STATUS_LABELS[s]}
+                  </label>
+                );
+              })}
+              <button
+                type="button"
+                onClick={() => setStatusFilter(new Set())}
+                className="ml-1 border border-slate-800 px-1.5 font-mono text-[10px] text-slate-500 hover:border-slate-600 hover:text-slate-300"
+              >
+                清空
+              </button>
             </div>
-            <div className="flex flex-wrap gap-1.5">
-              <FilterChip label="全部产线" active={lineFilter === "all"} onClick={() => setLineFilter("all")} />
-              {lines.map((l) => (
-                <FilterChip key={l} label={l} active={lineFilter === l} onClick={() => setLineFilter(l)} />
-              ))}
+            <div className="flex flex-wrap items-center gap-3 border border-slate-800 bg-slate-950/40 px-2 py-1.5">
+              <span className="font-mono text-[10px] uppercase tracking-wider text-slate-500">产线</span>
+              {lines.map((l) => {
+                const checked = lineFilter.has(l);
+                return (
+                  <label key={l} className="flex cursor-pointer items-center gap-1 font-mono text-[11px] text-slate-300 hover:text-slate-100">
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => {
+                        setLineFilter((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(l)) next.delete(l);
+                          else next.add(l);
+                          return next;
+                        });
+                      }}
+                      className="h-3 w-3 cursor-pointer accent-orange-500"
+                    />
+                    {l}
+                  </label>
+                );
+              })}
+              <button
+                type="button"
+                onClick={() => setLineFilter(new Set())}
+                className="ml-1 border border-slate-800 px-1.5 font-mono text-[10px] text-slate-500 hover:border-slate-600 hover:text-slate-300"
+              >
+                清空
+              </button>
             </div>
           </div>
         </CardContent>
