@@ -564,19 +564,31 @@ function CreateWorkOrderDialog({
   }, []);
 
   /** 选中产品后自动带入产品名称/规格/默认产线；返工订单锁定为原产线 */
+  // 把"短产线码"（A/B）归一化为数据库用的"LINE-A/LINE-B"
+  const normalizeLineCode = (code: string | null | undefined): string => {
+    if (!code) return "";
+    const c = code.trim();
+    if (c.toUpperCase() === "A" || c.toUpperCase() === "B") return `LINE-${c.toUpperCase()}`;
+    return c;
+  };
+
   function onProductPicked(p: Product | null) {
     if (!p) return;
     setForm((f) => {
-      const next = { ...f, product_name: p.name, specification: p.specification && p.specification !== "—" ? p.specification : "" };
+      const spec = p.specification && p.specification !== "—" ? p.specification : "";
+      const lineCode = normalizeLineCode(p.default_line_code);
+      const lineName = p.default_line_name ||
+        (lineCode === "LINE-A" ? "A线" : lineCode === "LINE-B" ? "B线" : "");
+      const next: typeof f = { ...f, product_name: p.name, specification: spec };
       if (f.order_type === "返工") {
-        // 返工订单保持原产线，不覆盖
-        if (!f.line_code && p.default_line_code) {
-          next.line_code = p.default_line_code;
-          next.rework_source_line_name = p.default_line_name || "";
+        // 返工订单保持原产线，未填则使用产品的默认产线
+        if (!f.line_code && lineCode) {
+          next.line_code = lineCode;
+          next.rework_source_line_name = lineName;
         }
       } else {
-        if (p.default_line_code) {
-          next.line_code = p.default_line_code;
+        if (lineCode) {
+          next.line_code = lineCode;
           next.rework_source_line_name = "";
         }
       }
