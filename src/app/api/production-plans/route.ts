@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { listPlans, updatePlan, getWorkOrder, addPlan } from '@/lib/mes-service';
+import { listPlans, updatePlan, getWorkOrder, addPlan, deletePlan } from '@/lib/mes-service';
 import { getSupabaseClient } from '@/storage/database/supabase-client';
 import { getProductionDate } from '@/lib/date-utils';
 
@@ -121,6 +121,21 @@ export async function POST(request: NextRequest) {
   } catch (e) {
     console.error('addPlan failed:', e);
     const message = e instanceof Error ? e.message : '创建排产失败';
+    return NextResponse.json({ success: false, error: message }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const sp = request.nextUrl.searchParams;
+    const id = sp.get('id');
+    if (!id) {
+      return NextResponse.json({ success: false, error: '缺少计划 id' }, { status: 400 });
+    }
+    await deletePlan(id);
+    return NextResponse.json({ success: true });
+  } catch (e) {
+    const message = e instanceof Error ? e.message : '删除计划失败';
     return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
 }
