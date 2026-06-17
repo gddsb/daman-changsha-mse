@@ -11,16 +11,25 @@ import {
   FileBarChart,
   ChevronsLeft,
   ChevronsRight,
+  Settings,
+  Package,
+  Cog,
+  AlertOctagon,
+  ChevronDown,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useSidebar } from './sidebar-context';
 
-const NAV = [
+const PRIMARY_NAV = [
   { href: '/', label: '生产看板', icon: LayoutDashboard, exact: true },
   { href: '/work-orders', label: '工单管理', icon: ClipboardList },
   { href: '/production-plan', label: '七天计划', icon: CalendarRange },
   { href: '/quality-inspection', label: '质量检验', icon: ShieldCheck },
   { href: '/quality-report', label: '质量日报', icon: FileBarChart },
+];
+
+const SETTINGS_NAV = [
+  { href: '/settings/products', label: '产品信息', icon: Package },
 ];
 
 export function Sidebar() {
@@ -67,8 +76,8 @@ export function Sidebar() {
       </div>
 
       {/* 导航 */}
-      <nav className="flex-1 space-y-0.5 p-2">
-        {NAV.map((item) => {
+      <nav className="flex-1 space-y-0.5 overflow-y-auto p-2">
+        {PRIMARY_NAV.map((item) => {
           const Icon = item.icon;
           const isActive = item.exact
             ? pathname === item.href
@@ -97,6 +106,44 @@ export function Sidebar() {
               {!collapsed && isActive && (
                 <span className="ml-auto h-1.5 w-1.5 bg-sidebar-primary" />
               )}
+              {collapsed && isActive && (
+                <span className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 bg-sidebar-primary" />
+              )}
+            </Link>
+          );
+        })}
+
+        {/* 参数设置分组 */}
+        {!collapsed && (
+          <div className="px-3 pt-4 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+            参数设置
+          </div>
+        )}
+        {collapsed && <div className="my-2 mx-2 border-t border-sidebar-border" />}
+        {SETTINGS_NAV.map((item) => {
+          const Icon = item.icon;
+          const isActive = pathname?.startsWith(item.href);
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              title={collapsed ? item.label : undefined}
+              className={cn(
+                'group relative flex h-9 items-center text-sm transition-colors',
+                collapsed ? 'justify-center px-2' : 'gap-3 px-3',
+                isActive
+                  ? 'bg-sidebar-primary/10 text-sidebar-primary'
+                  : 'text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
+              )}
+            >
+              <Icon
+                className={cn(
+                  'h-4 w-4 shrink-0 transition-colors',
+                  isActive ? 'text-sidebar-primary' : 'text-muted-foreground group-hover:text-foreground',
+                )}
+                strokeWidth={1.5}
+              />
+              {!collapsed && <span className="font-medium">{item.label}</span>}
               {collapsed && isActive && (
                 <span className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 bg-sidebar-primary" />
               )}

@@ -157,6 +157,8 @@ export interface Product {
   unit: string | null;
   process_route: string | null;
   customer_name: string | null;
+  default_line_code: string | null;
+  default_line_name: string | null;
 }
 
 export interface Workshop {

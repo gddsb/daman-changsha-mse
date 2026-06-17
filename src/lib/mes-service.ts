@@ -175,6 +175,8 @@ const toProductView = (r: Record<string, unknown>): Product => ({
   unit: cn(r.unit) || "罐",
   process_route: cn(r.process_route),
   customer_name: cn(r.customer_name),
+  default_line_code: cn(r.default_line_code),
+  default_line_name: cn(r.default_line_name),
 });
 
 const toWorkshopView = (r: Record<string, unknown>): Workshop => ({
@@ -232,7 +234,7 @@ export async function createWorkOrder(input: CreateWorkOrderInput) {
   // 校验产品
   const { data: prod, error: pErr } = await c
     .from("products")
-    .select("code, name, specification, unit")
+    .select("code, name, specification, unit, default_line_code, default_line_name")
     .eq("code", input.product_code)
     .maybeSingle();
   if (pErr) throw pErr;
@@ -244,22 +246,39 @@ export async function createWorkOrder(input: CreateWorkOrderInput) {
     throw err;
   }
 
+  // 返工订单默认原产线（如果入参未传 line_code）
+  let lineCode = input.line_code;
+  let lineName = input.line_name;
+  if (!lineCode) {
+    const fallbackLine = (prod as { default_line_code?: string | null }).default_line_code;
+    if (!fallbackLine) {
+      const err: Error & { status?: number } = new Error(
+        `物料 ${input.product_code} 未设置默认产线，请在参数设置中配置后重试`
+      );
+      err.status = 400;
+      throw err;
+    }
+    lineCode = fallbackLine;
+    const _lineNameFromProd = (prod as { default_line_name?: string | null }).default_line_name;
+    lineName = _lineNameFromProd ?? undefined;
+  }
+
   // 校验产线
   const { data: line, error: lErr } = await c
     .from("production_lines")
     .select("code, name, workshop_code, workshop_name")
-    .eq("code", input.line_code)
+    .eq("code", lineCode)
     .maybeSingle();
   if (lErr) throw lErr;
   if (!line) {
-    const err: Error & { status?: number } = new Error(`产线 ${input.line_code} 不存在`);
+    const err: Error & { status?: number } = new Error(`产线 ${lineCode} 不存在`);
     err.status = 400;
     throw err;
   }
 
   const orderNo = input.order_no?.trim() || generateOrderNo();
   const priority = Math.max(1, Math.min(5, input.priority ?? 3));
-  const lineName = input.line_name ?? (line as { name: string }).name;
+  const finalLineName = lineName ?? (line as { name: string }).name;
   const ws = line as { workshop_code: string; workshop_name: string };
   const productName = input.product_name?.trim() || (prod as { name: string }).name;
   const productSpec = input.specification ?? (prod as { specification?: string | null }).specification ?? null;
@@ -281,8 +300,8 @@ export async function createWorkOrder(input: CreateWorkOrderInput) {
       priority,
       workshop_code: ws.workshop_code,
       workshop_name: ws.workshop_name,
-      line_code: input.line_code,
-      line_name: lineName,
+      line_code: lineCode,
+      line_name: finalLineName,
       customer_name: input.customer_name ?? null,
       planned_start_date: input.planned_start_date ?? new Date().toISOString(),
       planned_end_date: input.planned_end_date ?? new Date(Date.now() + 86400000 * 3).toISOString(),
@@ -297,9 +316,9 @@ export async function createWorkOrder(input: CreateWorkOrderInput) {
     work_order_id: (data as { id: string }).id,
     sequence: idx + 1,
     operation_name: name,
-    workstation: lineName === "A线" ? "A线主控台" : "B线主控台",
-    line_code: input.line_code,
-    line_name: lineName,
+    workstation: finalLineName === "A线" ? "A线主控台" : "B线主控台",
+    line_code: lineCode,
+    line_name: finalLineName,
     standard_time_minutes: Math.max(30, Math.round(input.planned_quantity / 500)),
     status: "pending",
     good_quantity: 0,
@@ -314,8 +333,8 @@ export async function createWorkOrder(input: CreateWorkOrderInput) {
   const planDateStr = `${planDate.getFullYear()}-${String(planDate.getMonth() + 1).padStart(2, "0")}-${String(planDate.getDate()).padStart(2, "0")}`;
   await c.from("production_plans").insert({
     plan_date: planDateStr,
-    line_code: input.line_code,
-    line_name: lineName,
+    line_code: lineCode,
+    line_name: finalLineName,
     work_order_id: (data as { id: string }).id,
     work_order_no: orderNo,
     product_code: input.product_code,
@@ -731,9 +750,39 @@ export async function listDefectCodes() {
 
 export async function listProducts(): Promise<Product[]> {
   const c = getSupabaseClient();
-  const { data, error } = await c.from("products").select("*").order("code", { ascending: true }).limit(200);
+  const { data, error } = await c.from("products").select("*").order("code", { ascending: true }).limit(500);
   if (error) throw error;
   return (data ?? []).map(toProductView);
+}
+
+export interface UpdateProductInput {
+  id: string;
+  name?: string;
+  specification?: string | null;
+  unit?: string | null;
+  process_route?: string | null;
+  default_line_code?: string | null;
+  default_line_name?: string | null;
+}
+
+export async function updateProduct(input: UpdateProductInput): Promise<Product> {
+  const c = getSupabaseClient();
+  const updates: Record<string, unknown> = {};
+  if (input.name !== undefined) updates.name = input.name;
+  if (input.specification !== undefined) updates.specification = input.specification;
+  if (input.unit !== undefined) updates.unit = input.unit;
+  if (input.process_route !== undefined) updates.process_route = input.process_route;
+  if (input.default_line_code !== undefined) updates.default_line_code = input.default_line_code;
+  if (input.default_line_name !== undefined) updates.default_line_name = input.default_line_name;
+
+  const { data, error } = await c
+    .from("products")
+    .update(updates)
+    .eq("id", input.id)
+    .select()
+    .single();
+  if (error) throw error;
+  return toProductView(data as Record<string, unknown>);
 }
 
 // ==================== 车间 ====================

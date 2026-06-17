@@ -1,64 +1,65 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { listWorkOrders, createWorkOrder } from '@/lib/mes-service';
+import { NextRequest, NextResponse } from "next/server";
+import { createWorkOrder, listWorkOrders } from "@/lib/mes-service";
 
-export async function GET(request: NextRequest) {
+export async function GET(req: NextRequest) {
+  const { searchParams } = new URL(req.url);
+  const status = searchParams.get("status") || undefined;
+  const line = searchParams.get("line_code") || searchParams.get("line") || undefined;
+  const keyword = searchParams.get("q") || searchParams.get("keyword") || undefined;
+  const limit = searchParams.get("limit") ? Number(searchParams.get("limit")) : undefined;
   try {
-    const sp = request.nextUrl.searchParams;
-    const status = sp.get('status') ?? undefined;
-    const line = sp.get('line_code') ?? undefined;
-    const keyword = sp.get('search') ?? undefined;
-    const limit = sp.get('limit') ? Number(sp.get('limit')) : undefined;
     const data = await listWorkOrders({ status, line, keyword, limit });
     return NextResponse.json({ success: true, data });
   } catch (e) {
-    const message = e instanceof Error ? e.message : '查询工单失败';
-    return NextResponse.json(
-      { success: false, error: message },
-      { status: 500 },
-    );
+    const message = e instanceof Error ? e.message : "服务异常";
+    console.error("listWorkOrders failed:", e);
+    return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
 }
 
-export async function POST(request: NextRequest) {
+export async function POST(req: NextRequest) {
   try {
-    const body = await request.json();
-    if (!body.product_code || !body.planned_quantity || !body.line_code) {
+    const body = await req.json();
+    if (!body.product_code) {
       return NextResponse.json(
-        { success: false, error: '产品/计划数量/产线为必填' },
-        { status: 400 },
+        { success: false, error: "缺少料号 product_code" },
+        { status: 400 }
       );
     }
-    if (Number(body.planned_quantity) <= 0) {
+    if (!body.planned_quantity || Number(body.planned_quantity) <= 0) {
       return NextResponse.json(
-        { success: false, error: '计划数量必须大于 0' },
-        { status: 400 },
+        { success: false, error: "计划数量必须大于 0" },
+        { status: 400 }
       );
     }
-    const wo = await createWorkOrder({
+    if (!body.planned_start_date || !body.planned_end_date) {
+      return NextResponse.json(
+        { success: false, error: "缺少计划开始/结束日期" },
+        { status: 400 }
+      );
+    }
+    // line_code 可选：未传则由 createWorkOrder 用产品 default_line 兜底
+    const result = await createWorkOrder({
       product_code: String(body.product_code),
       product_name: body.product_name && body.product_name !== body.product_code ? String(body.product_name) : undefined,
       specification: body.specification,
       planned_quantity: Number(body.planned_quantity),
-      line_code: String(body.line_code),
-      line_name: body.line_name,
-      priority: body.priority ? Number(body.priority) : undefined,
-      order_type: body.order_type,
-      customer_name: body.customer_name,
-      sales_order_no: body.sales_order_no,
-      planned_start_date: body.planned_start_date,
-      planned_end_date: body.planned_end_date,
-      notes: body.notes,
+      line_code: body.line_code ? String(body.line_code) : "",
+      line_name: body.line_name ? String(body.line_name) : "",
+      priority: body.priority ? Number(body.priority) : 5,
+      order_type: body.order_type ? String(body.order_type) : "制罐生产订单",
+      customer_name: body.customer_name ? String(body.customer_name) : "",
+      sales_order_no: body.sales_order_no ? String(body.sales_order_no) : "",
+      planned_start_date: new Date(body.planned_start_date).toISOString(),
+      planned_end_date: new Date(body.planned_end_date).toISOString(),
+      notes: body.notes ? String(body.notes) : "",
     });
-    return NextResponse.json({ success: true, data: wo });
+    return NextResponse.json({ success: true, data: result });
   } catch (e) {
-    const message = e instanceof Error ? e.message : '创建工单失败';
+    const message = e instanceof Error ? e.message : "创建工单失败";
     const status =
-      (typeof e === 'object' && e !== null && 'status' in e && typeof (e as { status?: number }).status === 'number')
-        ? (e as { status: number }).status
-        : 500;
-    return NextResponse.json(
-      { success: false, error: message },
-      { status },
-    );
+      e instanceof Error && /未找到|不存在|已存在/.test(message) ? 400 : 500;
+    console.error("createWorkOrder failed:", e);
+    return NextResponse.json({ success: false, error: message }, { status });
   }
 }
