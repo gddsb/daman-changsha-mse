@@ -35,7 +35,7 @@ function rowXml(values: string[]): string {
 }
 
 function buildXml(): string {
-  const data = [HEADER, ...SAMPLE]
+  const data = SAMPLE
     .map((r) => rowXml(r))
     .join('\n');
   return `<?xml version="1.0" encoding="UTF-8"?>

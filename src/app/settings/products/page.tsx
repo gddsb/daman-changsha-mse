@@ -173,30 +173,66 @@ export default function ProductSettingsPage() {
   const onImportFile = async (file: File) => {
     setError(null);
     try {
-      const text = await file.text();
-      const cleaned = text.replace(/^﻿/, "");
-      const lines = cleaned.split(/\r?\n/).filter((l) => l.trim());
-      if (lines.length === 0) {
-        setError("文件为空");
+      const buf = await file.arrayBuffer();
+      const text = new TextDecoder("utf-8").decode(buf).replace(/^﻿/, "");
+      let header: string[] = [];
+      let rowsRaw: string[][] = [];
+
+      const lowerName = file.name.toLowerCase();
+      const isXmlExcel = lowerName.endsWith(".xls") || lowerName.endsWith(".xml") ||
+        text.trimStart().startsWith("<?xml") || text.includes("<Workbook");
+
+      if (isXmlExcel) {
+        // 解析 Office 2003 SpreadsheetML（XML）
+        const doc = new DOMParser().parseFromString(text, "application/xml");
+        const parserErr = doc.querySelector("parsererror");
+        if (parserErr) {
+          setError("Excel 文件解析失败：不是合法的 XML SpreadsheetML 格式");
+          return;
+        }
+        const rowEls = Array.from(doc.querySelectorAll("Row"));
+        if (rowEls.length === 0) {
+          setError("文件中没有可识别的行");
+          return;
+        }
+        const parseRow = (r: Element) =>
+          Array.from(r.querySelectorAll("Cell")).map((c) => {
+            const data = c.querySelector("Data");
+            return data ? data.textContent ?? "" : "";
+          });
+        header = parseRow(rowEls[0]).map((s) => s.trim());
+        rowsRaw = rowEls.slice(1).map((r) => parseRow(r));
+      } else {
+        // CSV / 纯文本
+        const lines = text.split(/\r?\n/).filter((l) => l.trim());
+        if (lines.length === 0) {
+          setError("文件为空");
+          return;
+        }
+        header = lines[0].split(",").map((s) => s.trim());
+        rowsRaw = lines.slice(1).map((line) => line.split(",").map((s) => s.trim()));
+      }
+
+      if (header.length === 0) {
+        setError("文件表头为空");
         return;
       }
-      // 简单 CSV 解析：表头识别
-      const header = lines[0].split(",").map((s) => s.trim());
       const codeIdx = header.indexOf("料号");
       const nameIdx = header.indexOf("产品名称");
       const specIdx = header.indexOf("规格");
+      const unitIdx = header.indexOf("单位");
       const lineIdx = header.indexOf("默认产线");
       if (codeIdx < 0 || nameIdx < 0) {
         setError("缺少必填列：料号 / 产品名称");
         return;
       }
-      const dataRows = lines.slice(1).map((line) => line.split(",").map((s) => s.trim()));
-      const rows = dataRows
-        .filter((r) => r.some((c) => c.length > 0))
+      const rows = rowsRaw
+        .filter((r) => r.some((c) => (c ?? "").length > 0))
         .map((r) => ({
           code: r[codeIdx] ?? "",
           name: r[nameIdx] ?? "",
           specification: specIdx >= 0 ? r[specIdx] ?? "" : "",
+          unit: unitIdx >= 0 ? r[unitIdx] ?? "" : "",
           default_line_code: lineIdx >= 0 ? r[lineIdx] ?? "" : "",
         }));
       setImportRows(rows);
