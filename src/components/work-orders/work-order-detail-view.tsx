@@ -29,6 +29,7 @@ export function WorkOrderDetailView({ params }: { params: Promise<{ id: string }
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [activeOpId, setActiveOpId] = useState<string | null>(null);
+  const [editingReportId, setEditingReportId] = useState<string | null>(null);
   const [form, setForm] = useState({
     good_qty: '',
     scrap_qty: '',
@@ -96,11 +97,15 @@ export function WorkOrderDetailView({ params }: { params: Promise<{ id: string }
     if (!activeOpId) return;
     setSubmitting(true);
     try {
-      const res = await fetch(`/api/work-orders/${id}/reports`, {
-        method: 'POST',
+      const url = editingReportId
+        ? `/api/work-orders/${id}/reports/${editingReportId}`
+        : `/api/work-orders/${id}/reports`;
+      const method = editingReportId ? 'PUT' : 'POST';
+      const res = await fetch(url, {
+        method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          operation_id: activeOpId,
+          ...(editingReportId ? {} : { operation_id: activeOpId }),
           ...form,
           good_qty: Number(form.good_qty) || 0,
           scrap_qty: Number(form.scrap_qty) || 0,
@@ -116,6 +121,7 @@ export function WorkOrderDetailView({ params }: { params: Promise<{ id: string }
       }
       if (json.success) {
         setForm({ ...form, good_qty: '', scrap_qty: '', scrap_reason: '' });
+        setEditingReportId(null);
         await load();
       } else {
         alert(json.error || `报工失败 (HTTP ${res.status})`);
@@ -123,6 +129,31 @@ export function WorkOrderDetailView({ params }: { params: Promise<{ id: string }
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleEditReport = (r: WorkOrderReport) => {
+    setActiveOpId(r.operation_id ?? activeOpId);
+    setEditingReportId(r.id);
+    setForm({
+      good_qty: String(r.good_quantity ?? ''),
+      scrap_qty: String(r.scrap_quantity ?? ''),
+      operator: r.operator_name ?? '',
+      shift_no: (r.shift_no === '夜班' ? '夜班' : '白班') as '白班' | '夜班',
+      can_spec: r.can_spec ?? '',
+      can_height: r.can_height != null ? String(r.can_height) : '',
+      batch_no: r.batch_no ?? '',
+      inspector_name: r.inspector_name ?? '',
+      inspection_type: ((r as { inspection_type?: InspectionType }).inspection_type ?? 'in_process') as InspectionType,
+      scrap_reason: r.scrap_reason ?? '',
+    });
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 200, behavior: 'smooth' });
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setEditingReportId(null);
+    setForm({ ...form, good_qty: '', scrap_qty: '', scrap_reason: '' });
   };
 
   if (loading) {
@@ -272,7 +303,20 @@ export function WorkOrderDetailView({ params }: { params: Promise<{ id: string }
             ) : (
               <form onSubmit={handleReport} className="space-y-3">
                 <div className="border border-border/40 bg-background/30 p-2 text-xs">
-                  <div className="text-muted-foreground">当前工序</div>
+                  <div className="flex items-center justify-between">
+                    <div className="text-muted-foreground">
+                      {editingReportId ? '正在修改报工单' : '当前工序'}
+                    </div>
+                    {editingReportId && (
+                      <button
+                        type="button"
+                        onClick={handleCancelEdit}
+                        className="text-[10px] text-amber-400 hover:underline"
+                      >
+                        取消修改
+                      </button>
+                    )}
+                  </div>
                   <div className="mt-0.5 font-mono text-sm text-amber-400">
                     {activeOp.sequence}. {activeOp.operation_name}
                   </div>
@@ -338,8 +382,14 @@ export function WorkOrderDetailView({ params }: { params: Promise<{ id: string }
                   <Input value={form.scrap_reason} onChange={(e) => setForm({ ...form, scrap_reason: e.target.value })} placeholder="如:印铁划伤" />
                 </div>
                 <Button type="submit" className="w-full" disabled={submitting}>
-                  <Send className="mr-2 h-4 w-4" />提交报工（同时生成质量日报）
+                  <Send className="mr-2 h-4 w-4" />
+                  {editingReportId ? '保存修改' : '添加报工单'}
                 </Button>
+                {!editingReportId && (
+                  <p className="text-center text-[10px] text-muted-foreground">
+                    表单内容已自动暂存，未点击添加报工单前不会保存到数据库
+                  </p>
+                )}
               </form>
             )}
           </CardContent>
@@ -405,13 +455,24 @@ export function WorkOrderDetailView({ params }: { params: Promise<{ id: string }
                     <th className="pb-2 pr-3 text-right">不良</th>
                     <th className="pb-2 pr-3">批次</th>
                     <th className="pb-2">备注</th>
+                    <th className="pb-2 pr-3 text-right">操作</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {opReports.map((r) => (
-                    <tr key={r.id} className="border-b border-border/20">
-                      <td className="py-2 pr-3 font-mono text-xs text-muted-foreground">{formatDateTime(r.reported_at)}</td>
-                      <td className="py-2 pr-3">{r.operator_name || '-'}</td>
+                  {opReports.map((r) => {
+                    const editable = wo.status !== '完工' && wo.status !== '超期完工';
+                    const isEditing = r.id === editingReportId;
+                    return (
+                      <tr
+                        key={r.id}
+                        onClick={editable ? () => handleEditReport(r) : undefined}
+                        title={editable ? '点击修改此条报工' : '工单已完工，不允许修改'}
+                        className={`border-b border-border/20 ${
+                          editable ? 'cursor-pointer hover:bg-amber-900/10' : 'opacity-60'
+                        } ${isEditing ? 'bg-amber-900/20' : ''}`}
+                      >
+                        <td className="py-2 pr-3 font-mono text-xs text-muted-foreground">{formatDateTime(r.reported_at)}</td>
+                        <td className="py-2 pr-3">{r.operator_name || '-'}</td>
                       <td className="py-2 pr-3">
                         <span className={`border px-1.5 py-0.5 text-[10px] ${SHIFT_TONE[r.shift_no || '白班'] || SHIFT_TONE['白班']}`}>
                           {r.shift_no || '白班'}
@@ -422,8 +483,12 @@ export function WorkOrderDetailView({ params }: { params: Promise<{ id: string }
                       <td className="py-2 pr-3 text-right font-mono text-rose-400">{formatNumber(r.scrap_quantity)}</td>
                       <td className="py-2 pr-3 font-mono text-xs text-muted-foreground">{r.batch_no || '-'}</td>
                       <td className="py-2 text-xs text-muted-foreground">{r.scrap_reason || '-'}</td>
+                      {editable && (
+                        <td className="py-2 pr-3 text-right text-[10px] text-amber-400">{isEditing ? '编辑中' : '修改'}</td>
+                      )}
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

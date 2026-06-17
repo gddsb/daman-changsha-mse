@@ -523,7 +523,7 @@ export async function createReport(input: CreateReportInput) {
       product_code: (wo as { product_code: string }).product_code,
       product_name: (wo as { product_name: string }).product_name,
       can_spec: input.can_spec ?? null,
-      can_height: input.can_height ?? null,
+      can_height: input.can_height != null ? Math.round(input.can_height) : null,
       batch_no: input.batch_no ?? null,
       inspector_name: input.inspector_name ?? input.operator_name,
       reported_at: new Date().toISOString(),
@@ -555,7 +555,7 @@ export async function createReport(input: CreateReportInput) {
     const newCompleted = Number(currentWo.completed_quantity ?? 0) + input.good_quantity;
     const newScrap = Number(currentWo.scrap_quantity ?? 0) + input.scrap_quantity;
     const newStatus =
-      currentWo.status === "开立" || currentWo.status === "已下发" ? "开工" : currentWo.status;
+      currentWo.status === "开立" || currentWo.status === "已下发" ? "生产中" : currentWo.status;
     await c
       .from("work_orders")
       .update({
@@ -570,60 +570,104 @@ export async function createReport(input: CreateReportInput) {
       .eq("id", input.work_order_id);
   }
 
-  // 4) 实时聚合：当天/产线/工序/产品的累计（用于日报）
-  const today = new Date().toISOString().slice(0, 10);
-  const { data: existing } = await c
-    .from("daily_quality_reports")
-    .select("*")
-    .eq("report_date", today)
-    .eq("line_code", input.line_code)
-    .eq("process_name", input.process_name)
-    .eq("product_code", (wo as { product_code: string }).product_code)
-    .eq("shift_no", input.shift_no)
-    .maybeSingle();
-
-  const inspected = total;
-  const good = input.good_quantity;
-  const scrap = input.scrap_quantity;
-  const passRate = inspected > 0 ? good / inspected : 0;
-  const scrapRate = inspected > 0 ? scrap / inspected : 0;
-
-  if (existing) {
-    const e = existing as Record<string, unknown>;
-    const newInspected = Number(e.total_inspected ?? 0) + inspected;
-    const newGood = Number(e.total_good ?? 0) + good;
-    const newScrap = Number(e.total_scrap ?? 0) + scrap;
-    await c
-      .from("daily_quality_reports")
-      .update({
-        total_inspected: newInspected,
-        total_good: newGood,
-        total_scrap: newScrap,
-        pass_rate: newGood / Math.max(newInspected, 1),
-        scrap_rate: newScrap / Math.max(newInspected, 1),
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", String(e.id));
-  } else {
-    await c.from("daily_quality_reports").insert({
-      report_date: today,
-      line_code: input.line_code,
-      line_name: lineName,
-      process_name: input.process_name,
-      product_code: (wo as { product_code: string }).product_code,
-      product_name: (wo as { product_name: string }).product_name,
-      can_spec: input.can_spec ?? null,
-      can_height: input.can_height ?? null,
-      shift_no: input.shift_no,
-      total_inspected: inspected,
-      total_good: good,
-      total_scrap: scrap,
-      pass_rate: passRate,
-      scrap_rate: scrapRate,
-    });
-  }
+  // 报工不自动生成质量日报（按需求）
 
   return toReportView(report as Record<string, unknown>);
+}
+
+export interface UpdateReportInput {
+  report_id: string;
+  work_order_id: string;
+  good_quantity: number;
+  scrap_quantity: number;
+  operator_name?: string;
+  process_name?: string;
+  shift_no?: string;
+  batch_no?: string;
+  inspector_name?: string;
+  can_spec?: string;
+  can_height?: number;
+  notes?: string;
+}
+
+export async function getReport(reportId: string) {
+  const c = getSupabaseClient();
+  const { data, error } = await c
+    .from("work_order_reports")
+    .select("*")
+    .eq("id", reportId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return data ? toReportView(data as Record<string, unknown>) : null;
+}
+
+export async function updateReport(input: UpdateReportInput) {
+  const c = getSupabaseClient();
+
+  // 1) 校验工单存在 + 未完工
+  const { data: wo } = await c
+    .from("work_orders")
+    .select("id, status, completed_quantity, scrap_quantity")
+    .eq("id", input.work_order_id)
+    .maybeSingle();
+  if (!wo) throw new Error("工单不存在");
+  if (wo.status === "完工" || wo.status === "超期完工") {
+    throw new Error("工单已完工/超期完工，不允许修改报工单");
+  }
+
+  // 2) 校验报工单存在
+  const { data: existing, error: gerr } = await c
+    .from("work_order_reports")
+    .select("*")
+    .eq("id", input.report_id)
+    .eq("work_order_id", input.work_order_id)
+    .maybeSingle();
+  if (gerr) throw new Error(gerr.message);
+  if (!existing) throw new Error("报工单不存在或不属于该工单");
+
+  // 3) 计算差量，回写到工单累计
+  const oldGood = Number((existing as { good_quantity: number }).good_quantity ?? 0);
+  const oldScrap = Number((existing as { scrap_quantity: number }).scrap_quantity ?? 0);
+  const deltaGood = input.good_quantity - oldGood;
+  const deltaScrap = input.scrap_quantity - oldScrap;
+  const newCompleted = Number(wo.completed_quantity ?? 0) + deltaGood;
+  const newScrap = Number(wo.scrap_quantity ?? 0) + deltaScrap;
+  if (newCompleted < 0 || newScrap < 0) {
+    throw new Error("调整后工单累计数量不能为负");
+  }
+
+  // 4) 报工单 UPDATE
+  const patch: Record<string, unknown> = {
+    good_quantity: input.good_quantity,
+    scrap_quantity: input.scrap_quantity,
+  };
+  if (input.operator_name !== undefined) patch.operator_name = input.operator_name;
+  if (input.process_name !== undefined) patch.process_name = input.process_name;
+  if (input.shift_no !== undefined) patch.shift_no = input.shift_no;
+  if (input.batch_no !== undefined) patch.batch_no = input.batch_no;
+  if (input.inspector_name !== undefined) patch.inspector_name = input.inspector_name;
+  if (input.can_spec !== undefined) patch.can_spec = input.can_spec;
+  if (input.can_height !== undefined && input.can_height !== null) patch.can_height = Math.round(input.can_height);
+  if (input.notes !== undefined) patch.scrap_reason = input.notes;
+
+  const { data: updated, error: uerr } = await c
+    .from("work_order_reports")
+    .update(patch)
+    .eq("id", input.report_id)
+    .select("*")
+    .single();
+  if (uerr) throw new Error(uerr.message);
+
+  // 5) 工单累计同步
+  await c
+    .from("work_orders")
+    .update({
+      completed_quantity: newCompleted,
+      scrap_quantity: newScrap,
+    })
+    .eq("id", input.work_order_id);
+
+  return toReportView(updated as Record<string, unknown>);
 }
 
 // ==================== 报检（生成 quality_inspections 记录） ====================

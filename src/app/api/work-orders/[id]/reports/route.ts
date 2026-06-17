@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createReport, getWorkOrder } from '@/lib/mes-service';
-import { recomputeDailyQualityReport } from '@/lib/daily-quality-service';
 
 export async function POST(
   request: NextRequest,
@@ -48,18 +47,7 @@ export async function POST(
       notes: body.notes ?? body.scrap_reason,
     });
 
-    // 同步刷新该工序+该产线+当日的质量日报
-    await recomputeDailyQualityReport({
-      report_date: new Date().toISOString().slice(0, 10),
-      line_code: body.line_code,
-      process_name: body.process_name,
-      product_code: report.product_code ?? "",
-      product_name: report.product_name ?? "",
-      can_spec: body.can_spec,
-      can_height: body.can_height ? Number(body.can_height) : undefined,
-      shift_no: body.shift_no ?? '白班',
-    });
-
+    // 注：报工不再自动生成质量日报
     return NextResponse.json({ success: true, data: report });
   } catch (e) {
     const message = e instanceof Error ? e.message : '报工失败';
