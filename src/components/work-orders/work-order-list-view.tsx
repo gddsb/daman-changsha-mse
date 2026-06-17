@@ -558,8 +558,10 @@ function CreateWorkOrderDialog({
   const [lines, setLines] = useState<ProductionLine[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [orderNoAuto, setOrderNoAuto] = useState(true);
   const today = new Date().toISOString().slice(0, 10);
   const [form, setForm] = useState({
+    order_no: "",
     product_code: "",
     product_name: "",
     specification: "",
@@ -573,6 +575,13 @@ function CreateWorkOrderDialog({
     notes: "",
   });
 
+  // MO 号预览：根据当天日期 + 现有工单最大流水 + 1 生成
+  const orderNoPreview = useMemo(() => {
+    const d = new Date();
+    const pad2 = (n: number) => String(n).padStart(2, "0");
+    return `MO-16${pad2(d.getFullYear() % 100)}${pad2(d.getMonth() + 1)}${pad2(d.getDate())}___`;
+  }, []);
+
   useEffect(() => {
     Promise.all([
       fetch("/api/products").then((r) => r.json()),
@@ -582,6 +591,19 @@ function CreateWorkOrderDialog({
       if (l.success) setLines(l.data);
     });
   }, []);
+
+  async function fillNextOrderNo() {
+    try {
+      const res = await fetch("/api/work-orders/next-order-no");
+      const json = await res.json();
+      if (json.success && json.data) {
+        setForm((f) => ({ ...f, order_no: json.data }));
+        setOrderNoAuto(false);
+      }
+    } catch {
+      /* ignore */
+    }
+  }
 
   /** 选中产品后自动带入产品名称/规格/默认产线；返工订单锁定为原产线 */
   // 把"短产线码"（A/B）归一化为数据库用的"LINE-A/LINE-B"
@@ -645,6 +667,11 @@ function CreateWorkOrderDialog({
       setError("计划开始日期不能小于当前日期");
       return;
     }
+    const trimmedOrderNo = form.order_no.trim();
+    if (trimmedOrderNo && !/^MO-16\d{9}$/.test(trimmedOrderNo)) {
+      setError("MO 号格式不正确，应为 MO-16+两位年+两位月+两位日+三位流水，如 MO-16260617003");
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {
@@ -652,6 +679,7 @@ function CreateWorkOrderDialog({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          order_no: trimmedOrderNo || undefined,
           product_code: form.product_code,
           product_name: form.product_name,
           specification: form.specification || null,
@@ -688,6 +716,39 @@ function CreateWorkOrderDialog({
           </button>
         </div>
         <CardContent className="space-y-3 p-4">
+          <Field
+            label={
+              <span className="flex items-center gap-2">
+                MO 号
+                <span className="font-mono text-[10px] text-slate-500">
+                  {orderNoAuto ? "(留空将自动按 MO-16+YYMMDD+流水 生成)" : "(已手动填写)"}
+                </span>
+              </span>
+            }
+          >
+            <div className="flex gap-2">
+              <Input
+                value={form.order_no}
+                onChange={(e) => {
+                  setForm({ ...form, order_no: e.target.value });
+                  setOrderNoAuto(e.target.value.trim().length === 0);
+                }}
+                placeholder={orderNoPreview}
+                className="flex-1 border-slate-800 bg-slate-900 font-mono text-slate-200"
+              />
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={fillNextOrderNo}
+                className="border-slate-700 bg-slate-900 font-mono text-[11px] text-slate-300 hover:border-orange-500/60 hover:text-orange-300"
+                title="取下一个 MO 号填入"
+              >
+                自动生成
+              </Button>
+            </div>
+          </Field>
+
           <Field label="产品料号（输入筛选）" required>
             <ProductCodeCombobox
               products={products}
@@ -954,7 +1015,7 @@ function EditWorkOrderDialog({
   );
 }
 
-function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
+function Field({ label, required, children }: { label: React.ReactNode; required?: boolean; children: React.ReactNode }) {
   return (
     <div>
       <div className="mb-1 font-mono text-[11px] text-slate-500">

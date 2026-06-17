@@ -46,6 +46,7 @@ export async function POST(req: NextRequest) {
     }
     // line_code 可选：未传则由 createWorkOrder 用产品 default_line 兜底
     const result = await createWorkOrder({
+      order_no: body.order_no ? String(body.order_no).trim() : "",
       product_code: String(body.product_code),
       product_name: body.product_name && body.product_name !== body.product_code ? String(body.product_name) : undefined,
       specification: body.specification,
@@ -64,7 +65,9 @@ export async function POST(req: NextRequest) {
   } catch (e) {
     const message = e instanceof Error ? e.message : "创建工单失败";
     const status =
-      e instanceof Error && /未找到|不存在|已存在/.test(message) ? 400 : 500;
+      e instanceof Error && (e as Error & { status?: number }).status
+        ? (e as Error & { status?: number }).status
+        : 500;
     console.error("createWorkOrder failed:", e);
     return NextResponse.json({ success: false, error: message }, { status });
   }

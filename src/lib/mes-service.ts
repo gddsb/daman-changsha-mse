@@ -247,12 +247,42 @@ export interface CreateWorkOrderInput {
   notes?: string;
 }
 
-function generateOrderNo(): string {
+function pad2(n: number): string {
+  return String(n).padStart(2, "0");
+}
+function pad3(n: number): string {
+  return String(n).padStart(3, "0");
+}
+
+/** MO 号格式：MO-16 + YY + MM + DD + NNN(三位流水)
+ *  例：MO-16260617003
+ *  流水号按当天最大流水 + 1 续号（找不到时从 001 开始） */
+function orderNoPrefix(): string {
   const d = new Date();
-  const pad = (n: number) => String(n).padStart(2, "0");
-  const stamp = `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}${pad(d.getHours())}${pad(d.getMinutes())}`;
-  const rand = Math.floor(Math.random() * 1000).toString().padStart(3, "0");
-  return `MO-${stamp}-${rand}`;
+  return `MO-16${pad2(d.getFullYear() % 100)}${pad2(d.getMonth() + 1)}${pad2(d.getDate())}`;
+}
+
+async function nextOrderNo(): Promise<string> {
+  const prefix = orderNoPrefix();
+  const c = getSupabaseClient();
+  const { data } = await c
+    .from("work_orders")
+    .select("order_no")
+    .like("order_no", `${prefix}%`)
+    .order("order_no", { ascending: false })
+    .limit(1);
+  let maxSeq = 0;
+  if (data && data.length > 0) {
+    const last = String((data[0] as { order_no: string }).order_no);
+    const tail = last.slice(prefix.length);
+    const n = parseInt(tail, 10);
+    if (Number.isFinite(n)) maxSeq = n;
+  }
+  return `${prefix}${pad3(maxSeq + 1)}`;
+}
+
+export async function generateOrderNo(): Promise<string> {
+  return nextOrderNo();
 }
 
 export async function createWorkOrder(input: CreateWorkOrderInput) {
@@ -302,7 +332,29 @@ export async function createWorkOrder(input: CreateWorkOrderInput) {
     throw err;
   }
 
-  const orderNo = input.order_no?.trim() || generateOrderNo();
+  // MO 号：用户输入则校验格式 + 查重；空则按 MO-16YYMMDDNNN 自动续号
+  // 格式：MO-16(2位年)(2位月)(2位日)(3位流水) = MO-16 + 9 位数字
+  const userOrderNo = input.order_no?.trim();
+  if (userOrderNo) {
+    if (!/^MO-16\d{9}$/.test(userOrderNo)) {
+      const err: Error & { status?: number } = new Error(
+        "MO 号格式应为 MO-16+两位年+两位月+两位日+三位流水，如 MO-16260617003"
+      );
+      err.status = 400;
+      throw err;
+    }
+    const { data: dup } = await c
+      .from("work_orders")
+      .select("id")
+      .eq("order_no", userOrderNo)
+      .maybeSingle();
+    if (dup) {
+      const err: Error & { status?: number } = new Error(`MO 号 ${userOrderNo} 已存在`);
+      err.status = 409;
+      throw err;
+    }
+  }
+  const orderNo = userOrderNo || (await nextOrderNo());
   const priority = Math.max(1, Math.min(5, input.priority ?? 3));
   // 注意：lineName 可能为空字符串，需用 || 兜底，?? 不会因为空字符串触发
   const finalLineName = lineName || (line as { name: string }).name;
