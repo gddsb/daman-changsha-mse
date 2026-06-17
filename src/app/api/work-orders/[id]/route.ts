@@ -133,7 +133,7 @@ export async function PATCH(
           .from("work_orders")
           .select("id, order_no, status")
           .eq("line_code", lineCode)
-          .in("status", ["下发", "生产中", "暂停"])
+          .in("status", ["生产中"])
           .neq("id", id)
           .limit(5);
         if (active && active.length > 0) {
