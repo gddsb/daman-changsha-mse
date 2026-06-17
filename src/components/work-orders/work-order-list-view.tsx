@@ -34,6 +34,7 @@ type SortDir = "asc" | "desc";
 export function WorkOrderListView() {
   const router = useRouter();
   const [orders, setOrders] = useState<WorkOrder[] | null>(null);
+  const [plannedIds, setPlannedIds] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<Set<string>>(new Set(["开立", "下发", "生产中", "暂停"]));
   const [lineFilter, setLineFilter] = useState<Set<string>>(new Set());
@@ -48,14 +49,30 @@ export function WorkOrderListView() {
 
   const load = async () => {
     try {
-      const res = await fetch("/api/work-orders", { cache: "no-store" });
+      const [res, planRes] = await Promise.all([
+        fetch("/api/work-orders", { cache: "no-store" }),
+        fetch("/api/production-plans?from=" + sevenDayRange().from + "&to=" + sevenDayRange().to, { cache: "no-store" }),
+      ]);
       const json = await res.json();
+      const planJson = await planRes.json();
       if (json.success) setOrders(json.data);
+      if (planJson.success) {
+        setPlannedIds(new Set((planJson.data ?? []).map((p: { work_order_id: string }) => p.work_order_id)));
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   };
+
+  // 计算 [今天, +6天] 的日期范围（UTC）
+  function sevenDayRange(): { from: string; to: string } {
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+    const day7 = new Date(today);
+    day7.setUTCDate(day7.getUTCDate() + 6);
+    return { from: today.toISOString().slice(0, 10), to: day7.toISOString().slice(0, 10) };
+  }
 
   useEffect(() => {
     load();
@@ -263,7 +280,8 @@ export function WorkOrderListView() {
                     wo={wo}
                     onClick={() => setEditingOrder(wo)}
                     onDoubleClick={() => setEditingOrder(wo)}
-                    onAction={async (action) => {
+                    hasPlan={plannedIds.has(wo.id)}
+                onAction={async (action) => {
                       try {
                         if (action === "delete") {
                           if (!confirm(`确认删除工单 ${wo.order_no}？该操作不可恢复。`)) return;
@@ -343,17 +361,19 @@ function WorkOrderRow({
   onClick,
   onDoubleClick,
   onAction,
+  hasPlan,
 }: {
   wo: WorkOrder;
   onClick: () => void;
   onDoubleClick: () => void;
   onAction: (action: "release" | "start" | "delete" | "complete" | "pause") => void;
+  hasPlan: boolean;
 }) {
   const rate = wo.quantity > 0 ? (wo.completed_quantity / wo.quantity) * 100 : 0;
   const tone = WO_STATUS_TONE[wo.status] ?? "border-slate-700 text-slate-400";
   const st = wo.status;
   const canRelease = st === "开立";
-  const canStart = st === "下发" || st === "暂停";
+  const canStart = (st === "下发" || st === "暂停") && hasPlan;
   const canDelete = st === "开立";
   return (
     <tr

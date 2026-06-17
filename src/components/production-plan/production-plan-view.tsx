@@ -53,7 +53,7 @@ export function ProductionPlanView() {
       const [planRes, lineRes, woRes] = await Promise.all([
         fetch(`/api/production-plans?from=${startDate}&to=${endDate}`),
         fetch("/api/production-lines"),
-        fetch("/api/work-orders?statuses=released,paused&limit=200"),
+        fetch("/api/work-orders?statuses=%E4%B8%8B%E5%8F%91%2C%E6%9A%82%E5%81%9C&limit=200"),
       ]);
       const planJson = await planRes.json();
       const lineJson = await lineRes.json();

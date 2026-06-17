@@ -87,6 +87,31 @@ export async function PATCH(
       );
     }
 
+    // 开工前校验：工单必须已排入七天滚动生产计划
+    if (nextStatus === "生产中") {
+      const c2 = getSupabaseClient();
+      const today = new Date();
+      today.setUTCHours(0, 0, 0, 0);
+      const day7 = new Date(today);
+      day7.setUTCDate(day7.getUTCDate() + 6);
+      const todayStr = today.toISOString().slice(0, 10);
+      const day7Str = day7.toISOString().slice(0, 10);
+      const { data: planRow } = await c2
+        .from("production_plans")
+        .select("id, plan_date")
+        .eq("work_order_id", id)
+        .gte("plan_date", todayStr)
+        .lte("plan_date", day7Str)
+        .limit(1)
+        .maybeSingle();
+      if (!planRow) {
+        return NextResponse.json(
+          { success: false, error: "工单未排入七天滚动生产计划，请先在排产计划页面进行排产" },
+          { status: 400 }
+        );
+      }
+    }
+
     // 开工前检查同产线是否有未完工的工单
     if (nextStatus === "生产中") {
       const c = getSupabaseClient();
