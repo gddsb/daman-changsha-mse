@@ -5,13 +5,14 @@
  * 真实数据库行（中文状态、snake_case 字段）由 src/lib/mes-service.ts 在数据访问层做归一化。
  */
 
+// DB 直接存中文状态：开立 / 下发 / 生产中 / 暂停 / 完工 / 超期完工
 export type WorkOrderStatus =
-  | "planned"
-  | "released"
-  | "in_progress"
-  | "paused"
-  | "completed"
-  | "closed";
+  | "开立"
+  | "下发"
+  | "生产中"
+  | "暂停"
+  | "完工"
+  | "超期完工";
 export type WorkOrderPriority = 1 | 2 | 3 | 4 | 5;
 export type OperationStatus = "pending" | "in_progress" | "completed" | "skipped";
 export type ReportType = string; // 报工类型，由创建方传入

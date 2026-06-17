@@ -28,7 +28,7 @@ import { formatDate } from "@/lib/format";
 import { WO_STATUS_TONE, WO_STATUS_LABELS } from "@/lib/constants";
 import type { WorkOrder, Product, ProductionLine } from "@/types/mes";
 
-type SortKey = "order_no" | "product_name" | "line_name" | "quantity" | "completed_quantity" | "status" | "planned_start_date" | "priority";
+type SortKey = "order_no" | "product_name" | "line_name" | "quantity" | "completed_quantity" | "status" | "planned_start_date";
 type SortDir = "asc" | "desc";
 
 export function WorkOrderListView() {
@@ -96,9 +96,9 @@ export function WorkOrderListView() {
     if (!orders) return null;
     return {
       total: orders.length,
-      inProgress: orders.filter((o) => o.status === "in_progress").length,
-      completed: orders.filter((o) => o.status === "completed").length,
-      planned: orders.filter((o) => o.status === "planned" || o.status === "released").length,
+      inProgress: orders.filter((o) => o.status === "生产中").length,
+      completed: orders.filter((o) => o.status === "完工" || o.status === "超期完工").length,
+      planned: orders.filter((o) => o.status === "开立" || o.status === "下发").length,
     };
   }, [orders]);
 
@@ -145,7 +145,7 @@ export function WorkOrderListView() {
       {summary && (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <SummaryCell label="工单总数" value={summary.total} />
-          <SummaryCell label="未开工" value={summary.planned} tone="slate" />
+          <SummaryCell label="未下发" value={summary.planned} tone="slate" />
           <SummaryCell label="生产中" value={summary.inProgress} tone="amber" />
           <SummaryCell label="已完成" value={summary.completed} tone="emerald" />
         </div>
@@ -165,7 +165,7 @@ export function WorkOrderListView() {
             </div>
             <div className="flex flex-wrap gap-1.5">
               <FilterChip label="全部状态" active={statusFilter === "all"} onClick={() => setStatusFilter("all")} />
-              {(["planned", "released", "in_progress", "paused", "completed", "closed"] as const).map((s) => (
+              {(["开立", "下发", "生产中", "暂停", "完工", "超期完工"] as const).map((s) => (
                 <FilterChip key={s} label={WO_STATUS_LABELS[s]} active={statusFilter === s} onClick={() => setStatusFilter(s)} />
               ))}
             </div>
@@ -203,7 +203,6 @@ export function WorkOrderListView() {
                   <th className="px-3 py-2 text-right font-mono text-[11px] uppercase tracking-wider text-slate-500">完工率</th>
                   <Th onClick={() => toggleSort("status")} active={sortKey === "status"} dir={sortDir}>状态</Th>
                   <Th onClick={() => toggleSort("planned_start_date")} active={sortKey === "planned_start_date"} dir={sortDir}>计划起止</Th>
-                  <Th onClick={() => toggleSort("priority")} active={sortKey === "priority"} dir={sortDir} align="center">优先级</Th>
                   <th className="px-3 py-2 text-right font-mono text-[11px] uppercase tracking-wider text-slate-500">操作</th>
                 </tr>
               </thead>
@@ -298,14 +297,14 @@ function WorkOrderRow({
   wo: WorkOrder;
   onClick: () => void;
   onDoubleClick: () => void;
-  onAction: (action: "release" | "start" | "delete") => void;
+  onAction: (action: "release" | "start" | "delete" | "complete" | "pause") => void;
 }) {
   const rate = wo.quantity > 0 ? (wo.completed_quantity / wo.quantity) * 100 : 0;
   const tone = WO_STATUS_TONE[wo.status] ?? "border-slate-700 text-slate-400";
   const st = wo.status;
-  const canRelease = st === "planned";
-  const canStart = st === "released" || st === "paused";
-  const canDelete = st === "planned" || st === "released";
+  const canRelease = st === "开立";
+  const canStart = st === "下发" || st === "暂停";
+  const canDelete = st === "开立";
   return (
     <tr
       onClick={onClick}
@@ -337,13 +336,6 @@ function WorkOrderRow({
         <div>{formatDate(wo.planned_start_date)}</div>
         <div className="text-slate-500">~ {formatDate(wo.planned_end_date)}</div>
       </td>
-      <td className="px-3 py-2 text-center">
-        <span className={`inline-block border px-1.5 font-mono text-[10px] ${
-          wo.priority <= 2 ? "border-rose-500/40 text-rose-300" :
-          wo.priority >= 4 ? "border-slate-700 text-slate-500" :
-          "border-amber-500/40 text-amber-300"
-        }`}>P{wo.priority}</span>
-      </td>
       <td className="px-3 py-2 text-right" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-end gap-1.5">
           {canRelease && (
@@ -359,7 +351,7 @@ function WorkOrderRow({
               onClick={() => onAction("start")}
               className="border border-orange-500/50 px-1.5 py-0.5 font-mono text-[10px] text-orange-300 hover:bg-orange-500/15"
             >
-              {st === "paused" ? "重新开工" : "开工"}
+              {st === "暂停" ? "重新开工" : "开工"}
             </button>
           )}
           {canDelete && (
@@ -503,7 +495,6 @@ function CreateWorkOrderDialog({
     specification: "",
     planned_quantity: "",
     line_code: "",
-    priority: "3",
     order_type: "制罐生产订单",
     rework_source_line_name: "",
     customer_name: "",
@@ -584,7 +575,6 @@ function CreateWorkOrderDialog({
           specification: form.specification || null,
           planned_quantity: Number(form.planned_quantity),
           line_code: form.line_code,
-          priority: Number(form.priority),
           order_type: form.order_type,
           customer_name: form.customer_name || null,
           planned_start_date: new Date(form.planned_start_date).toISOString(),
@@ -681,19 +671,6 @@ function CreateWorkOrderDialog({
                     {form.order_type === "返工" && l.name === form.rework_source_line_name ? " · 原产线" : ""}
                   </option>
                 ))}
-              </select>
-            </Field>
-            <Field label="优先级 (1最高)">
-              <select
-                value={form.priority}
-                onChange={(e) => setForm({ ...form, priority: e.target.value })}
-                className="h-9 w-full rounded-sm border border-slate-800 bg-slate-900 px-2 font-mono text-xs text-slate-200 outline-none focus:border-orange-500"
-              >
-                <option value="1">P1 · 最高</option>
-                <option value="2">P2 · 高</option>
-                <option value="3">P3 · 中</option>
-                <option value="4">P4 · 低</option>
-                <option value="5">P5 · 最低</option>
               </select>
             </Field>
           </div>

@@ -179,17 +179,17 @@ export function WorkOrderDetailView({ params }: { params: Promise<{ id: string }
             )}
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            {wo.status === 'planned' && (
+            {wo.status === '开立' && (
               <Button size="sm" onClick={() => handleAction('release')} disabled={submitting}>
                 <PlayCircle className="mr-2 h-4 w-4" />下发工单
               </Button>
             )}
-            {wo.status === 'released' && (
+            {wo.status === '下发' && (
               <Button size="sm" onClick={() => handleAction('start')} disabled={submitting}>
                 <Factory className="mr-2 h-4 w-4" />开始生产
               </Button>
             )}
-            {wo.status === 'in_progress' && (
+            {wo.status === '生产中' && (
               <>
                 <Button size="sm" variant="outline" onClick={() => handleAction('pause')} disabled={submitting}>
                   <PauseCircle className="mr-2 h-4 w-4" />暂停
@@ -199,7 +199,7 @@ export function WorkOrderDetailView({ params }: { params: Promise<{ id: string }
                 </Button>
               </>
             )}
-            {wo.status === 'paused' && (
+            {wo.status === '暂停' && (
               <Button size="sm" onClick={() => handleAction('resume')} disabled={submitting}>
                 <PlayCircle className="mr-2 h-4 w-4" />恢复
               </Button>
@@ -262,7 +262,7 @@ export function WorkOrderDetailView({ params }: { params: Promise<{ id: string }
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {wo.status !== 'in_progress' ? (
+            {wo.status !== '生产中' ? (
               <div className="flex items-center gap-2 rounded border border-amber-700/40 bg-amber-900/20 p-3 text-xs text-amber-300">
                 <AlertCircle className="h-4 w-4 shrink-0" />
                 <span>工单开始生产后才能报工</span>

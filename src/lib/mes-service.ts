@@ -4,7 +4,7 @@
  * 涵盖：工单、工序、报工、报检、生产计划、质量日报
  */
 import { getSupabaseClient } from "@/storage/database/supabase-client";
-import { U9_STATUS_MAP, CAN_PROCESS_NAMES } from "@/lib/constants";
+import { CAN_PROCESS_NAMES } from "@/lib/constants";
 import type {
   WorkOrder,
   WorkOrderOperation,
@@ -20,8 +20,9 @@ import type {
 const cn = (status: unknown): string => (status == null ? "—" : String(status));
 
 const toWoStatus = (s: string | null | undefined): WorkOrder["status"] => {
-  if (!s) return "planned";
-  return (U9_STATUS_MAP[s] as WorkOrder["status"]) ?? "planned";
+  // DB 直接存中文状态（开立/下发/生产中/暂停/完工/超期完工），原样返回
+  if (!s) return "开立";
+  return s as WorkOrder["status"];
 };
 
 const toWoView = (r: Record<string, unknown>): WorkOrder => ({
@@ -199,7 +200,28 @@ export async function listWorkOrders(opts?: {
   let q = c.from("work_orders").select("*").order("created_at", { ascending: false });
   const statusList = opts?.statuses ?? (opts?.status ? [opts.status] : undefined);
   if (statusList && statusList.length > 0) {
-    q = q.in("status", statusList);
+    // 兼容历史英文 status：自动展开为中英文并集
+    const EN_TO_CN: Record<string, string> = {
+      planned: "开立",
+      released: "下发",
+      in_progress: "生产中",
+      paused: "暂停",
+      completed: "完工",
+      closed: "超期完工",
+    };
+    const expanded = new Set<string>();
+    const inputs: string[] = Array.isArray(statusList)
+      ? (statusList as string[])
+      : statusList
+        ? [statusList as string]
+        : [];
+    for (const s of inputs) {
+      expanded.add(s);
+      if (EN_TO_CN[s]) expanded.add(EN_TO_CN[s]);
+      const en = Object.keys(EN_TO_CN).find((k) => EN_TO_CN[k] === s);
+      if (en) expanded.add(en);
+    }
+    q = q.in("status", Array.from(expanded));
   }
   if (opts?.line) q = q.eq("line_code", opts.line);
   if (opts?.keyword) q = q.ilike("order_no", `%${opts.keyword}%`);
@@ -300,7 +322,7 @@ export async function createWorkOrder(input: CreateWorkOrderInput) {
       planned_quantity: input.planned_quantity,
       completed_quantity: 0,
       scrap_quantity: 0,
-      status: "planned",
+      status: "开立",
       priority,
       workshop_code: ws.workshop_code,
       workshop_name: ws.workshop_name,

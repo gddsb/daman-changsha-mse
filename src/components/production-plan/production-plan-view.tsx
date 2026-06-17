@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import { formatNumber } from "@/lib/format";
 import { addDays, getProductionDate } from "@/lib/date-utils";
-import { PRIORITY_TONE, PLAN_STATUS } from "@/lib/constants";
+import { PLAN_STATUS } from "@/lib/constants";
 import type { ProductionLine, ProductionPlan } from "@/types/mes";
 
 const DAY_LABELS = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
@@ -144,7 +144,7 @@ export function ProductionPlanView() {
   function plansAtCell(date: string, lineCode: string): ProductionPlan[] {
     return visiblePlans
       .filter((p) => p.plan_date === date && p.line_code === lineCode)
-      .sort((a, b) => a.priority - b.priority);
+      .sort((a, b) => a.work_order_no.localeCompare(b.work_order_no));
   }
 
   async function movePlan(plan: ProductionPlan, newDate: string, newLine: string) {
@@ -234,6 +234,14 @@ export function ProductionPlanView() {
     // 优先级 1: 拖入"待排产"工单 → 新增排产
     const unschedId = e.dataTransfer.getData("application/x-unscheduled");
     if (unschedId) {
+      // 产线必须匹配：工单的默认产线决定了可派到的日格
+      const unschedWo = unscheduledOrders.find((w) => w.id === unschedId);
+      if (unschedWo && unschedWo.line_code && unschedWo.line_code !== line) {
+        const targetLine = lines.find((l) => l.code === line)?.name ?? line;
+        const woLine = lines.find((l) => l.code === unschedWo.line_code)?.name ?? unschedWo.line_code;
+        alert(`工单 ${unschedWo.order_no} 绑定产线为「${woLine}」，无法排到「${targetLine}」`);
+        return;
+      }
       await scheduleFromUnscheduled(unschedId, date, line);
       return;
     }
@@ -243,6 +251,13 @@ export function ProductionPlanView() {
     const plan = plans.find((p) => p.id === planId);
     if (!plan) return;
     if (plan.plan_date === date && plan.line_code === line) return;
+    // 已排产卡的产线也要匹配（不匹配时拒绝）
+    if (plan.line_code && plan.line_code !== line) {
+      const targetLine = lines.find((l) => l.code === line)?.name ?? line;
+      const planLine = lines.find((l) => l.code === plan.line_code)?.name ?? plan.line_code;
+      alert(`工单 ${plan.work_order_no} 绑定产线为「${planLine}」，无法换到「${targetLine}」`);
+      return;
+    }
     await movePlan(plan, date, line);
   }
 
@@ -480,7 +495,7 @@ export function ProductionPlanView() {
       {/* 待排产工单：未排入本周排程的已下发 / 已暂停工单，可拖到上方日格 */}
       <UnscheduledOrdersPanel
         orders={unscheduledOrders}
-        onDragStart={onDragStartUnscheduled}
+        onDragStart={(e, wo) => onDragStartUnscheduled(e, wo)}
       />
 
       {/* 双击编辑数量弹窗 */}
@@ -523,13 +538,7 @@ function PlanCard({
     >
       <div className="flex items-center justify-between gap-1">
         <span className="truncate font-mono text-[10px] text-slate-300">{plan.work_order_no}</span>
-        <span
-          className={`shrink-0 rounded-sm border px-1 font-mono text-[10px] ${
-            PRIORITY_TONE[plan.priority] ?? "border-slate-700 text-slate-500"
-          }`}
-        >
-          P{plan.priority}
-        </span>
+
       </div>
       <div className="mt-0.5 truncate font-mono text-xs font-semibold text-slate-100 tabular-nums">
         {formatNumber(plan.planned_quantity)} 罐
@@ -672,20 +681,14 @@ function UnscheduledOrdersPanel({
                 </span>
                 <span
                   className={`border px-1 font-mono text-[9px] ${
-                    wo.status === "paused"
+                    wo.status === "暂停"
                       ? "border-orange-500/40 text-orange-300"
                       : "border-sky-500/40 text-sky-300"
                   }`}
                 >
-                  {wo.status === "paused" ? "已暂停" : "已下发"}
+                  {wo.status === "暂停" ? "已暂停" : "已下发"}
                 </span>
-                <span
-                  className={`border px-1 font-mono text-[9px] ${
-                    PRIORITY_TONE[wo.priority] ?? "border-slate-700 text-slate-500"
-                  }`}
-                >
-                  P{wo.priority}
-                </span>
+
               </div>
               <div className="mt-0.5 flex items-center gap-2 text-[10px] text-slate-300">
                 <span className="truncate max-w-[160px]">{wo.product_name}</span>

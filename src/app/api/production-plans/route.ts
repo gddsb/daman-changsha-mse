@@ -67,6 +67,7 @@ export async function POST(request: NextRequest) {
       work_order_id?: string;
       plan_date?: string;
       line_code?: string;
+      line_name?: string;
       planned_quantity?: number;
       priority?: number;
     };
@@ -97,16 +98,28 @@ export async function POST(request: NextRequest) {
       );
     }
     const wo = woResult.workOrder;
+    // 工单未存 line_name 时按产线字典补
+    let lineName = body.line_name;
+    if (!lineName) {
+      const c2 = getSupabaseClient();
+      const { data: ln } = await c2.from("production_lines").select("name").eq("code", body.line_code).maybeSingle();
+      lineName = (ln as { name?: string } | null)?.name ?? body.line_code;
+    }
     const created = await addPlan({
       work_order_id: body.work_order_id,
+      work_order_no: wo.order_no,
       plan_date: body.plan_date,
       line_code: body.line_code,
+      line_name: lineName,
+      product_code: wo.product_code,
+      product_name: wo.product_name,
       planned_quantity: body.planned_quantity ?? wo.quantity ?? 0,
       priority: body.priority ?? wo.priority ?? 3,
       status: 'planned',
     } as Omit<import('@/types/mes').ProductionPlan, 'id' | 'created_at' | 'updated_at'>);
     return NextResponse.json({ success: true, data: created });
   } catch (e) {
+    console.error('addPlan failed:', e);
     const message = e instanceof Error ? e.message : '创建排产失败';
     return NextResponse.json({ success: false, error: message }, { status: 500 });
   }

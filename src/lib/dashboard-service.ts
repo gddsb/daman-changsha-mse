@@ -21,15 +21,15 @@ type PlanRow = Database["public"]["Tables"]["production_plans"]["Row"];
 
 // 状态归一化：DB 中文 -> view 用英文枚举
 const WO_STATUS_MAP: Record<string, string> = {
-  计划中: "planned",
-  已下发: "released",
-  生产中: "in_progress",
-  已暂停: "paused",
-  已完成: "completed",
-  已关闭: "closed",
-  开立: "planned",
-  开工: "in_progress",
-  完工: "completed",
+  计划中: "开立",
+  已下发: "下发",
+  生产中: "生产中",
+  已暂停: "暂停",
+  已完成: "完工",
+  已关闭: "已关闭",
+  开立: "开立",
+  开工: "生产中",
+  完工: "完工",
 };
 
 const todayStr = () => new Date().toISOString().slice(0, 10);
@@ -76,7 +76,7 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
   // 今日完工数 = 今日完工的工单的 completed_quantity 累加
   // 不再按工序报工累加（一批罐会经 13 道工序，会被算 13 次）
   const isCompleted = (s?: string | null) =>
-    s === "已完成" || s === "完工" || s === "closed" || s === "completed";
+    s === "已完成" || s === "完工" || s === "已关闭" || s === "完工";
   const todayCompletedWorkOrders = workOrders.filter(
     (w) => isCompleted(w.status) && (w.actual_end_date ?? "").slice(0, 10) === today,
   );
@@ -104,12 +104,9 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
   // 规则：制罐产线一次只能跑一条产线。当前"在制"工单数最多的产线标记为"运行"，
   // 其余为"待机"；无任何在制工单时全部为"待机"。
   // 排序键：在制工单数（降序）→ 最早开工时间（升序）→ 优先级（升序）
-  // 用户要求：在制工单仅显示"生产中"（in_progress）；
-  // "已暂停/已开工" 不视为在制（产线仍显示运行中以便用户感知，但不在列表中列出）。
-  const inProgressStatuses = [
-    "生产中", "开工", "开立",
-    "in_progress",
-  ];
+  // 用户要求：在制工单仅显示"生产中"；
+  // "暂停/开立" 不视为在制（产线仍按规则显示，但不在列表中列出）。
+  const inProgressStatuses = ["生产中"];
   const lineOrderCounts = new Map<string, number>();
   const lineActiveWorkOrders = new Map<string, WoRow[]>();
   workOrders.forEach((w) => {
@@ -126,7 +123,7 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
   let activeLineCode: string | null = null;
   const inProgressByLine = new Map<string, number>();
   workOrders.forEach((w) => {
-    if (w.line_code && w.status === "in_progress") {
+    if (w.line_code && w.status === "生产中") {
       inProgressByLine.set(w.line_code, (inProgressByLine.get(w.line_code) ?? 0) + 1);
     }
   });
@@ -188,7 +185,7 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
   }
   workOrders.forEach((w) => {
     const s = w.status ?? "";
-    if (s === "已完成" || s === "完工" || s === "closed" || s === "completed") {
+    if (s === "已完成" || s === "完工" || s === "已关闭" || s === "完工") {
       const ds = (w.actual_end_date ?? w.planned_end_date ?? "").slice(0, 10);
       const entry = trendMap.get(ds);
       if (entry) {
@@ -213,7 +210,7 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
   // === 进行中工单 ===
   const activeWorkOrders: WorkOrder[] = workOrders
     .filter((w) => inProgressStatuses.includes(w.status ?? ""))
-    .sort((a, b) => (a.priority ?? 99) - (b.priority ?? 99))
+    .sort((a, b) => (a.planned_start_date ?? "").localeCompare(b.planned_start_date ?? ""))
     .slice(0, 8)
     .map((w) => mapWorkOrderRow(w));
 
@@ -326,7 +323,7 @@ export function mapWorkOrderRow(w: WoRow): WorkOrder {
     quantity: w.planned_quantity ?? 0,
     completed_quantity: w.completed_quantity ?? 0,
     scrap_quantity: w.scrap_quantity ?? 0,
-    status: (WO_STATUS_MAP[w.status ?? ""] ?? w.status ?? "planned") as WorkOrderStatus,
+    status: (WO_STATUS_MAP[w.status ?? ""] ?? w.status ?? "开立") as WorkOrderStatus,
     priority: (w.priority ?? 3) as 1 | 2 | 3 | 4 | 5,
     workshop: w.workshop_name,
     workshop_code: w.workshop_code,

@@ -163,7 +163,14 @@ export const DEFECT_SEVERITY_OPTIONS: SelectOption[] = [
 
 // 工单状态色调（badge 用）
 export const WO_STATUS_TONE: Record<string, string> = {
-  planned: "border-slate-700 bg-slate-800/40 text-slate-300",
+  开立: "border-slate-600 bg-slate-800/50 text-slate-300",
+  下发: "border-sky-700/50 bg-sky-900/30 text-sky-400",
+  生产中: "border-amber-700/50 bg-amber-900/30 text-amber-400",
+  暂停: "border-orange-700/50 bg-orange-900/30 text-orange-400",
+  完工: "border-emerald-700/50 bg-emerald-900/30 text-emerald-400",
+  超期完工: "border-rose-700/50 bg-rose-900/30 text-rose-400",
+  // 兼容历史英文键
+  planned: "border-slate-600 bg-slate-800/50 text-slate-300",
   released: "border-sky-700/50 bg-sky-900/30 text-sky-400",
   in_progress: "border-amber-700/50 bg-amber-900/30 text-amber-400",
   paused: "border-orange-700/50 bg-orange-900/30 text-orange-400",
@@ -173,12 +180,30 @@ export const WO_STATUS_TONE: Record<string, string> = {
 
 // 工单状态中文标签（视图层直接用）
 export const WO_STATUS_LABELS: Record<string, string> = {
-  planned: "计划中",
-  released: "已下发",
+  开立: "开立",
+  下发: "下发",
+  生产中: "生产中",
+  暂停: "暂停",
+  完工: "完工",
+  超期完工: "超期完工",
+  // 兼容历史英文键
+  planned: "开立",
+  released: "下发",
   in_progress: "生产中",
-  paused: "已暂停",
-  completed: "已完成",
+  paused: "暂停",
+  completed: "完工",
   closed: "已关闭",
+};
+
+// 状态机：允许的转换
+// 开立 -> 下发 -> 生产中 -> 暂停 -> 生产中 | 完工 | 超期完工
+export const WO_STATUS_TRANSITIONS: Record<string, string[]> = {
+  开立: ["下发"],
+  下发: ["生产中"],
+  生产中: ["暂停", "完工", "超期完工"],
+  暂停: ["生产中"],
+  完工: [],
+  超期完工: [],
 };
 
 // 工序状态色调（中文状态）

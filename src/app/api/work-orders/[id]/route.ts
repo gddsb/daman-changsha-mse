@@ -1,13 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseClient } from "@/storage/database/supabase-client";
 import { getWorkOrder, updateWorkOrderStatus } from "@/lib/mes-service";
+import { WO_STATUS_LABELS } from "@/lib/constants";
 
 const ACTION_TO_STATUS: Record<string, string> = {
-  release: "released",
-  start: "in_progress",
-  pause: "paused",
-  resume: "in_progress",
-  complete: "completed",
+  release: "下发",
+  start: "生产中",
+  pause: "暂停",
+  resume: "生产中",
+  complete: "完工",
+  overdue_complete: "超期完工",
 };
 
 export async function GET(
@@ -86,7 +88,7 @@ export async function PATCH(
     }
 
     // 开工前检查同产线是否有未完工的工单
-    if (nextStatus === "in_progress") {
+    if (nextStatus === "生产中") {
       const c = getSupabaseClient();
       const { data: wo } = await c
         .from("work_orders")
@@ -106,7 +108,7 @@ export async function PATCH(
           .from("work_orders")
           .select("id, order_no, status")
           .eq("line_code", lineCode)
-          .in("status", ["released", "in_progress", "paused"])
+          .in("status", ["下发", "生产中", "暂停"])
           .neq("id", id)
           .limit(5);
         if (active && active.length > 0) {
@@ -148,7 +150,7 @@ export async function DELETE(
   try {
     const { id } = await params;
     const c = getSupabaseClient();
-    // 只能删除：planned（未下发）或 released（已下发未开工）；in_progress/paused 不允许
+    // 只能删除：开立（未下发）；下发后不再允许删除（需走取消流程）
     const { data: wo, error: e1 } = await c
       .from("work_orders")
       .select("id, order_no, status")
@@ -162,11 +164,11 @@ export async function DELETE(
       );
     }
     const st = (wo as { status: string }).status;
-    if (st !== "planned" && st !== "released") {
+    if ((st !== "开立" && st !== "planned")) {
       return NextResponse.json(
         {
           success: false,
-          error: `工单当前状态为「${st}」，只有未下发或未开工的工单可以删除`,
+          error: `工单当前状态为「${WO_STATUS_LABELS[st] ?? st}」，只有开立（未下发）的工单可以删除`,
         },
         { status: 400 }
       );
