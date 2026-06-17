@@ -199,7 +199,7 @@ export function ProductionPlanView() {
             {startDate} ~ {endDate} · 共 {orderCount} 单 · 计划 {formatNumber(totalPlanned)} 罐
           </span>
           <span className="font-mono text-[10px] text-slate-600">
-            · 拖拽改日/换线 · 双击改数量
+            · 拖拽改日/换线 · 单击/双击查看工单详情
           </span>
         </div>
         <div className="flex items-center gap-2">
@@ -369,7 +369,7 @@ export function ProductionPlanView() {
                               plan={p}
                               onDragStart={(e) => onDragStart(e, p)}
                               onDoubleClick={() =>
-                                setEditingQty({ id: p.id, value: String(p.planned_quantity) })
+                                router.push(`/work-orders/${p.work_order_id}`)
                               }
                               onClick={() => router.push(`/work-orders/${p.work_order_id}`)}
                             />

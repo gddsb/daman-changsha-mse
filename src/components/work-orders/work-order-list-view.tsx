@@ -211,7 +211,7 @@ export function WorkOrderListView() {
                   <WorkOrderRow
                     key={wo.id}
                     wo={wo}
-                    onClick={() => router.push(`/work-orders/${wo.id}`)}
+                    onClick={() => setEditingOrder(wo)}
                     onDoubleClick={() => setEditingOrder(wo)}
                   />
                 ))}
@@ -273,7 +273,7 @@ function WorkOrderRow({ wo, onClick, onDoubleClick }: { wo: WorkOrder; onClick: 
     <tr
       onClick={onClick}
       onDoubleClick={onDoubleClick}
-      title="单击查看详情 · 双击编辑计划数量与日期"
+      title="单击 / 双击打开工单修改"
       className="cursor-pointer border-b border-slate-800/60 transition hover:bg-slate-900/80"
     >
       <td className="px-3 py-2 font-mono text-[11px] text-orange-400">{wo.order_no}</td>
