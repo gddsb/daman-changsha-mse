@@ -6,9 +6,9 @@ import Link from 'next/link';
 import {
   LayoutDashboard,
   ClipboardList,
+  ClipboardEdit,
   CalendarRange,
   ShieldCheck,
-  FileBarChart,
   ChevronsLeft,
   ChevronsRight,
   Settings,
@@ -23,9 +23,9 @@ import { useSidebar } from './sidebar-context';
 const PRIMARY_NAV = [
   { href: '/', label: '生产看板', icon: LayoutDashboard, exact: true },
   { href: '/work-orders', label: '工单管理', icon: ClipboardList },
+  { href: '/reports', label: '报工管理', icon: ClipboardEdit },
   { href: '/production-plan', label: '七天计划', icon: CalendarRange },
   { href: '/quality-inspection', label: '质量检验', icon: ShieldCheck },
-  { href: '/quality-report', label: '质量日报', icon: FileBarChart },
 ];
 
 const SETTINGS_NAV = [

@@ -7,7 +7,6 @@
  */
 import { getSupabaseClient } from "../src/storage/database/supabase-client";
 import { CAN_PROCESS_NAMES } from "../src/lib/constants";
-import { recomputeDailyQualityReport } from "../src/lib/daily-quality-service";
 
 const SHIFTS = ["白班", "中班", "夜班"] as const;
 const OPERATOR_NAMES = ["张工", "李工", "王工", "刘工", "陈工", "杨工", "赵工", "黄工", "周工", "吴工"];
@@ -352,15 +351,6 @@ async function main() {
           for (const g of groups.values()) {
             const wo = woList.find((w) => w.id === g.work_order_id);
             if (!wo) continue;
-            await recomputeDailyQualityReport({
-              report_date: day,
-              line_code: lineCode,
-              line_name: lineName,
-              process_name: proc,
-              product_code: wo.product_code,
-              product_name: wo.product_name,
-              shift_no: g.shift_no,
-            });
             totalWritten++;
           }
         } catch (e) {

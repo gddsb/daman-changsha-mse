@@ -78,28 +78,38 @@ export interface WorkOrderOperation {
   notes: string | null;
 }
 
+// 工单报工（顶层批次报工：开批/换线/人员/清场）
 export interface WorkOrderReport {
   id: string;
   work_order_id: string;
-  work_order_no: string | null;
-  operation_id: string | null;
-  process_name: string | null;
-  operator_name: string;
-  line_code: string | null;
-  line_name: string | null;
-  shift_no: string | null;
-  report_type: string;
-  good_quantity: number;
-  scrap_quantity: number;
-  scrap_reason: string | null;
-  product_code: string | null;
-  product_name: string | null;
-  can_spec: string | null;
-  can_height: number;
-  batch_no: string | null;
-  inspector_name: string | null;
-  reported_at: string;
-  notes: string | null;
+  batch_no: string;
+  start_at: string;
+  change_line_at: string | null;
+  skilled_workers: number;
+  general_workers: number;
+  labor_workers: number;
+  cleanup_minutes: number;
+  notes: string;
+  created_at: string;
+  updated_at: string;
+}
+
+// 工序报工（物料/批次/投入/不良，合格自动 = 投入-不良）
+export interface OperationReport {
+  id: string;
+  work_order_report_id: string;
+  operation_id: string;
+  process_name: string;
+  sequence: number;
+  material_code: string;
+  material_name: string;
+  material_batch_no: string;
+  input_qty: number;
+  defect_qty: number;
+  qualified_qty: number;
+  notes: string;
+  created_at: string;
+  updated_at: string;
 }
 
 // ====== 制罐业务新增 ======
@@ -129,25 +139,6 @@ export interface ProductionPlan {
   notes: string | null;
   created_at: string;
   updated_at: string;
-}
-
-export interface DailyQualityReport {
-  id: string;
-  report_date: string;
-  line_code: string;
-  line_name: string | null;
-  process_name: string;
-  product_code: string;
-  product_name: string;
-  can_spec: string | null;
-  can_height: number;
-  shift_no: string | null;
-  total_inspected: number;
-  total_good: number;
-  total_scrap: number;
-  pass_rate: number;
-  scrap_rate: number;
-  defect_breakdown: unknown;
 }
 
 export interface Product {

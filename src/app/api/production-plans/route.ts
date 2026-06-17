@@ -33,20 +33,45 @@ export async function PATCH(request: NextRequest) {
       planned_quantity?: number;
     };
     let planId = body.id;
+    let currentPlan: { work_order_id: string | null; plan_date: string | null } | null = null;
     if (!planId && body.work_order_id) {
       const supa = getSupabaseClient();
       const { data: plan } = await supa
         .from('production_plans')
-        .select('id')
+        .select('id, work_order_id, plan_date')
         .eq('work_order_id', body.work_order_id)
         .maybeSingle();
       if (!plan) {
         return NextResponse.json({ success: false, error: '该工单未在排产计划中' }, { status: 404 });
       }
       planId = plan.id;
+      currentPlan = plan;
+    } else if (planId) {
+      const supa = getSupabaseClient();
+      const { data: plan } = await supa
+        .from('production_plans')
+        .select('id, work_order_id, plan_date')
+        .eq('id', planId)
+        .maybeSingle();
+      if (plan) currentPlan = plan;
     }
     if (!planId) {
       return NextResponse.json({ success: false, error: '缺少计划 id' }, { status: 400 });
+    }
+    // 工单在生产中时禁止调整日期/产线
+    if (currentPlan?.work_order_id && (body.plan_date || body.line_code)) {
+      const supa2 = getSupabaseClient();
+      const { data: wo } = await supa2
+        .from('work_orders')
+        .select('id, status, order_no')
+        .eq('id', currentPlan.work_order_id)
+        .maybeSingle();
+      if (wo && (wo as { status: string }).status === '生产中') {
+        return NextResponse.json(
+          { success: false, error: `工单 ${(wo as { order_no: string }).order_no} 已开工（生产中），不允许调整 7 天生产计划` },
+          { status: 400 },
+        );
+      }
     }
     const updated = await updatePlan(planId, {
       plan_date: body.plan_date,

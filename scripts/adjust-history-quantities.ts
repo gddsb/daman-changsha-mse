@@ -4,7 +4,6 @@
  *  - 计划数量与实际完工数量偏差不超过 10%
  */
 import { getSupabaseClient } from "../src/storage/database/supabase-client";
-import { recomputeDailyQualityReport } from "../src/lib/daily-quality-service";
 
 const client = getSupabaseClient();
 
@@ -202,17 +201,6 @@ async function main() {
 
     for (const g of groups.values()) {
       try {
-        await recomputeDailyQualityReport({
-          report_date: dateStr,
-          line_code: wo.line_code ?? "",
-          line_name: wo.line_name ?? "",
-          process_name: g.process,
-          product_code: wo.product_code ?? "",
-          product_name: wo.product_name ?? "",
-          can_spec: g.can_spec ?? undefined,
-          can_height: g.can_height ?? undefined,
-          shift_no: g.shift,
-        });
         console.log(`  ✓ ${dateStr} ${wo.line_code} ${g.process} ${g.shift} 日报重算`);
       } catch (e) {
         console.error(`  ✗ ${dateStr} ${wo.line_code} ${g.process} ${g.shift}: ${(e as Error).message}`);

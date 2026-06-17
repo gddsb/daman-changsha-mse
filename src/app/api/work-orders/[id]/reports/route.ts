@@ -1,6 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { createReport, getWorkOrder } from '@/lib/mes-service';
+import { NextRequest, NextResponse } from "next/server";
+import { createWorkOrderReport, getWorkOrder } from "@/lib/mes-service";
 
+// 报工/工单报工顶层
+// POST 创建工单报工批次
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -8,49 +10,36 @@ export async function POST(
   try {
     const { id } = await params;
     const body = await request.json();
-
-    // 兜底：报工产线信息从工单取
     const woWrap = await getWorkOrder(id);
     const wo = woWrap?.workOrder;
-
-    const operatorName = body.operator_name ?? body.operator;
-    if (!operatorName || !body.process_name || !body.line_code || !body.batch_no) {
+    if (!wo) {
+      return NextResponse.json({ success: false, error: "工单不存在" }, { status: 404 });
+    }
+    if (wo.status === "完工" || wo.status === "超期完工") {
+      return NextResponse.json({ success: false, error: "工单已完工/超期完工，不能再创建工单报工" }, { status: 400 });
+    }
+    if (wo.status === "开立" || wo.status === "下发") {
       return NextResponse.json(
-        { success: false, error: '操作员/工序/产线/批次为必填' },
+        { success: false, error: "工单还未开工（开立/下发），请先开工后再做工单报工" },
         { status: 400 },
       );
     }
-    const good = Number(body.good_quantity ?? body.good_qty ?? 0);
-    const scrap = Number(body.scrap_quantity ?? body.scrap_qty ?? 0);
-    if (Number.isNaN(good) || Number.isNaN(scrap) || good < 0 || scrap < 0) {
-      return NextResponse.json(
-        { success: false, error: '数量必须为非负数' },
-        { status: 400 },
-      );
+    if (!body.batch_no || !body.start_at) {
+      return NextResponse.json({ success: false, error: "生产批号、开始时间为必填" }, { status: 400 });
     }
-
-    const report = await createReport({
+    const rep = await createWorkOrderReport({
       work_order_id: id,
-      operation_id: body.operation_id ?? body.process_id,
-      process_name: body.process_name,
-      operator_name: operatorName,
-      // line_code/line_name 兜底从工单取，避免历史数据 / 前端没传时丢失
-      line_code: body.line_code || wo?.line_code,
-      line_name: body.line_name || wo?.line_name,
-      shift_no: body.shift_no ?? '白班',
-      good_quantity: good,
-      scrap_quantity: scrap,
       batch_no: body.batch_no,
-      inspector_name: body.inspector_name ?? operatorName,
-      can_spec: body.can_spec,
-      can_height: body.can_height ? Number(body.can_height) : undefined,
-      notes: body.notes ?? body.scrap_reason,
+      start_at: body.start_at,
+      change_line_at: body.change_line_at ?? null,
+      skilled_workers: Number(body.skilled_workers ?? 0),
+      general_workers: Number(body.general_workers ?? 0),
+      labor_workers: Number(body.labor_workers ?? 0),
+      cleanup_minutes: Number(body.cleanup_minutes ?? 0),
+      notes: body.notes ?? "",
     });
-
-    // 注：报工不再自动生成质量日报
-    return NextResponse.json({ success: true, data: report });
+    return NextResponse.json({ success: true, data: rep });
   } catch (e) {
-    const message = e instanceof Error ? e.message : '报工失败';
-    return NextResponse.json({ success: false, error: message }, { status: 500 });
+    return NextResponse.json({ success: false, error: (e as Error).message }, { status: 400 });
   }
 }
