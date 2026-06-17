@@ -61,47 +61,7 @@
 
 :root {
   --radius: 0.25rem;
-  /* 浅色留作 fallback，但默认走深色 */
-  --background: #F5F6FA;
-  --foreground: #1A2030;
-  --card: #FFFFFF;
-  --card-foreground: #1A2030;
-  --popover: #FFFFFF;
-  --popover-foreground: #1A2030;
-  --primary: #F97316;
-  --primary-foreground: #0A0E1A;
-  --secondary: #EEF0F5;
-  --secondary-foreground: #1A2030;
-  --muted: #EEF0F5;
-  --muted-foreground: #6B7592;
-  --accent: #EEF0F5;
-  --accent-foreground: #1A2030;
-  --destructive: #EF4444;
-  --border: #E2E5EE;
-  --input: #E2E5EE;
-  --ring: #F97316;
-  --success: #22C55E;
-  --warning: #EAB308;
-  --info: #3B82F6;
-  --brand: #F97316;
-  --cyan: #06B6D4;
-  --chart-1: #06B6D4;
-  --chart-2: #22C55E;
-  --chart-3: #EAB308;
-  --chart-4: #F97316;
-  --chart-5: #EF4444;
-  --sidebar: #FFFFFF;
-  --sidebar-foreground: #1A2030;
-  --sidebar-primary: #F97316;
-  --sidebar-primary-foreground: #0A0E1A;
-  --sidebar-accent: #EEF0F5;
-  --sidebar-accent-foreground: #1A2030;
-  --sidebar-border: #E2E5EE;
-  --sidebar-ring: #F97316;
-}
-
-/* MES 强制深色模式 — 工业管控台调性 */
-.dark, html {
+  /* 浅色 fallback（不实际使用，但 shadcn 组件需要这些变量存在） */
   --background: #0A0E1A;
   --foreground: #E8ECF4;
   --card: #111726;
@@ -140,6 +100,212 @@
   --sidebar-ring: #F97316;
 }
 
+/* ===========================================================
+ *  5 套预设深色主题 — 工业管控台调性
+ *  默认主题：mes-dark（工业橙，原始色）
+ *  切换方式：html[data-theme="xxx"]
+ * =========================================================== */
+
+/* 主题 1: 工业橙（默认）— 长沙大满品牌色 */
+html[data-theme='mes-dark'] {
+  --background: #0A0E1A;
+  --foreground: #E8ECF4;
+  --card: #111726;
+  --card-foreground: #E8ECF4;
+  --popover: #111726;
+  --popover-foreground: #E8ECF4;
+  --primary: #F97316;
+  --primary-foreground: #0A0E1A;
+  --secondary: #1A2030;
+  --secondary-foreground: #E8ECF4;
+  --muted: #1A2030;
+  --muted-foreground: #A0AABE;
+  --accent: #1A2030;
+  --accent-foreground: #E8ECF4;
+  --destructive: #EF4444;
+  --border: #1F2738;
+  --input: #1F2738;
+  --ring: #F97316;
+  --success: #22C55E;
+  --warning: #EAB308;
+  --info: #3B82F6;
+  --brand: #F97316;
+  --cyan: #06B6D4;
+  --chart-1: #06B6D4;
+  --chart-2: #22C55E;
+  --chart-3: #EAB308;
+  --chart-4: #F97316;
+  --chart-5: #EF4444;
+  --sidebar: #0A0E1A;
+  --sidebar-foreground: #E8ECF4;
+  --sidebar-primary: #F97316;
+  --sidebar-primary-foreground: #0A0E1A;
+  --sidebar-accent: #1A2030;
+  --sidebar-accent-foreground: #E8ECF4;
+  --sidebar-border: #1F2738;
+  --sidebar-ring: #F97316;
+}
+
+/* 主题 2: 冰蓝 — 冷静、医疗、洁净车间感 */
+html[data-theme='mes-cyan'] {
+  --background: #07131C;
+  --foreground: #E2ECF5;
+  --card: #0E1F2D;
+  --card-foreground: #E2ECF5;
+  --popover: #0E1F2D;
+  --popover-foreground: #E2ECF5;
+  --primary: #38BDF8;
+  --primary-foreground: #07131C;
+  --secondary: #14293A;
+  --secondary-foreground: #E2ECF5;
+  --muted: #14293A;
+  --muted-foreground: #94A8BC;
+  --accent: #14293A;
+  --accent-foreground: #E2ECF5;
+  --destructive: #F87171;
+  --border: #1A3144;
+  --input: #1A3144;
+  --ring: #38BDF8;
+  --success: #34D399;
+  --warning: #FBBF24;
+  --info: #60A5FA;
+  --brand: #38BDF8;
+  --cyan: #22D3EE;
+  --chart-1: #22D3EE;
+  --chart-2: #34D399;
+  --chart-3: #FBBF24;
+  --chart-4: #38BDF8;
+  --chart-5: #F87171;
+  --sidebar: #07131C;
+  --sidebar-foreground: #E2ECF5;
+  --sidebar-primary: #38BDF8;
+  --sidebar-primary-foreground: #07131C;
+  --sidebar-accent: #14293A;
+  --sidebar-accent-foreground: #E2ECF5;
+  --sidebar-border: #1A3144;
+  --sidebar-ring: #38BDF8;
+}
+
+/* 主题 3: 翡翠绿 — 安全、顺行、合规 */
+html[data-theme='mes-emerald'] {
+  --background: #061512;
+  --foreground: #E1F1EA;
+  --card: #0C2620;
+  --card-foreground: #E1F1EA;
+  --popover: #0C2620;
+  --popover-foreground: #E1F1EA;
+  --primary: #10B981;
+  --primary-foreground: #061512;
+  --secondary: #11332B;
+  --secondary-foreground: #E1F1EA;
+  --muted: #11332B;
+  --muted-foreground: #8FAA9F;
+  --accent: #11332B;
+  --accent-foreground: #E1F1EA;
+  --destructive: #F87171;
+  --border: #1A4034;
+  --input: #1A4034;
+  --ring: #10B981;
+  --success: #22C55E;
+  --warning: #FBBF24;
+  --info: #38BDF8;
+  --brand: #10B981;
+  --cyan: #22D3EE;
+  --chart-1: #10B981;
+  --chart-2: #22D3EE;
+  --chart-3: #FBBF24;
+  --chart-4: #F97316;
+  --chart-5: #F87171;
+  --sidebar: #061512;
+  --sidebar-foreground: #E1F1EA;
+  --sidebar-primary: #10B981;
+  --sidebar-primary-foreground: #061512;
+  --sidebar-accent: #11332B;
+  --sidebar-accent-foreground: #E1F1EA;
+  --sidebar-border: #1A4034;
+  --sidebar-ring: #10B981;
+}
+
+/* 主题 4: 朱红 — 警示、应急、异常高亮 */
+html[data-theme='mes-crimson'] {
+  --background: #16090B;
+  --foreground: #F2E2E5;
+  --card: #241012;
+  --card-foreground: #F2E2E5;
+  --popover: #241012;
+  --popover-foreground: #F2E2E5;
+  --primary: #F43F5E;
+  --primary-foreground: #16090B;
+  --secondary: #2E141A;
+  --secondary-foreground: #F2E2E5;
+  --muted: #2E141A;
+  --muted-foreground: #B2949A;
+  --accent: #2E141A;
+  --accent-foreground: #F2E2E5;
+  --destructive: #DC2626;
+  --border: #3D1A22;
+  --input: #3D1A22;
+  --ring: #F43F5E;
+  --success: #34D399;
+  --warning: #FBBF24;
+  --info: #60A5FA;
+  --brand: #F43F5E;
+  --cyan: #22D3EE;
+  --chart-1: #F43F5E;
+  --chart-2: #34D399;
+  --chart-3: #FBBF24;
+  --chart-4: #60A5FA;
+  --chart-5: #F43F5E;
+  --sidebar: #16090B;
+  --sidebar-foreground: #F2E2E5;
+  --sidebar-primary: #F43F5E;
+  --sidebar-primary-foreground: #16090B;
+  --sidebar-accent: #2E141A;
+  --sidebar-accent-foreground: #F2E2E5;
+  --sidebar-border: #3D1A22;
+  --sidebar-ring: #F43F5E;
+}
+
+/* 主题 5: 琥珀金 — 高级、稳重、领导办公室 */
+html[data-theme='mes-amber'] {
+  --background: #15100A;
+  --foreground: #F2EBE2;
+  --card: #221A12;
+  --card-foreground: #F2EBE2;
+  --popover: #221A12;
+  --popover-foreground: #F2EBE2;
+  --primary: #F59E0B;
+  --primary-foreground: #15100A;
+  --secondary: #2A2117;
+  --secondary-foreground: #F2EBE2;
+  --muted: #2A2117;
+  --muted-foreground: #B2A294;
+  --accent: #2A2117;
+  --accent-foreground: #F2EBE2;
+  --destructive: #EF4444;
+  --border: #3A2C1D;
+  --input: #3A2C1D;
+  --ring: #F59E0B;
+  --success: #34D399;
+  --warning: #FBBF24;
+  --info: #60A5FA;
+  --brand: #F59E0B;
+  --cyan: #22D3EE;
+  --chart-1: #F59E0B;
+  --chart-2: #34D399;
+  --chart-3: #FBBF24;
+  --chart-4: #60A5FA;
+  --chart-5: #EF4444;
+  --sidebar: #15100A;
+  --sidebar-foreground: #F2EBE2;
+  --sidebar-primary: #F59E0B;
+  --sidebar-primary-foreground: #15100A;
+  --sidebar-accent: #2A2117;
+  --sidebar-accent-foreground: #F2EBE2;
+  --sidebar-border: #3A2C1D;
+  --sidebar-ring: #F59E0B;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
@@ -151,39 +317,15 @@
     @apply font-sans;
     font-feature-settings: "cv11", "ss01", "ss03";
   }
+  /* 主题切换平滑过渡 */
+  html, body, [data-theme-transition] {
+    transition: background-color 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+                color 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+                border-color 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
 }
 
 /* 数字等宽对齐 */
 .tabular-nums {
   font-variant-numeric: tabular-nums;
-}
-
-/* 实时数据脉动点 */
-@keyframes pulse-dot {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.35; }
-}
-.pulse-dot {
-  animation: pulse-dot 1.6s ease-in-out infinite;
-}
-
-/* 滚动条美化（深色） */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  background: #2D3548;
-  border-radius: 2px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: #3D4558;
-}
-
-/* 等宽数字用于表格和 KPI */
-.font-mono, code, kbd {
-  font-feature-settings: "tnum";
 }

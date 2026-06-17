@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { Bell, Search, ChevronRight, RefreshCcw } from 'lucide-react';
+import { ThemeSwitcher } from './theme-switcher';
 
 const TITLE_MAP: Record<string, string> = {
   '/': '生产看板',
@@ -64,6 +65,7 @@ export function Topbar() {
           <RefreshCcw className={`h-3.5 w-3.5 ${syncing ? 'animate-spin' : ''}`} />
           {syncing ? '同步中...' : '同步 U9'}
         </button>
+        <ThemeSwitcher />
         <div className="hidden items-center gap-2 border border-border bg-card px-3 py-1.5 text-xs text-muted-foreground md:flex">
           <Search className="h-3.5 w-3.5" />
           <span>搜索工单 / 设备 / 物料</span>

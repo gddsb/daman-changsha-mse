@@ -1,19 +1,19 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import {
   LayoutDashboard,
   ClipboardList,
   CalendarRange,
   ShieldCheck,
-  RefreshCcw,
   FileBarChart,
-  Settings,
-  Activity,
+  ChevronsLeft,
+  ChevronsRight,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useSidebar } from './sidebar-context';
 
 const NAV = [
   { href: '/', label: '生产看板', icon: LayoutDashboard, exact: true },
@@ -25,6 +25,7 @@ const NAV = [
 
 export function Sidebar() {
   const pathname = usePathname();
+  const { collapsed, toggle } = useSidebar();
   const [now, setNow] = useState<Date | null>(null);
 
   useEffect(() => {
@@ -34,28 +35,39 @@ export function Sidebar() {
   }, []);
 
   const timeStr = now
-    ? `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`
-    : '— — — — — — — — — — —';
+    ? `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`
+    : '--:--:--';
 
   return (
-    <aside className="flex w-60 shrink-0 flex-col border-r border-border bg-sidebar">
+    <aside
+      className={cn(
+        'flex shrink-0 flex-col border-r border-sidebar-border bg-sidebar transition-[width] duration-200 ease-out',
+        collapsed ? 'w-16' : 'w-60',
+      )}
+      aria-expanded={!collapsed}
+    >
       {/* Logo 区 */}
-      <div className="flex h-14 items-center gap-3 border-b border-border px-4">
-        <img
-          src="/logo.gif"
-          alt="长沙大满"
-          className="h-9 w-auto"
-        />
-        <div>
-          <div className="text-sm font-semibold tracking-tight text-foreground leading-tight">长沙大满</div>
-          <div className="text-[10px] uppercase tracking-wider text-muted-foreground leading-tight">
-            Production System
+      <div
+        className={cn(
+          'flex h-14 items-center border-b border-sidebar-border',
+          collapsed ? 'justify-center px-2' : 'gap-3 px-4',
+        )}
+      >
+        <img src="/logo.gif" alt="长沙大满" className="h-9 w-auto shrink-0" />
+        {!collapsed && (
+          <div className="overflow-hidden">
+            <div className="truncate text-sm font-semibold tracking-tight text-sidebar-foreground leading-tight">
+              长沙大满
+            </div>
+            <div className="truncate text-[10px] uppercase tracking-wider text-muted-foreground leading-tight">
+              Production System
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* 导航 */}
-      <nav className="flex-1 space-y-0.5 p-3">
+      <nav className="flex-1 space-y-0.5 p-2">
         {NAV.map((item) => {
           const Icon = item.icon;
           const isActive = item.exact
@@ -65,41 +77,78 @@ export function Sidebar() {
             <Link
               key={item.href}
               href={item.href}
+              title={collapsed ? item.label : undefined}
               className={cn(
-                'group flex h-9 items-center gap-3 px-3 text-sm transition-colors',
+                'group relative flex h-9 items-center text-sm transition-colors',
+                collapsed ? 'justify-center px-2' : 'gap-3 px-3',
                 isActive
-                  ? 'bg-primary/10 text-primary'
-                  : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+                  ? 'bg-sidebar-primary/10 text-sidebar-primary'
+                  : 'text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
               )}
             >
               <Icon
                 className={cn(
-                  'h-4 w-4 transition-colors',
-                  isActive ? 'text-primary' : 'text-muted-foreground group-hover:text-foreground',
+                  'h-4 w-4 shrink-0 transition-colors',
+                  isActive ? 'text-sidebar-primary' : 'text-muted-foreground group-hover:text-foreground',
                 )}
                 strokeWidth={1.5}
               />
-              <span className="font-medium">{item.label}</span>
-              {isActive && (
-                <span className="ml-auto h-1.5 w-1.5 bg-primary" />
+              {!collapsed && <span className="font-medium">{item.label}</span>}
+              {!collapsed && isActive && (
+                <span className="ml-auto h-1.5 w-1.5 bg-sidebar-primary" />
+              )}
+              {collapsed && isActive && (
+                <span className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 bg-sidebar-primary" />
               )}
             </Link>
           );
         })}
       </nav>
 
+      {/* 折叠按钮 */}
+      <button
+        type="button"
+        onClick={toggle}
+        title={collapsed ? '展开侧边栏' : '收起侧边栏'}
+        className={cn(
+          'flex h-9 items-center border-t border-sidebar-border text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
+          collapsed ? 'justify-center' : 'gap-2 px-4',
+        )}
+      >
+        {collapsed ? (
+          <ChevronsRight className="h-4 w-4" strokeWidth={1.5} />
+        ) : (
+          <>
+            <ChevronsLeft className="h-4 w-4" strokeWidth={1.5} />
+            <span className="text-xs">收起菜单</span>
+          </>
+        )}
+      </button>
+
       {/* 底部状态 */}
-      <div className="border-t border-border p-4">
-        <div className="flex items-center gap-2">
-          <span className="relative flex h-2 w-2">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-60" />
-            <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
-          </span>
-          <span className="text-xs text-muted-foreground">系统在线</span>
-        </div>
-        <div className="mt-2 font-mono text-xs text-foreground/80 tabular-nums">
-          {timeStr}
-        </div>
+      <div
+        className={cn(
+          'border-t border-sidebar-border p-3',
+          collapsed ? 'flex justify-center' : '',
+        )}
+      >
+        {collapsed ? (
+          <div
+            className="flex h-2 w-2 rounded-full bg-emerald-500"
+            title="系统在线"
+          />
+        ) : (
+          <>
+            <div className="flex items-center gap-2">
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-60" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+              </span>
+              <span className="text-xs text-muted-foreground">系统在线</span>
+            </div>
+            <div className="mt-2 font-mono text-xs text-foreground/80 tabular-nums">{timeStr}</div>
+          </>
+        )}
       </div>
     </aside>
   );
