@@ -202,6 +202,114 @@ export async function listWorkOrders(opts?: {
   return (data ?? []).map(toWoView);
 }
 
+export interface CreateWorkOrderInput {
+  order_no?: string;        // 不传则自动生成 MO-YYYYMMDDHHmm-XXX
+  product_code: string;
+  product_name?: string;
+  specification?: string;
+  planned_quantity: number;
+  line_code: string;
+  line_name?: string;
+  priority?: number;        // 1-5, 数字越小越高
+  order_type?: string;      // 默认 "制罐生产订单"
+  customer_name?: string;
+  sales_order_no?: string;
+  planned_start_date?: string;  // ISO
+  planned_end_date?: string;
+  notes?: string;
+}
+
+function generateOrderNo(): string {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const stamp = `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}${pad(d.getHours())}${pad(d.getMinutes())}`;
+  const rand = Math.floor(Math.random() * 1000).toString().padStart(3, "0");
+  return `MO-${stamp}-${rand}`;
+}
+
+export async function createWorkOrder(input: CreateWorkOrderInput) {
+  const c = getSupabaseClient();
+  // 校验产品
+  const { data: prod, error: pErr } = await c
+    .from("products")
+    .select("code, name, specification, unit")
+    .eq("code", input.product_code)
+    .maybeSingle();
+  if (pErr) throw pErr;
+  if (!prod) {
+    const err: Error & { status?: number } = new Error(
+      `物料 ${input.product_code} 不存在，请先在物料字典创建`
+    );
+    err.status = 400;
+    throw err;
+  }
+
+  // 校验产线
+  const { data: line, error: lErr } = await c
+    .from("production_lines")
+    .select("code, name, workshop_code, workshop_name")
+    .eq("code", input.line_code)
+    .maybeSingle();
+  if (lErr) throw lErr;
+  if (!line) {
+    const err: Error & { status?: number } = new Error(`产线 ${input.line_code} 不存在`);
+    err.status = 400;
+    throw err;
+  }
+
+  const orderNo = input.order_no?.trim() || generateOrderNo();
+  const priority = Math.max(1, Math.min(5, input.priority ?? 3));
+  const lineName = input.line_name ?? (line as { name: string }).name;
+  const ws = line as { workshop_code: string; workshop_name: string };
+  const productName = input.product_name?.trim() || (prod as { name: string }).name;
+  const productSpec = input.specification ?? (prod as { specification?: string | null }).specification ?? null;
+
+  const { data, error } = await c
+    .from("work_orders")
+    .insert({
+      order_no: orderNo,
+      order_type: input.order_type ?? "制罐生产订单",
+      sales_order_no: input.sales_order_no ?? null,
+      product_code: input.product_code,
+      product_name: productName,
+      specification: productSpec,
+      unit: (prod as { unit?: string | null }).unit ?? "罐",
+      planned_quantity: input.planned_quantity,
+      completed_quantity: 0,
+      scrap_quantity: 0,
+      status: "released",
+      priority,
+      workshop_code: ws.workshop_code,
+      workshop_name: ws.workshop_name,
+      line_code: input.line_code,
+      line_name: lineName,
+      customer_name: input.customer_name ?? null,
+      planned_start_date: input.planned_start_date ?? new Date().toISOString(),
+      planned_end_date: input.planned_end_date ?? new Date(Date.now() + 86400000 * 3).toISOString(),
+      notes: input.notes ?? null,
+    })
+    .select()
+    .single();
+  if (error) throw error;
+
+  // 自动生成 13 道工序
+  const ops = CAN_PROCESS_NAMES.map((name, idx) => ({
+    work_order_id: (data as { id: string }).id,
+    sequence: idx + 1,
+    operation_name: name,
+    workstation: lineName === "A线" ? "A线主控台" : "B线主控台",
+    line_code: input.line_code,
+    line_name: lineName,
+    standard_time_minutes: Math.max(30, Math.round(input.planned_quantity / 500)),
+    status: "pending",
+    good_quantity: 0,
+    scrap_quantity: 0,
+  }));
+  await c.from("work_order_operations").insert(ops);
+
+  return toWoView(data as Record<string, unknown>);
+}
+
 export async function getWorkOrder(id: string) {
   const c = getSupabaseClient();
   const { data: wo, error } = await c
@@ -507,7 +615,7 @@ export async function listPlans(filter: PlanFilter = {}): Promise<ProductionPlan
 
 export async function updatePlan(
   id: string,
-  patch: { plan_date?: string; line_code?: string; priority?: number; status?: string; notes?: string }
+  patch: { plan_date?: string; line_code?: string; priority?: number; status?: string; notes?: string; planned_quantity?: number }
 ) {
   const c = getSupabaseClient();
   const update: Record<string, unknown> = { updated_at: new Date().toISOString() };
@@ -519,6 +627,7 @@ export async function updatePlan(
   if (patch.priority !== undefined) update.priority = patch.priority;
   if (patch.status !== undefined) update.status = patch.status;
   if (patch.notes !== undefined) update.notes = patch.notes;
+  if (patch.planned_quantity !== undefined) update.planned_quantity = patch.planned_quantity;
   const { data, error } = await c
     .from("production_plans")
     .update(update)

@@ -30,6 +30,7 @@ export async function PATCH(request: NextRequest) {
       plan_date?: string;
       line_code?: string;
       priority?: number;
+      planned_quantity?: number;
     };
     let planId = body.id;
     if (!planId && body.work_order_id) {
@@ -51,6 +52,7 @@ export async function PATCH(request: NextRequest) {
       plan_date: body.plan_date,
       line_code: body.line_code,
       priority: body.priority,
+      planned_quantity: body.planned_quantity,
     });
     return NextResponse.json({ success: true, data: updated });
   } catch (e) {
