@@ -31,20 +31,66 @@ export function ProductionPlanView() {
   const [filterLine, setFilterLine] = useState<string>("all");
   const [dragOver, setDragOver] = useState<{ date: string; line: string } | null>(null);
   const [editingQty, setEditingQty] = useState<{ id: string; value: string } | null>(null);
+  const [unscheduledOrders, setUnscheduledOrders] = useState<
+    Array<{
+      id: string;
+      order_no: string;
+      product_name: string;
+      product_code: string;
+      planned_quantity: number;
+      status: string;
+      line_code: string | null;
+      line_name: string | null;
+      priority: number;
+    }>
+  >([]);
 
   const endDate = getProductionDate(addDays(new Date(startDate), 6));
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const [planRes, lineRes] = await Promise.all([
+      const [planRes, lineRes, woRes] = await Promise.all([
         fetch(`/api/production-plans?from=${startDate}&to=${endDate}`),
         fetch("/api/production-lines"),
+        fetch("/api/work-orders?statuses=released,paused&limit=200"),
       ]);
       const planJson = await planRes.json();
       const lineJson = await lineRes.json();
-      if (planJson.success) setPlans(planJson.data);
+      const woJson = await woRes.json();
+      const allPlans: ProductionPlan[] = planJson.success ? planJson.data : [];
+      setPlans(allPlans);
       if (lineJson.success) setLines(lineJson.data);
+      if (woJson.success) {
+        type Wo = {
+          id: string;
+          order_no: string;
+          product_name: string;
+          product_code: string;
+          quantity: number;
+          status: string;
+          line_code: string | null;
+          line_name: string | null;
+          priority: number;
+        };
+        const allWos: Wo[] = (woJson.data ?? []) as Wo[];
+        const scheduledWoIds = new Set(allPlans.map((p) => p.work_order_id));
+        setUnscheduledOrders(
+          allWos
+            .filter((w) => !scheduledWoIds.has(w.id))
+            .map((w) => ({
+              id: w.id,
+              order_no: w.order_no,
+              product_name: w.product_name,
+              product_code: w.product_code,
+              planned_quantity: w.quantity,
+              status: w.status,
+              line_code: w.line_code,
+              line_name: w.line_name,
+              priority: w.priority,
+            }))
+        );
+      }
     } catch (e) {
       console.error("加载计划失败", e);
     } finally {
@@ -161,6 +207,17 @@ export function ProductionPlanView() {
     e.dataTransfer.effectAllowed = "move";
   }
 
+  function onDragStartUnscheduled(
+    e: React.DragEvent,
+    wo: { id: string; planned_quantity: number; line_code: string | null }
+  ) {
+    e.dataTransfer.setData("text/plain", "");
+    e.dataTransfer.setData("application/x-unscheduled", wo.id);
+    e.dataTransfer.setData("application/x-qty", String(wo.planned_quantity));
+    e.dataTransfer.setData("application/x-line", wo.line_code ?? "");
+    e.dataTransfer.effectAllowed = "copy";
+  }
+
   function onDragOver(e: React.DragEvent, date: string, line: string) {
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
@@ -174,11 +231,44 @@ export function ProductionPlanView() {
   async function onDrop(e: React.DragEvent, date: string, line: string) {
     e.preventDefault();
     setDragOver(null);
+    // 优先级 1: 拖入"待排产"工单 → 新增排产
+    const unschedId = e.dataTransfer.getData("application/x-unscheduled");
+    if (unschedId) {
+      await scheduleFromUnscheduled(unschedId, date, line);
+      return;
+    }
+    // 优先级 2: 拖已有排产卡 → 调整
     const planId = e.dataTransfer.getData("text/plain");
+    if (!planId) return;
     const plan = plans.find((p) => p.id === planId);
     if (!plan) return;
     if (plan.plan_date === date && plan.line_code === line) return;
     await movePlan(plan, date, line);
+  }
+
+  async function scheduleFromUnscheduled(woId: string, date: string, line: string) {
+    setSubmitting(true);
+    try {
+      const res = await fetch("/api/production-plans", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ work_order_id: woId, plan_date: date, line_code: line }),
+      });
+      const text = await res.text();
+      let json: { success?: boolean; error?: string } = {};
+      try {
+        json = text ? JSON.parse(text) : {};
+      } catch {
+        json = { success: false, error: `HTTP ${res.status}` };
+      }
+      if (!json.success) {
+        alert(json.error || "排产失败");
+        return;
+      }
+      await fetchData();
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   function shiftWeek(delta: number) {
@@ -387,6 +477,12 @@ export function ProductionPlanView() {
         </div>
       </div>
 
+      {/* 待排产工单：未排入本周排程的已下发 / 已暂停工单，可拖到上方日格 */}
+      <UnscheduledOrdersPanel
+        orders={unscheduledOrders}
+        onDragStart={onDragStartUnscheduled}
+      />
+
       {/* 双击编辑数量弹窗 */}
       {editingQty && (
         <QtyEditDialog
@@ -509,6 +605,101 @@ function QtyEditDialog({
           </Button>
         </div>
       </Card>
+    </div>
+  );
+}
+
+type UnscheduledOrder = {
+  id: string;
+  order_no: string;
+  product_name: string;
+  product_code: string;
+  planned_quantity: number;
+  status: string;
+  line_code: string | null;
+  line_name: string | null;
+  priority: number;
+};
+
+function UnscheduledOrdersPanel({
+  orders,
+  onDragStart,
+}: {
+  orders: UnscheduledOrder[];
+  onDragStart: (
+    e: React.DragEvent,
+    wo: { id: string; planned_quantity: number; line_code: string | null }
+  ) => void;
+}) {
+  return (
+    <div className="border-b border-slate-800 bg-slate-950/40">
+      <div className="flex items-center justify-between px-6 py-2">
+        <div className="flex items-center gap-2">
+          <AlertCircle className="h-3.5 w-3.5 text-amber-400" />
+          <span className="font-mono text-xs font-semibold text-slate-200">
+            待排产工单
+          </span>
+          <span className="font-mono text-[10px] text-slate-500">
+            · {orders.length} 单 · 拖入上方日格完成排程
+          </span>
+        </div>
+        <span className="font-mono text-[10px] text-slate-600">
+          包含：已下发(released) · 已暂停(paused)
+        </span>
+      </div>
+      <div className="flex flex-wrap gap-2 px-6 pb-3">
+        {orders.length === 0 ? (
+          <div className="py-2 font-mono text-[11px] text-slate-600">
+            暂无待排产工单
+          </div>
+        ) : (
+          orders.map((wo) => (
+            <div
+              key={wo.id}
+              draggable
+              onDragStart={(e) =>
+                onDragStart(e, {
+                  id: wo.id,
+                  planned_quantity: wo.planned_quantity,
+                  line_code: wo.line_code,
+                })
+              }
+              className="cursor-grab border border-amber-500/30 bg-amber-900/10 px-2 py-1.5 transition-colors hover:border-amber-500/60 hover:bg-amber-900/20 active:cursor-grabbing"
+            >
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-[10px] text-amber-300">
+                  {wo.order_no}
+                </span>
+                <span
+                  className={`border px-1 font-mono text-[9px] ${
+                    wo.status === "paused"
+                      ? "border-orange-500/40 text-orange-300"
+                      : "border-sky-500/40 text-sky-300"
+                  }`}
+                >
+                  {wo.status === "paused" ? "已暂停" : "已下发"}
+                </span>
+                <span
+                  className={`border px-1 font-mono text-[9px] ${
+                    PRIORITY_TONE[wo.priority] ?? "border-slate-700 text-slate-500"
+                  }`}
+                >
+                  P{wo.priority}
+                </span>
+              </div>
+              <div className="mt-0.5 flex items-center gap-2 text-[10px] text-slate-300">
+                <span className="truncate max-w-[160px]">{wo.product_name}</span>
+                <span className="font-mono text-slate-500">
+                  {formatNumber(wo.planned_quantity)} 罐
+                </span>
+                <span className="font-mono text-slate-500">
+                  · {wo.line_name ?? wo.line_code ?? "—"}
+                </span>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { listPlans, updatePlan, getWorkOrder } from '@/lib/mes-service';
+import { listPlans, updatePlan, getWorkOrder, addPlan } from '@/lib/mes-service';
 import { getSupabaseClient } from '@/storage/database/supabase-client';
 import { getProductionDate } from '@/lib/date-utils';
 
@@ -57,6 +57,57 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ success: true, data: updated });
   } catch (e) {
     const message = e instanceof Error ? e.message : '调整计划失败';
+    return NextResponse.json({ success: false, error: message }, { status: 500 });
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const body = (await request.json()) as {
+      work_order_id?: string;
+      plan_date?: string;
+      line_code?: string;
+      planned_quantity?: number;
+      priority?: number;
+    };
+    if (!body.work_order_id || !body.plan_date || !body.line_code) {
+      return NextResponse.json(
+        { success: false, error: '缺少工单 / 日期 / 产线' },
+        { status: 400 }
+      );
+    }
+    // 防止重复排产
+    const supa = getSupabaseClient();
+    const { data: existing } = await supa
+      .from('production_plans')
+      .select('id')
+      .eq('work_order_id', body.work_order_id)
+      .maybeSingle();
+    if (existing) {
+      return NextResponse.json(
+        { success: false, error: '该工单已在排产计划中' },
+        { status: 409 }
+      );
+    }
+    const woResult = await getWorkOrder(body.work_order_id);
+    if (!woResult || !woResult.workOrder) {
+      return NextResponse.json(
+        { success: false, error: '工单不存在' },
+        { status: 404 }
+      );
+    }
+    const wo = woResult.workOrder;
+    const created = await addPlan({
+      work_order_id: body.work_order_id,
+      plan_date: body.plan_date,
+      line_code: body.line_code,
+      planned_quantity: body.planned_quantity ?? wo.quantity ?? 0,
+      priority: body.priority ?? wo.priority ?? 3,
+      status: 'planned',
+    } as Omit<import('@/types/mes').ProductionPlan, 'id' | 'created_at' | 'updated_at'>);
+    return NextResponse.json({ success: true, data: created });
+  } catch (e) {
+    const message = e instanceof Error ? e.message : '创建排产失败';
     return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
 }

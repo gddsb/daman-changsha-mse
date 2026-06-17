@@ -262,10 +262,18 @@ export const U9_DOC_STATUS = {
 } as const;
 
 export const U9_STATUS_MAP: Record<string, string> = {
+  // 中文 U9 状态 -> 系统英文状态
   开立: "released",
   开工: "in_progress",
   完工: "completed",
   关闭: "closed",
+  // 英文直通
+  planned: "planned",
+  released: "released",
+  in_progress: "in_progress",
+  paused: "paused",
+  completed: "completed",
+  closed: "closed",
 };
 
 export const U9_STATUS_REVERSE: Record<string, string> = {

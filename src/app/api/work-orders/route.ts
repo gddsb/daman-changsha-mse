@@ -3,12 +3,18 @@ import { createWorkOrder, listWorkOrders } from "@/lib/mes-service";
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
-  const status = searchParams.get("status") || undefined;
+  const rawStatus = searchParams.get("status") || undefined;
+  const statusList = searchParams
+    .get("statuses")
+    ?.split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const status = statusList && statusList.length > 0 ? undefined : rawStatus;
   const line = searchParams.get("line_code") || searchParams.get("line") || undefined;
   const keyword = searchParams.get("q") || searchParams.get("keyword") || undefined;
   const limit = searchParams.get("limit") ? Number(searchParams.get("limit")) : undefined;
   try {
-    const data = await listWorkOrders({ status, line, keyword, limit });
+    const data = await listWorkOrders({ status, statuses: statusList, line, keyword, limit });
     return NextResponse.json({ success: true, data });
   } catch (e) {
     const message = e instanceof Error ? e.message : "服务异常";

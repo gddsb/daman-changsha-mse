@@ -140,3 +140,50 @@ export async function PATCH(
     );
   }
 }
+
+export async function DELETE(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    const c = getSupabaseClient();
+    // 只能删除：planned（未下发）或 released（已下发未开工）；in_progress/paused 不允许
+    const { data: wo, error: e1 } = await c
+      .from("work_orders")
+      .select("id, order_no, status")
+      .eq("id", id)
+      .maybeSingle();
+    if (e1) throw e1;
+    if (!wo) {
+      return NextResponse.json(
+        { success: false, error: "工单不存在" },
+        { status: 404 }
+      );
+    }
+    const st = (wo as { status: string }).status;
+    if (st !== "planned" && st !== "released") {
+      return NextResponse.json(
+        {
+          success: false,
+          error: `工单当前状态为「${st}」，只有未下发或未开工的工单可以删除`,
+        },
+        { status: 400 }
+      );
+    }
+    // 联动删除工序/报工/排产
+    await c.from("work_order_operations").delete().eq("work_order_id", id);
+    await c.from("work_order_reports").delete().eq("work_order_id", id);
+    await c.from("production_plans").delete().eq("work_order_id", id);
+    await c.from("quality_inspections").delete().eq("work_order_id", id);
+    const { error: delErr } = await c.from("work_orders").delete().eq("id", id);
+    if (delErr) throw delErr;
+    return NextResponse.json({ success: true });
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "删除失败";
+    return NextResponse.json(
+      { success: false, error: message },
+      { status: 500 }
+    );
+  }
+}

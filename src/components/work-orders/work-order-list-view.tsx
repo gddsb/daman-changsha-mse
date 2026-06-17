@@ -204,6 +204,7 @@ export function WorkOrderListView() {
                   <Th onClick={() => toggleSort("status")} active={sortKey === "status"} dir={sortDir}>状态</Th>
                   <Th onClick={() => toggleSort("planned_start_date")} active={sortKey === "planned_start_date"} dir={sortDir}>计划起止</Th>
                   <Th onClick={() => toggleSort("priority")} active={sortKey === "priority"} dir={sortDir} align="center">优先级</Th>
+                  <th className="px-3 py-2 text-right font-mono text-[11px] uppercase tracking-wider text-slate-500">操作</th>
                 </tr>
               </thead>
               <tbody>
@@ -213,6 +214,28 @@ export function WorkOrderListView() {
                     wo={wo}
                     onClick={() => setEditingOrder(wo)}
                     onDoubleClick={() => setEditingOrder(wo)}
+                    onAction={async (action) => {
+                      try {
+                        if (action === "delete") {
+                          if (!confirm(`确认删除工单 ${wo.order_no}？该操作不可恢复。`)) return;
+                          const res = await fetch(`/api/work-orders/${wo.id}`, { method: "DELETE" });
+                          const j = await res.json().catch(() => ({}));
+                          if (!res.ok || !j.success) throw new Error(j.error || "删除失败");
+                          await load();
+                          return;
+                        }
+                        const res = await fetch(`/api/work-orders/${wo.id}`, {
+                          method: "PATCH",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ action }),
+                        });
+                        const j = await res.json().catch(() => ({}));
+                        if (!res.ok || !j.success) throw new Error(j.error || `${action} 失败`);
+                        await load();
+                      } catch (e) {
+                        alert((e as Error).message);
+                      }
+                    }}
                   />
                 ))}
               </tbody>
@@ -266,9 +289,23 @@ function Th({
   );
 }
 
-function WorkOrderRow({ wo, onClick, onDoubleClick }: { wo: WorkOrder; onClick: () => void; onDoubleClick: () => void }) {
+function WorkOrderRow({
+  wo,
+  onClick,
+  onDoubleClick,
+  onAction,
+}: {
+  wo: WorkOrder;
+  onClick: () => void;
+  onDoubleClick: () => void;
+  onAction: (action: "release" | "start" | "delete") => void;
+}) {
   const rate = wo.quantity > 0 ? (wo.completed_quantity / wo.quantity) * 100 : 0;
   const tone = WO_STATUS_TONE[wo.status] ?? "border-slate-700 text-slate-400";
+  const st = wo.status;
+  const canRelease = st === "planned";
+  const canStart = st === "released" || st === "paused";
+  const canDelete = st === "planned" || st === "released";
   return (
     <tr
       onClick={onClick}
@@ -306,6 +343,34 @@ function WorkOrderRow({ wo, onClick, onDoubleClick }: { wo: WorkOrder; onClick: 
           wo.priority >= 4 ? "border-slate-700 text-slate-500" :
           "border-amber-500/40 text-amber-300"
         }`}>P{wo.priority}</span>
+      </td>
+      <td className="px-3 py-2 text-right" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-end gap-1.5">
+          {canRelease && (
+            <button
+              onClick={() => onAction("release")}
+              className="border border-sky-500/50 px-1.5 py-0.5 font-mono text-[10px] text-sky-300 hover:bg-sky-500/15"
+            >
+              下发
+            </button>
+          )}
+          {canStart && (
+            <button
+              onClick={() => onAction("start")}
+              className="border border-orange-500/50 px-1.5 py-0.5 font-mono text-[10px] text-orange-300 hover:bg-orange-500/15"
+            >
+              {st === "paused" ? "重新开工" : "开工"}
+            </button>
+          )}
+          {canDelete && (
+            <button
+              onClick={() => onAction("delete")}
+              className="border border-rose-500/40 px-1.5 py-0.5 font-mono text-[10px] text-rose-300 hover:bg-rose-500/15"
+            >
+              删除
+            </button>
+          )}
+        </div>
       </td>
     </tr>
   );

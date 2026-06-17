@@ -20,8 +20,8 @@ import type {
 const cn = (status: unknown): string => (status == null ? "—" : String(status));
 
 const toWoStatus = (s: string | null | undefined): WorkOrder["status"] => {
-  if (!s) return "released";
-  return (U9_STATUS_MAP[s] as WorkOrder["status"]) ?? "released";
+  if (!s) return "planned";
+  return (U9_STATUS_MAP[s] as WorkOrder["status"]) ?? "planned";
 };
 
 const toWoView = (r: Record<string, unknown>): WorkOrder => ({
@@ -189,14 +189,18 @@ const toWorkshopView = (r: Record<string, unknown>): Workshop => ({
 // ==================== 工单 ====================
 
 export async function listWorkOrders(opts?: {
-  status?: string;
+  status?: string | string[];
+  statuses?: string[];
   line?: string;
   keyword?: string;
   limit?: number;
 }): Promise<WorkOrder[]> {
   const c = getSupabaseClient();
   let q = c.from("work_orders").select("*").order("created_at", { ascending: false });
-  if (opts?.status) q = q.eq("status", opts.status);
+  const statusList = opts?.statuses ?? (opts?.status ? [opts.status] : undefined);
+  if (statusList && statusList.length > 0) {
+    q = q.in("status", statusList);
+  }
   if (opts?.line) q = q.eq("line_code", opts.line);
   if (opts?.keyword) q = q.ilike("order_no", `%${opts.keyword}%`);
   const { data, error } = await q.limit(200);
@@ -296,7 +300,7 @@ export async function createWorkOrder(input: CreateWorkOrderInput) {
       planned_quantity: input.planned_quantity,
       completed_quantity: 0,
       scrap_quantity: 0,
-      status: "released",
+      status: "planned",
       priority,
       workshop_code: ws.workshop_code,
       workshop_name: ws.workshop_name,
@@ -326,24 +330,9 @@ export async function createWorkOrder(input: CreateWorkOrderInput) {
   }));
   await c.from("work_order_operations").insert(ops);
 
-  // 自动排入七天计划：取 planned_start_date 的日期部分作为 plan_date
-  const planDate = new Date(
-    (input.planned_start_date ?? new Date().toISOString()).split("T")[0] + "T00:00:00+08:00"
-  );
-  const planDateStr = `${planDate.getFullYear()}-${String(planDate.getMonth() + 1).padStart(2, "0")}-${String(planDate.getDate()).padStart(2, "0")}`;
-  await c.from("production_plans").insert({
-    plan_date: planDateStr,
-    line_code: lineCode,
-    line_name: finalLineName,
-    work_order_id: (data as { id: string }).id,
-    work_order_no: orderNo,
-    product_code: input.product_code,
-    product_name: productName,
-    planned_quantity: input.planned_quantity,
-    priority,
-    status: "已排",
-    notes: input.notes ?? null,
-  });
+  // 注意：新工单状态默认为 planned（未下发），不再自动建排产。
+  // 用户在工单管理中点击"下发"后，再到七天计划页面拖入排程。
+  // 如需保留自动排产的行为（兼容老调用方），调用方可在外部显式 addPlan。
 
   return toWoView(data as Record<string, unknown>);
 }
