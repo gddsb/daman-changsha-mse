@@ -374,7 +374,7 @@ function WorkOrderRow({
   const st = wo.status;
   const canRelease = st === "开立";
   const canStart = (st === "下发" || st === "暂停") && hasPlan;
-  const canDelete = st === "开立";
+  const canDelete = st === "开立" || st === "下发";
   return (
     <tr
       onClick={onClick}

@@ -175,7 +175,7 @@ export async function DELETE(
   try {
     const { id } = await params;
     const c = getSupabaseClient();
-    // 只能删除：开立（未下发）；下发后不再允许删除（需走取消流程）
+    // 可删除状态：开立（未下发）、下发（已下发未开工）
     const { data: wo, error: e1 } = await c
       .from("work_orders")
       .select("id, order_no, status")
@@ -189,16 +189,16 @@ export async function DELETE(
       );
     }
     const st = (wo as { status: string }).status;
-    if ((st !== "开立" && st !== "planned")) {
+    if (st !== "开立" && st !== "下发" && st !== "planned" && st !== "released") {
       return NextResponse.json(
         {
           success: false,
-          error: `工单当前状态为「${WO_STATUS_LABELS[st] ?? st}」，只有开立（未下发）的工单可以删除`,
+          error: `工单当前状态为「${WO_STATUS_LABELS[st] ?? st}」，只有「开立」「下发」状态的工单可以删除`,
         },
         { status: 400 }
       );
     }
-    // 联动删除工序/报工/排产
+    // 联动删除工序/报工/排产/检验
     await c.from("work_order_operations").delete().eq("work_order_id", id);
     await c.from("work_order_reports").delete().eq("work_order_id", id);
     await c.from("production_plans").delete().eq("work_order_id", id);
