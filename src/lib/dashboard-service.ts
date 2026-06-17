@@ -104,11 +104,11 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
   // 规则：制罐产线一次只能跑一条产线。当前"在制"工单数最多的产线标记为"运行"，
   // 其余为"待机"；无任何在制工单时全部为"待机"。
   // 排序键：在制工单数（降序）→ 最早开工时间（升序）→ 优先级（升序）
-  // 用户要求：仅"已开工"（in_progress/生产中/已暂停/paused）才算在制；
-  // "已下发/released" 还未真正开工，不进入在制清单，但允许产线状态显示"待机"。
+  // 用户要求：在制工单仅显示"生产中"（in_progress）；
+  // "已暂停/已开工" 不视为在制（产线仍显示运行中以便用户感知，但不在列表中列出）。
   const inProgressStatuses = [
-    "生产中", "已暂停", "开工", "开立",
-    "in_progress", "paused",
+    "生产中", "开工", "开立",
+    "in_progress",
   ];
   const lineOrderCounts = new Map<string, number>();
   const lineActiveWorkOrders = new Map<string, WoRow[]>();
