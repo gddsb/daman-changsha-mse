@@ -18,10 +18,18 @@ export type ReportType = string; // 报工类型，由创建方传入
 export type EquipmentStatus = "running" | "idle" | "maintenance" | "breakdown" | "offline";
 export type MaintenanceType = string; // 日常点检/定期保养/故障维修 等
 export type MaintenanceStatus = "pending" | "in_progress" | "completed" | "overdue";
-export type InspectionType = "first" | "in_process" | "final" | "incoming";
+export type InspectionType = "first" | "in_process" | "final" | "incoming" | "outgoing" | "patrol";
 export type InspectionResult = "pass" | "fail" | "conditional";
 export type DefectCategory = "dimension" | "appearance" | "material" | "assembly" | "function";
 export type DefectSeverity = "critical" | "major" | "minor";
+
+export interface DefectCode {
+  id: string;
+  code: string;
+  name: string;
+  category: string;
+  severity: string;
+}
 
 export interface WorkOrder {
   id: string;
@@ -38,6 +46,10 @@ export interface WorkOrder {
   workshop: string | null;
   workshop_code: string | null;
   customer_name: string | null;
+  line_code: string | null;
+  line_name: string | null;
+  order_type: string | null;
+  unit: string | null;
   planned_start_date: string | null;
   planned_end_date: string | null;
   actual_start_date: string | null;
@@ -51,84 +63,107 @@ export interface WorkOrderOperation {
   id: string;
   work_order_id: string;
   sequence: number;
+  operation_code: string | null;
   operation_name: string;
-  equipment_code: string | null;
-  equipment_name: string | null;
+  line_code: string | null;
+  line_name: string | null;
   standard_time_minutes: number | null;
   status: OperationStatus;
   operator_name: string | null;
-  start_time: string | null;
-  end_time: string | null;
   good_quantity: number;
   scrap_quantity: number;
+  start_time: string | null;
+  end_time: string | null;
   notes: string | null;
 }
 
 export interface WorkOrderReport {
   id: string;
   work_order_id: string;
+  work_order_no: string | null;
   operation_id: string | null;
-  report_type: string;
+  process_name: string | null;
   operator_name: string;
+  line_code: string | null;
+  line_name: string | null;
+  shift_no: string | null;
+  report_type: string;
   good_quantity: number;
   scrap_quantity: number;
   scrap_reason: string | null;
+  product_code: string | null;
+  product_name: string | null;
+  can_spec: string | null;
+  can_height: number;
+  batch_no: string | null;
+  inspector_name: string | null;
   reported_at: string;
   notes: string | null;
 }
 
-export interface Equipment {
+// ====== 制罐业务新增 ======
+
+export interface ProductionLine {
   id: string;
   code: string;
   name: string;
-  type: string;
-  model: string | null;
-  manufacturer: string | null;
-  workshop: string | null;
   workshop_code: string | null;
   workshop_name: string | null;
-  status: EquipmentStatus;
-  current_work_order_no: string | null;
-  last_maintenance_date: string | null;
-  next_maintenance_date: string | null;
-  oee_target: number | null;
-}
-
-export interface EquipmentOEE {
-  id: string;
-  equipment_code: string;
-  record_date: string;
-  planned_time_minutes: number;
-  run_time_minutes: number;
-  downtime_minutes: number;
-  good_quantity: number;
-  total_quantity: number;
-  availability: number;
-  performance: number;
-  quality: number;
-  oee: number;
-}
-
-export interface EquipmentMaintenance {
-  id: string;
-  equipment_code: string;
-  equipment_name: string;
-  maintenance_type: string;
-  planned_date: string;
-  completed_date: string | null;
-  operator_name: string | null;
-  status: MaintenanceStatus;
+  status: string;
   description: string | null;
-  cost: number | null;
-  notes: string | null;
 }
 
-export interface DefectCode {
+export interface ProductionPlan {
+  id: string;
+  plan_date: string;
+  line_code: string;
+  line_name: string | null;
+  work_order_id: string;
+  work_order_no: string;
+  product_code: string;
+  product_name: string;
+  planned_quantity: number;
+  priority: number;
+  status: string;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DailyQualityReport {
+  id: string;
+  report_date: string;
+  line_code: string;
+  line_name: string | null;
+  process_name: string;
+  product_code: string;
+  product_name: string;
+  can_spec: string | null;
+  can_height: number;
+  shift_no: string | null;
+  total_inspected: number;
+  total_good: number;
+  total_scrap: number;
+  pass_rate: number;
+  scrap_rate: number;
+  defect_breakdown: unknown;
+}
+
+export interface Product {
   id: string;
   code: string;
   name: string;
-  category: string;
-  severity: string;
+  specification: string | null;
+  unit: string | null;
+  process_route: string | null;
+  customer_name: string | null;
+}
+
+export interface Workshop {
+  id: string;
+  code: string;
+  name: string;
+  description: string | null;
 }
 
 export interface QualityInspection {
@@ -139,16 +174,22 @@ export interface QualityInspection {
   product_code: string;
   product_name: string;
   batch_no: string | null;
-  inspection_type: InspectionType;
+  inspection_type: string;
   sample_size: number;
   pass_quantity: number;
   fail_quantity: number;
-  result: InspectionResult;
+  result: string;
   defect_code: string | null;
   defect_name: string | null;
   defect_description: string | null;
   inspector_name: string;
   inspection_time: string;
+  line_code: string | null;
+  line_name: string | null;
+  process_name: string | null;
+  shift_no: string;
+  can_spec: string | null;
+  can_height: number;
   notes: string | null;
 }
 
@@ -164,42 +205,40 @@ export interface U9SalesOrder {
   synced_at: string;
 }
 
-export interface Product {
-  id: string;
-  code: string;
-  name: string;
-  specification: string | null;
-  unit: string | null;
-}
-
-export interface Workshop {
-  id: string;
-  code: string;
-  name: string;
-  description?: string;
-}
-
 export interface OutputTrendPoint {
   date: string;
   planned: number;
   actual: number;
+  scrap: number;
 }
 
-export interface EquipmentMatrixItem {
-  id: string;
+export interface LineStatusItem {
   code: string;
   name: string;
-  status: EquipmentStatus;
-  workshop: string | null;
+  status: string;
+  orderCount: number;
+  todayPlanned: number;
+  todayActual: number;
+  todayScrap: number;
+  todayPassRate: number;
+}
+
+export interface ProcessDefectStat {
+  process: string;
+  inspected: number;
+  scrap: number;
+  scrapRate: number;
 }
 
 export interface RecentDefect {
   id: string;
-  inspection_no: string;
+  work_order_no: string | null;
   product_name: string;
+  process_name: string | null;
+  line_name: string | null;
   defect_code: string | null;
-  defect_description: string | null;
-  inspection_time: string;
+  scrap_quantity: number;
+  reported_at: string;
 }
 
 export interface DashboardSummary {
@@ -209,25 +248,21 @@ export interface DashboardSummary {
     completionRate: number;
     delta: number;
   };
-  equipment: {
+  lines: {
     total: number;
     running: number;
     idle: number;
     maintenance: number;
-    breakdown: number;
-    availability: number;
-    performance: number;
-    quality: number;
-    oee: number;
   };
   quality: {
     firstPassRate: number;
-    inspectionCount: number;
+    inspectedCount: number;
     defectCount: number;
     defectRate: number;
   };
   outputTrend: OutputTrendPoint[];
-  equipmentMatrix: EquipmentMatrixItem[];
+  lineStatus: LineStatusItem[];
   activeWorkOrders: WorkOrder[];
   recentDefects: RecentDefect[];
+  processDefectStats: ProcessDefectStat[];
 }

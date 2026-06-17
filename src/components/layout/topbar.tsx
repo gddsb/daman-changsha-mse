@@ -7,8 +7,9 @@ import { Bell, Search, ChevronRight, RefreshCcw } from 'lucide-react';
 const TITLE_MAP: Record<string, string> = {
   '/': '生产看板',
   '/work-orders': '工单管理',
-  '/equipment': '设备管理',
-  '/quality': '质量管理',
+  '/production-plan': '七天生产计划',
+  '/quality': '质量检验',
+  '/quality-report': '质量日报',
   '/u9': 'U9 数据接入',
 };
 
@@ -45,7 +46,7 @@ export function Topbar() {
     <header className="flex h-14 shrink-0 items-center justify-between border-b border-border bg-background px-6">
       {/* 面包屑 */}
       <div className="flex items-center gap-2 text-sm">
-        <span className="text-muted-foreground">机加工 MES</span>
+        <span className="text-muted-foreground">长沙大满生产管理系统</span>
         <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/50" />
         <span className="font-semibold text-foreground">{title}</span>
       </div>

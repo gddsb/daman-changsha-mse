@@ -6,9 +6,10 @@ import Link from 'next/link';
 import {
   LayoutDashboard,
   ClipboardList,
-  Factory,
+  CalendarRange,
   ShieldCheck,
   RefreshCcw,
+  FileBarChart,
   Settings,
   Activity,
 } from 'lucide-react';
@@ -17,9 +18,9 @@ import { cn } from '@/lib/utils';
 const NAV = [
   { href: '/', label: '生产看板', icon: LayoutDashboard, exact: true },
   { href: '/work-orders', label: '工单管理', icon: ClipboardList },
-  { href: '/equipment', label: '设备管理', icon: Factory },
-  { href: '/quality', label: '质量管理', icon: ShieldCheck },
-  { href: '/u9', label: 'U9 数据接入', icon: RefreshCcw },
+  { href: '/production-plan', label: '七天计划', icon: CalendarRange },
+  { href: '/quality-inspection', label: '质量检验', icon: ShieldCheck },
+  { href: '/quality-report', label: '质量日报', icon: FileBarChart },
 ];
 
 export function Sidebar() {
@@ -39,14 +40,16 @@ export function Sidebar() {
   return (
     <aside className="flex w-60 shrink-0 flex-col border-r border-border bg-sidebar">
       {/* Logo 区 */}
-      <div className="flex h-14 items-center gap-3 border-b border-border px-5">
-        <div className="flex h-8 w-8 items-center justify-center bg-primary text-primary-foreground">
-          <Activity className="h-4 w-4" strokeWidth={2.5} />
-        </div>
+      <div className="flex h-14 items-center gap-3 border-b border-border px-4">
+        <img
+          src="/logo.gif"
+          alt="长沙大满"
+          className="h-9 w-auto"
+        />
         <div>
-          <div className="text-sm font-semibold tracking-tight text-foreground">机加工 MES</div>
-          <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
-            Production Control
+          <div className="text-sm font-semibold tracking-tight text-foreground leading-tight">长沙大满</div>
+          <div className="text-[10px] uppercase tracking-wider text-muted-foreground leading-tight">
+            Production System
           </div>
         </div>
       </div>

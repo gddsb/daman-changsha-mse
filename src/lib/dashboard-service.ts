@@ -1,17 +1,23 @@
 /**
- * 看板汇总数据计算
+ * 看板汇总数据计算（制罐业务版）
  */
 
 import { getSupabaseClient } from "@/storage/database/supabase-client";
-import type { DashboardSummary, WorkOrder, WorkOrderStatus } from "@/types/mes";
+import type {
+  DashboardSummary,
+  WorkOrder,
+  WorkOrderStatus,
+  LineStatusItem,
+  ProcessDefectStat,
+} from "@/types/mes";
 import type { Database } from "@/storage/database/shared/types";
 
 type WoRow = Database["public"]["Tables"]["work_orders"]["Row"];
-type EqRow = Database["public"]["Tables"]["equipment"]["Row"];
-type OeeRow = Database["public"]["Tables"]["equipment_oee"]["Row"];
-type InspRow = Database["public"]["Tables"]["quality_inspections"]["Row"];
+type LineRow = Database["public"]["Tables"]["production_lines"]["Row"];
 type ReportRow = Database["public"]["Tables"]["work_order_reports"]["Row"];
+type InspRow = Database["public"]["Tables"]["quality_inspections"]["Row"];
 type DefectRow = Database["public"]["Tables"]["defect_codes"]["Row"];
+type PlanRow = Database["public"]["Tables"]["production_plans"]["Row"];
 
 // 状态归一化：DB 中文 -> view 用英文枚举
 const WO_STATUS_MAP: Record<string, string> = {
@@ -21,27 +27,9 @@ const WO_STATUS_MAP: Record<string, string> = {
   已暂停: "paused",
   已完成: "completed",
   已关闭: "closed",
-};
-
-const EQ_STATUS_MAP: Record<string, string> = {
-  运行中: "running",
-  待机: "idle",
-  维保中: "maintenance",
-  故障: "breakdown",
-  离线: "offline",
-};
-
-const INSP_TYPE_MAP: Record<string, string> = {
-  首件检验: "first",
-  巡回检验: "in_process",
-  末件检验: "final",
-  入库检验: "incoming",
-};
-
-const INSP_RESULT_MAP: Record<string, string> = {
-  合格: "pass",
-  不合格: "fail",
-  让步接收: "conditional",
+  开立: "planned",
+  开工: "in_progress",
+  完工: "completed",
 };
 
 const todayStr = () => new Date().toISOString().slice(0, 10);
@@ -58,31 +46,31 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
   const yesterday = daysAgo(1);
 
   // 并行拉取基础数据
-  const [woRes, eqRes, oeeRes, inspRes, reportRes, defectRes] = await Promise.all([
+  const [woRes, lineRes, reportRes, inspRes, defectRes, planRes] = await Promise.all([
     supa.from("work_orders").select("*"),
-    supa.from("equipment").select("*"),
-    supa
-      .from("equipment_oee")
-      .select("*")
-      .gte("record_date", day7)
-      .order("record_date", { ascending: true }),
-    supa
-      .from("quality_inspections")
-      .select("*")
-      .gte("inspection_time", `${today}T00:00:00`),
+    supa.from("production_lines").select("*"),
     supa
       .from("work_order_reports")
       .select("*")
       .gte("reported_at", `${day7}T00:00:00`),
+    supa
+      .from("quality_inspections")
+      .select("*")
+      .gte("inspection_time", `${today}T00:00:00`),
     supa.from("defect_codes").select("*"),
+    supa
+      .from("production_plans")
+      .select("*")
+      .gte("plan_date", today)
+      .lte("plan_date", daysAgo(-6)),
   ]);
 
   const workOrders = (woRes.data ?? []) as WoRow[];
-  const equipment = (eqRes.data ?? []) as EqRow[];
-  const oeeRows = (oeeRes.data ?? []) as OeeRow[];
-  const inspections = (inspRes.data ?? []) as InspRow[];
+  const lines = (lineRes.data ?? []) as LineRow[];
   const reports = (reportRes.data ?? []) as ReportRow[];
+  const inspections = (inspRes.data ?? []) as InspRow[];
   const defectCodes = (defectRes.data ?? []) as DefectRow[];
+  const plans = (planRes.data ?? []) as PlanRow[];
 
   // === 今日产量 / 计划 ===
   const todayReports = reports.filter((r) => (r.reported_at ?? "").slice(0, 10) === today);
@@ -90,143 +78,116 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
     (s, r) => s + (r.good_quantity ?? 0) + (r.scrap_quantity ?? 0),
     0,
   );
-  const todayPlannedQty = workOrders
-    .filter((w) => {
-      const status = WO_STATUS_MAP[w.status] ?? w.status;
-      return ["planned", "released", "in_progress", "paused"].includes(status);
-    })
-    .reduce((s, w) => s + (w.planned_quantity ?? 0), 0);
+  const todayScrap = todayReports.reduce((s, r) => s + (r.scrap_quantity ?? 0), 0);
+  const todayPlannedQty = plans
+    .filter((p) => p.plan_date === today)
+    .reduce((s, p) => s + (p.planned_quantity ?? 0), 0);
   const yesterdayOutput = reports
     .filter((r) => (r.reported_at ?? "").slice(0, 10) === yesterday)
     .reduce((s, r) => s + (r.good_quantity ?? 0) + (r.scrap_quantity ?? 0), 0);
   const delta = todayOutput - yesterdayOutput;
 
-  // === 设备 OEE ===
-  const avgOeeList = oeeRows;
-  const avgOee =
-    avgOeeList.length > 0
-      ? avgOeeList.reduce((s, r) => s + Number(r.oee ?? 0), 0) / avgOeeList.length
-      : 0;
-  const oeeToday = oeeRows.filter((r) => r.record_date === today);
-  const oeeYesterday = oeeRows.filter((r) => r.record_date === yesterday);
-  const oeeTodayAvg =
-    oeeToday.length > 0
-      ? oeeToday.reduce((s, r) => s + Number(r.oee ?? 0), 0) / oeeToday.length
-      : 0;
-  const oeeYesterdayAvg =
-    oeeYesterday.length > 0
-      ? oeeYesterday.reduce((s, r) => s + Number(r.oee ?? 0), 0) / oeeYesterday.length
-      : 0;
-  const availability =
-    oeeToday.length > 0
-      ? oeeToday.reduce((s, r) => s + Number(r.availability ?? 0), 0) / oeeToday.length
-      : 0;
-  const performance =
-    oeeToday.length > 0
-      ? oeeToday.reduce((s, r) => s + Number(r.performance ?? 0), 0) / oeeToday.length
-      : 0;
-  const quality =
-    oeeToday.length > 0
-      ? oeeToday.reduce((s, r) => s + Number(r.quality ?? 0), 0) / oeeToday.length
-      : 0;
+  // === 产线状态 ===
+  const lineStatus: LineStatusItem[] = lines.map((l) => {
+    const lineReports = todayReports.filter((r) => r.line_code === l.code);
+    const lineActual = lineReports.reduce(
+      (s, r) => s + (r.good_quantity ?? 0) + (r.scrap_quantity ?? 0),
+      0,
+    );
+    const lineScrap = lineReports.reduce((s, r) => s + (r.scrap_quantity ?? 0), 0);
+    const lineGood = lineReports.reduce((s, r) => s + (r.good_quantity ?? 0), 0);
+    const linePlans = plans.filter((p) => p.line_code === l.code && p.plan_date === today);
+    const linePlanned = linePlans.reduce((s, p) => s + (p.planned_quantity ?? 0), 0);
+    const lineOrderCount = workOrders.filter(
+      (w) => w.line_code === l.code && ["已下发", "生产中", "已暂停", "开工", "开立"].includes(w.status),
+    ).length;
+    return {
+      code: l.code,
+      name: l.name,
+      status: l.status,
+      orderCount: lineOrderCount,
+      todayPlanned: linePlanned,
+      todayActual: lineActual,
+      todayScrap: lineScrap,
+      todayPassRate: lineActual > 0 ? (lineGood / lineActual) * 100 : 100,
+    };
+  });
 
-  // === 设备状态计数 ===
-  const eqRunning = equipment.filter((e) => e.status === "运行中").length;
-  const eqIdle = equipment.filter((e) => e.status === "待机").length;
-  const eqMaint = equipment.filter((e) => e.status === "维保中").length;
-  const eqBreak = equipment.filter((e) => e.status === "故障").length;
-
-  // === 质量 ===
+  // === 质量统计 ===
   const failInsp = inspections.filter((i) => i.result === "不合格");
-  const firstInsp = inspections.filter((i) => INSP_TYPE_MAP[i.inspection_type] === "first");
-  const firstPass = firstInsp.filter((i) => i.result === "合格").length;
-  const firstPassRate = firstInsp.length > 0 ? (firstPass / firstInsp.length) * 100 : 0;
   const totalSample = inspections.reduce((s, i) => s + (i.sample_size ?? 0), 0);
   const totalFail = inspections.reduce((s, i) => s + (i.fail_quantity ?? 0), 0);
+  const totalPass = totalSample - totalFail;
+  const firstPassRate = totalSample > 0 ? (totalPass / totalSample) * 100 : 100;
   const defectRate = totalSample > 0 ? (totalFail / totalSample) * 100 : 0;
 
   // === 7 日产量趋势 ===
-  const trendMap = new Map<string, { planned: number; actual: number }>();
+  const trendMap = new Map<string, { planned: number; actual: number; scrap: number }>();
   for (let i = 6; i >= 0; i--) {
-    trendMap.set(daysAgo(i), { planned: 0, actual: 0 });
+    trendMap.set(daysAgo(i), { planned: 0, actual: 0, scrap: 0 });
   }
   reports.forEach((r) => {
     const ds = (r.reported_at ?? "").slice(0, 10);
     const entry = trendMap.get(ds);
     if (entry) {
       entry.actual += (r.good_quantity ?? 0) + (r.scrap_quantity ?? 0);
+      entry.scrap += r.scrap_quantity ?? 0;
     }
   });
-  // 计划值：当日所有相关工单的计划量
-  workOrders.forEach((w) => {
-    const start = (w.planned_start_date ?? "").slice(0, 10);
-    if (trendMap.has(start)) {
-      trendMap.get(start)!.planned += w.planned_quantity ?? 0;
+  plans.forEach((p) => {
+    const entry = trendMap.get(p.plan_date);
+    if (entry) {
+      entry.planned += p.planned_quantity ?? 0;
     }
   });
   const outputTrend = Array.from(trendMap.entries()).map(([date, v]) => ({
     date: date.slice(5), // MM-DD
     planned: v.planned,
     actual: v.actual,
-  }));
-
-  // === 设备矩阵 ===
-  const latestOeeByCode = new Map<string, number>();
-  oeeRows.forEach((r) => {
-    if (!latestOeeByCode.has(r.equipment_code)) {
-      latestOeeByCode.set(r.equipment_code, Number(r.oee ?? 0));
-    }
-  });
-  const equipmentMatrix = equipment.map((e) => ({
-    id: e.id,
-    code: e.code,
-    name: e.name,
-    status: (EQ_STATUS_MAP[e.status] ?? "idle") as "running" | "idle" | "maintenance" | "breakdown" | "offline",
-    workshop: e.workshop_name,
+    scrap: v.scrap,
   }));
 
   // === 进行中工单 ===
   const activeWorkOrders: WorkOrder[] = workOrders
-    .filter((w) => ["已下发", "生产中", "已暂停"].includes(w.status))
+    .filter((w) => ["已下发", "生产中", "已暂停", "开工"].includes(w.status))
     .sort((a, b) => (a.priority ?? 99) - (b.priority ?? 99))
     .slice(0, 8)
-    .map((w) => ({
-      id: w.id,
-      order_no: w.order_no,
-      sales_order_no: w.sales_order_no,
-      product_code: w.product_code,
-      product_name: w.product_name,
-      specification: w.specification,
-      quantity: w.planned_quantity,
-      completed_quantity: w.completed_quantity ?? 0,
-      scrap_quantity: w.scrap_quantity ?? 0,
-      status: (WO_STATUS_MAP[w.status] ?? w.status) as WorkOrderStatus,
-      priority: (w.priority ?? 3) as 1 | 2 | 3 | 4 | 5,
-      workshop: w.workshop_name,
-      workshop_code: w.workshop_code,
-      customer_name: w.customer_name,
-      planned_start_date: w.planned_start_date,
-      planned_end_date: w.planned_end_date,
-      actual_start_date: w.actual_start_date,
-      actual_end_date: w.actual_end_date,
-      notes: w.notes,
-      created_at: w.created_at,
-      updated_at: w.updated_at,
-    }));
+    .map((w) => mapWorkOrderRow(w));
+
+  // === 工序不良率 ===
+  const processMap = new Map<string, { inspected: number; scrap: number }>();
+  reports.forEach((r) => {
+    const process = r.process_name ?? "其他";
+    const entry = processMap.get(process) ?? { inspected: 0, scrap: 0 };
+    entry.inspected += (r.good_quantity ?? 0) + (r.scrap_quantity ?? 0);
+    entry.scrap += r.scrap_quantity ?? 0;
+    processMap.set(process, entry);
+  });
+  const processDefectStats: ProcessDefectStat[] = Array.from(processMap.entries())
+    .map(([process, v]) => ({
+      process,
+      inspected: v.inspected,
+      scrap: v.scrap,
+      scrapRate: v.inspected > 0 ? (v.scrap / v.inspected) * 100 : 0,
+    }))
+    .sort((a, b) => b.scrapRate - a.scrapRate);
 
   // === 最近不良 ===
-  const recentDefects = failInsp
-    .sort((a, b) => (b.inspection_time ?? "").localeCompare(a.inspection_time ?? ""))
+  const recentDefects = reports
+    .filter((r) => (r.scrap_quantity ?? 0) > 0)
+    .sort((a, b) => (b.reported_at ?? "").localeCompare(a.reported_at ?? ""))
     .slice(0, 5)
-    .map((i) => {
-      const dc = defectCodes.find((d) => d.code === i.defect_code);
+    .map((r) => {
+      const dc = defectCodes.find((d) => d.code === r.scrap_reason);
       return {
-        id: i.id,
-        inspection_no: i.inspection_no,
-        product_name: i.product_name,
-        defect_code: i.defect_code,
-        defect_description: dc?.name ?? i.defect_description,
-        inspection_time: i.inspection_time,
+        id: r.id,
+        work_order_no: r.work_order_no,
+        product_name: r.product_name ?? "",
+        process_name: r.process_name,
+        line_name: r.line_name,
+        defect_code: r.scrap_reason,
+        scrap_quantity: r.scrap_quantity ?? 0,
+        reported_at: r.reported_at,
       };
     });
 
@@ -237,27 +198,53 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
       completionRate: todayPlannedQty > 0 ? (todayOutput / todayPlannedQty) * 100 : 0,
       delta,
     },
-    equipment: {
-      total: equipment.length,
-      running: eqRunning,
-      idle: eqIdle,
-      maintenance: eqMaint,
-      breakdown: eqBreak,
-      availability,
-      performance,
-      quality,
-      oee: oeeTodayAvg || avgOee,
+    lines: {
+      total: lines.length,
+      running: lineStatus.filter((l) => l.status === "运行").length,
+      idle: lineStatus.filter((l) => l.status === "停机").length,
+      maintenance: lineStatus.filter((l) => l.status === "维保").length,
     },
     quality: {
       firstPassRate,
-      inspectionCount: inspections.length,
-      defectCount: totalFail,
+      inspectedCount: inspections.length,
+      defectCount: todayScrap,
       defectRate,
     },
     outputTrend,
-    equipmentMatrix,
+    lineStatus,
     activeWorkOrders,
     recentDefects,
+    processDefectStats,
+  };
+}
+
+export function mapWorkOrderRow(w: WoRow): WorkOrder {
+  return {
+    id: w.id,
+    order_no: w.order_no,
+    sales_order_no: w.sales_order_no,
+    product_code: w.product_code ?? "",
+    product_name: w.product_name ?? "",
+    specification: w.specification,
+    quantity: w.planned_quantity ?? 0,
+    completed_quantity: w.completed_quantity ?? 0,
+    scrap_quantity: w.scrap_quantity ?? 0,
+    status: (WO_STATUS_MAP[w.status ?? ""] ?? w.status ?? "planned") as WorkOrderStatus,
+    priority: (w.priority ?? 3) as 1 | 2 | 3 | 4 | 5,
+    workshop: w.workshop_name,
+    workshop_code: w.workshop_code,
+    customer_name: w.customer_name,
+    line_code: w.line_code,
+    line_name: w.line_name,
+    order_type: w.order_type,
+    unit: w.unit,
+    planned_start_date: w.planned_start_date,
+    planned_end_date: w.planned_end_date,
+    actual_start_date: w.actual_start_date,
+    actual_end_date: w.actual_end_date,
+    notes: w.notes,
+    created_at: w.created_at ?? new Date().toISOString(),
+    updated_at: w.updated_at ?? new Date().toISOString(),
   };
 }
 

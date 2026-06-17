@@ -18,12 +18,12 @@ const jetbrains = JetBrains_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: '机加工 MES 生产管控台',
-    template: '%s | 机加工 MES',
+    default: '长沙大满生产管理系统',
+    template: '%s | 长沙大满生产管理系统',
   },
   description:
-    '机加工行业生产执行系统，集成 U9 ERP，覆盖工单管理、设备管理、质量管理、生产看板。',
-  keywords: ['MES', '机加工', '生产管控', '工单管理', '设备管理', '质量管理', '生产看板'],
+    '长沙大满生产管理系统：制罐行业生产执行系统，集成 U9 ERP，覆盖工单管理、设备管理、质量管理、生产看板。',
+  keywords: ['MES', '制罐', '大满', '生产管理', '工单管理', '质量管理', '生产看板', '七天滚动计划'],
 };
 
 export default function RootLayout({

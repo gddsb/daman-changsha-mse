@@ -1,56 +1,106 @@
-'use client';
+/**
+ * KPI 卡片（制罐业务版）
+ */
 
-import { cn } from '@/lib/utils';
-import { ArrowUp, ArrowDown, Minus } from 'lucide-react';
-import type { ReactNode } from 'react';
+"use client";
 
-type Tone = 'default' | 'success' | 'warning' | 'danger' | 'info';
+import { Card, CardContent } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
+import { ArrowDown, ArrowUp } from "lucide-react";
+import type { ReactNode } from "react";
 
-interface KpiCardProps {
-  label: string;
-  value: string | number;
-  unit?: string;
-  delta?: number; // 用于趋势图标
-  deltaText?: string; // 详细说明文字
-  tone?: Tone;
-  icon?: ReactNode;
-}
+type Tone = "emerald" | "amber" | "rose" | "sky" | "slate" | "orange";
 
-const TONE_CLASS: Record<Tone, { ring: string; text: string; accent: string }> = {
-  default: { ring: 'border-border/60', text: 'text-foreground', accent: 'text-muted-foreground' },
-  success: { ring: 'border-emerald-500/30', text: 'text-emerald-300', accent: 'text-emerald-400' },
-  warning: { ring: 'border-amber-500/40', text: 'text-amber-300', accent: 'text-amber-400' },
-  danger: { ring: 'border-rose-500/30', text: 'text-rose-300', accent: 'text-rose-400' },
-  info: { ring: 'border-sky-500/30', text: 'text-sky-300', accent: 'text-sky-400' },
+const TONE_BG: Record<Tone, string> = {
+  emerald: "border-emerald-500/20 bg-emerald-500/5",
+  amber: "border-amber-500/20 bg-amber-500/5",
+  rose: "border-rose-500/20 bg-rose-500/5",
+  sky: "border-sky-500/20 bg-sky-500/5",
+  slate: "border-slate-800 bg-slate-900/60",
+  orange: "border-orange-500/20 bg-orange-500/5",
+};
+const TONE_FG: Record<Tone, string> = {
+  emerald: "text-emerald-400",
+  amber: "text-amber-400",
+  rose: "text-rose-400",
+  sky: "text-sky-400",
+  slate: "text-slate-300",
+  orange: "text-orange-400",
+};
+const TONE_BAR: Record<Tone, string> = {
+  emerald: "[&>div]:bg-emerald-500",
+  amber: "[&>div]:bg-amber-500",
+  rose: "[&>div]:bg-rose-500",
+  sky: "[&>div]:bg-sky-500",
+  slate: "[&>div]:bg-slate-400",
+  orange: "[&>div]:bg-orange-500",
 };
 
-export function KpiCard({ label, value, unit, delta, deltaText, tone = 'default', icon }: KpiCardProps) {
-  const cfg = TONE_CLASS[tone];
-  const trendIcon = delta === undefined ? null : delta > 0 ? (
-    <ArrowUp className="h-3 w-3" />
-  ) : delta < 0 ? (
-    <ArrowDown className="h-3 w-3" />
-  ) : (
-    <Minus className="h-3 w-3" />
-  );
+export function KpiCard({
+  title,
+  value,
+  unit,
+  target,
+  trend,
+  tone = "slate",
+  isPercent = false,
+  icon,
+}: {
+  title: string;
+  value: number;
+  unit?: string;
+  target?: number;
+  trend?: number;
+  tone?: Tone;
+  isPercent?: boolean;
+  icon?: ReactNode;
+}) {
+  const displayValue = isPercent
+    ? value.toFixed(2)
+    : Math.round(value).toLocaleString();
+  const pct = target && target > 0 ? (value / target) * 100 : null;
+  const trendUp = trend !== undefined && trend > 0;
+  const trendDown = trend !== undefined && trend < 0;
+
   return (
-    <div className={cn('flex flex-col gap-2 border bg-card/40 p-4 backdrop-blur', cfg.ring)}>
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-          {icon}
-          {label}
+    <Card className={`border ${TONE_BG[tone]}`}>
+      <CardContent className="space-y-2 p-4">
+        <div className="flex items-start justify-between">
+          <div className="flex items-center gap-1.5 text-xs text-slate-400">
+            {icon && <span className={TONE_FG[tone]}>{icon}</span>}
+            {title}
+          </div>
+          {trend !== undefined && (
+            <div
+              className={`flex items-center gap-0.5 font-mono text-[10px] ${
+                trendUp ? "text-emerald-400" : trendDown ? "text-rose-400" : "text-slate-500"
+              }`}
+            >
+              {trendUp ? (
+                <ArrowUp className="h-3 w-3" />
+              ) : trendDown ? (
+                <ArrowDown className="h-3 w-3" />
+              ) : null}
+              {Math.abs(trend).toFixed(1)}%
+            </div>
+          )}
         </div>
-        {trendIcon && (
-          <div className={cn('flex items-center text-xs', cfg.accent)}>{trendIcon}</div>
+        <div className="flex items-baseline gap-1.5">
+          <span className={`font-mono text-2xl font-semibold tabular-nums ${TONE_FG[tone]}`}>
+            {displayValue}
+          </span>
+          {unit && <span className="text-xs text-slate-500">{unit}</span>}
+        </div>
+        {target !== undefined && pct !== null && (
+          <div className="space-y-1">
+            <div className="flex items-center justify-between text-[10px] text-slate-500">
+              <span>目标 {Math.round(target).toLocaleString()}{unit ? ` ${unit}` : ""}</span>
+              <span className="font-mono text-slate-400">{pct.toFixed(0)}%</span>
+            </div>
+            <Progress value={Math.min(pct, 100)} className={`h-1 bg-slate-800 ${TONE_BAR[tone]}`} />
+          </div>
         )}
-      </div>
-      <div className="flex items-baseline gap-2">
-        <div className={cn('font-mono text-3xl font-semibold tabular-nums', cfg.text)}>
-          {value}
-        </div>
-        {unit && <div className="text-sm text-muted-foreground">{unit}</div>}
-      </div>
-      {deltaText && <div className="text-[11px] text-muted-foreground">{deltaText}</div>}
-    </div>
+      </CardContent>
+    </Card>
   );
 }

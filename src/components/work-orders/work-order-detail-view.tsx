@@ -8,9 +8,10 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import { StatusBadge } from '@/components/shared/status-badge';
 import { ProgressBar } from '@/components/shared/progress-bar';
-import { ArrowLeft, CheckCircle2, Factory, PauseCircle, PlayCircle, ClipboardList, History, Package } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, ChevronRight, Factory, PauseCircle, PlayCircle, History, Package, AlertCircle, Send, ScanLine } from 'lucide-react';
 import { formatDate, formatDateTime, formatNumber } from '@/lib/format';
-import type { WorkOrder, WorkOrderOperation, WorkOrderReport } from '@/types/mes';
+import { WO_STATUS_LABELS, PROCESS_STATUS_LABELS, SHIFT_TONE, INSPECTION_TYPE_LABELS } from '@/lib/constants';
+import type { WorkOrder, WorkOrderOperation, WorkOrderReport, InspectionType } from '@/types/mes';
 
 type DetailResponse = {
   workOrder: WorkOrder;
@@ -18,23 +19,48 @@ type DetailResponse = {
   reports: WorkOrderReport[];
 };
 
+const SHIFTS = ['白班', '夜班'] as const;
+const INSPECTION_TYPES: InspectionType[] = ['first', 'in_process', 'final', 'outgoing'];
+
 export function WorkOrderDetailView({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
   const [data, setData] = useState<DetailResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [reportForm, setReportForm] = useState({ good_qty: '', scrap_qty: '', operator: '', scrap_reason: '' });
+  const [activeOpId, setActiveOpId] = useState<string | null>(null);
+  const [form, setForm] = useState({
+    good_qty: '',
+    scrap_qty: '',
+    operator: '',
+    shift_no: '白班' as '白班' | '夜班',
+    can_spec: '',
+    can_height: '',
+    batch_no: '',
+    inspector_name: '',
+    inspection_type: 'in_process' as InspectionType,
+    scrap_reason: '',
+  });
 
   const load = useCallback(async () => {
     try {
       const res = await fetch(`/api/work-orders/${id}`, { cache: 'no-store' });
       const json = await res.json();
-      if (json.success) setData(json.data);
+      if (json.success) {
+        setData(json.data);
+        if (json.data.operations.length > 0 && !activeOpId) {
+          setActiveOpId(json.data.operations[0].id);
+          setForm((f) => ({
+            ...f,
+            can_spec: json.data.workOrder.specification || '',
+            batch_no: json.data.workOrder.batch_no || '',
+          }));
+        }
+      }
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, activeOpId]);
 
   useEffect(() => {
     load();
@@ -49,7 +75,11 @@ export function WorkOrderDetailView({ params }: { params: Promise<{ id: string }
         body: JSON.stringify({ action }),
       });
       const json = await res.json();
-      if (json.success) await load();
+      if (json.success) {
+        await load();
+      } else {
+        alert(json.error || '操作失败');
+      }
     } finally {
       setSubmitting(false);
     }
@@ -57,32 +87,23 @@ export function WorkOrderDetailView({ params }: { params: Promise<{ id: string }
 
   const handleReport = async (e: React.FormEvent) => {
     e.preventDefault();
-    const good = Number(reportForm.good_qty || 0);
-    const scrap = Number(reportForm.scrap_qty || 0);
-    if (!reportForm.operator) {
-      alert('请填写报工人员');
-      return;
-    }
-    if (good + scrap <= 0) {
-      alert('请填写至少一件良品或不良品');
-      return;
-    }
+    if (!activeOpId) return;
     setSubmitting(true);
     try {
       const res = await fetch(`/api/work-orders/${id}/reports`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          operator_name: reportForm.operator,
-          good_quantity: good,
-          scrap_quantity: scrap,
-          scrap_reason: reportForm.scrap_reason || null,
-          report_type: 'production',
+          operation_id: activeOpId,
+          ...form,
+          good_qty: Number(form.good_qty) || 0,
+          scrap_qty: Number(form.scrap_qty) || 0,
+          can_height: form.can_height ? Number(form.can_height) : null,
         }),
       });
       const json = await res.json();
       if (json.success) {
-        setReportForm({ good_qty: '', scrap_qty: '', operator: reportForm.operator, scrap_reason: '' });
+        setForm({ ...form, good_qty: '', scrap_qty: '', scrap_reason: '' });
         await load();
       } else {
         alert(json.error || '报工失败');
@@ -95,69 +116,83 @@ export function WorkOrderDetailView({ params }: { params: Promise<{ id: string }
   if (loading) {
     return (
       <div className="space-y-4">
-        <Skeleton className="h-12" />
-        <Skeleton className="h-64" />
-        <Skeleton className="h-64" />
+        <Skeleton className="h-24 w-full" />
+        <Skeleton className="h-64 w-full" />
+        <Skeleton className="h-32 w-full" />
       </div>
     );
   }
 
-  if (!data) {
-    return (
-      <div className="py-16 text-center text-muted-foreground">
-        工单不存在
-        <div className="mt-4">
-          <Button variant="outline" onClick={() => router.push('/work-orders')}>返回列表</Button>
-        </div>
-      </div>
-    );
-  }
+  if (!data) return <div className="p-8 text-center text-muted-foreground">工单不存在</div>;
 
   const { workOrder: wo, operations, reports } = data;
   const rate = wo.quantity > 0 ? (wo.completed_quantity / wo.quantity) * 100 : 0;
   const yieldRate = wo.completed_quantity + wo.scrap_quantity > 0
     ? (wo.completed_quantity / (wo.completed_quantity + wo.scrap_quantity)) * 100
     : 100;
+  const activeOp = operations.find((o) => o.id === activeOpId);
+  const opReports = activeOp ? reports.filter((r) => r.operation_id === activeOp.id) : [];
+  const totalGood = operations.reduce((s, o) => s + (o.good_quantity || 0), 0);
+  const totalScrap = operations.reduce((s, o) => s + (o.scrap_quantity || 0), 0);
+  const completedOps = operations.filter((o) => o.status === 'completed').length;
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" onClick={() => router.push('/work-orders')}>
-          <ArrowLeft className="h-4 w-4" />
+    <div className="space-y-4">
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <Button variant="ghost" size="sm" onClick={() => router.push('/work-orders')}>
+          <ArrowLeft className="mr-1 h-3 w-3" />返回工单列表
         </Button>
-        <div className="flex-1">
-          <div className="flex items-center gap-2">
-            <h1 className="font-mono text-xl font-bold text-amber-400">{wo.order_no}</h1>
-            <StatusBadge kind="workOrder" value={wo.status} />
+        <ChevronRight className="h-3 w-3" />
+        <span>工单详情</span>
+      </div>
+
+      <div className="border border-border/60 bg-card/40 p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-3">
+              <h1 className="font-mono text-xl font-bold text-amber-400">{wo.order_no}</h1>
+              <StatusBadge kind="workOrder" value={wo.status} />
+              <span className="border border-border/40 bg-background/30 px-2 py-0.5 font-mono text-xs text-muted-foreground">
+                {wo.line_name || '未分配产线'}
+              </span>
+              {wo.order_type && (
+                <span className="border border-border/40 bg-background/30 px-2 py-0.5 text-xs text-muted-foreground">
+                  {wo.order_type}
+                </span>
+              )}
+            </div>
+            <p className="mt-1 text-sm text-foreground/80">{wo.product_name} · <span className="font-mono text-xs text-muted-foreground">{wo.product_code}</span></p>
+            {wo.specification && (
+              <p className="mt-0.5 text-xs text-muted-foreground">规格: {wo.specification}</p>
+            )}
           </div>
-          <p className="mt-1 text-sm text-muted-foreground">{wo.product_name} · <span className="font-mono">{wo.product_code}</span></p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {wo.status === 'planned' && (
-            <Button size="sm" onClick={() => handleAction('release')} disabled={submitting}>
-              <PlayCircle className="mr-2 h-4 w-4" />下发工单
-            </Button>
-          )}
-          {wo.status === 'released' && (
-            <Button size="sm" onClick={() => handleAction('start')} disabled={submitting}>
-              <Factory className="mr-2 h-4 w-4" />开始生产
-            </Button>
-          )}
-          {wo.status === 'in_progress' && (
-            <>
-              <Button size="sm" variant="outline" onClick={() => handleAction('pause')} disabled={submitting}>
-                <PauseCircle className="mr-2 h-4 w-4" />暂停
+          <div className="flex flex-wrap items-center gap-2">
+            {wo.status === 'planned' && (
+              <Button size="sm" onClick={() => handleAction('release')} disabled={submitting}>
+                <PlayCircle className="mr-2 h-4 w-4" />下发工单
               </Button>
-              <Button size="sm" onClick={() => handleAction('complete')} disabled={submitting}>
-                <CheckCircle2 className="mr-2 h-4 w-4" />完工
+            )}
+            {wo.status === 'released' && (
+              <Button size="sm" onClick={() => handleAction('start')} disabled={submitting}>
+                <Factory className="mr-2 h-4 w-4" />开始生产
               </Button>
-            </>
-          )}
-          {wo.status === 'paused' && (
-            <Button size="sm" onClick={() => handleAction('resume')} disabled={submitting}>
-              <PlayCircle className="mr-2 h-4 w-4" />恢复生产
-            </Button>
-          )}
+            )}
+            {wo.status === 'in_progress' && (
+              <>
+                <Button size="sm" variant="outline" onClick={() => handleAction('pause')} disabled={submitting}>
+                  <PauseCircle className="mr-2 h-4 w-4" />暂停
+                </Button>
+                <Button size="sm" onClick={() => handleAction('complete')} disabled={submitting}>
+                  <CheckCircle2 className="mr-2 h-4 w-4" />完工
+                </Button>
+              </>
+            )}
+            {wo.status === 'paused' && (
+              <Button size="sm" onClick={() => handleAction('resume')} disabled={submitting}>
+                <PlayCircle className="mr-2 h-4 w-4" />恢复
+              </Button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -170,7 +205,9 @@ export function WorkOrderDetailView({ params }: { params: Promise<{ id: string }
             <div>
               <div className="flex items-end justify-between">
                 <div>
-                  <div className="font-mono text-4xl text-foreground">{formatNumber(wo.completed_quantity)}<span className="text-base text-muted-foreground">/{formatNumber(wo.quantity)}</span></div>
+                  <div className="font-mono text-4xl text-foreground">
+                    {formatNumber(wo.completed_quantity)}<span className="text-base text-muted-foreground">/{formatNumber(wo.quantity)} {wo.unit || '罐'}</span>
+                  </div>
                   <div className="text-xs text-muted-foreground">已完工 / 计划数量</div>
                 </div>
                 <div className="text-right">
@@ -188,9 +225,15 @@ export function WorkOrderDetailView({ params }: { params: Promise<{ id: string }
             </div>
             <div className="grid grid-cols-2 gap-3 border-t border-border/40 pt-3 sm:grid-cols-4">
               <Field label="车间" value={wo.workshop || '-'} />
-              <Field label="设备" value={operations[0]?.equipment_name || operations[0]?.equipment_code || '-'} />
-              <Field label="来源销售订单" value={wo.sales_order_no || '-'} mono />
+              <Field label="产线" value={wo.line_name || '-'} />
+              <Field label="已完工序" value={`${completedOps} / ${operations.length} 道`} />
               <Field label="优先级" value={`P${wo.priority}`} />
+            </div>
+            <div className="grid grid-cols-2 gap-3 border-t border-border/40 pt-3 sm:grid-cols-4">
+              <Field label="累计良品" value={formatNumber(totalGood)} mono />
+              <Field label="累计不良" value={formatNumber(totalScrap)} accent="danger" mono />
+              <Field label="单位" value={wo.unit || '罐'} />
+              <Field label="工单状态" value={WO_STATUS_LABELS[wo.status] || wo.status} />
             </div>
             {wo.notes && (
               <div className="border-t border-border/40 pt-3 text-sm text-muted-foreground">
@@ -203,36 +246,90 @@ export function WorkOrderDetailView({ params }: { params: Promise<{ id: string }
         <Card className="border-border/60 bg-card/40">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
-              <ClipboardList className="h-4 w-4" />快速报工
+              <Send className="h-4 w-4" />工序报工
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleReport} className="space-y-3">
-              <div>
-                <label className="text-xs text-muted-foreground">报工人员</label>
-                <Input value={reportForm.operator} onChange={(e) => setReportForm({ ...reportForm, operator: e.target.value })} placeholder="姓名 / 工号" />
+            {wo.status !== 'in_progress' ? (
+              <div className="flex items-center gap-2 rounded border border-amber-700/40 bg-amber-900/20 p-3 text-xs text-amber-300">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                <span>工单开始生产后才能报工</span>
               </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-xs text-muted-foreground">良品数</label>
-                  <Input type="number" min="0" value={reportForm.good_qty} onChange={(e) => setReportForm({ ...reportForm, good_qty: e.target.value })} />
+            ) : !activeOp ? (
+              <p className="py-4 text-center text-xs text-muted-foreground">请选择工序</p>
+            ) : (
+              <form onSubmit={handleReport} className="space-y-3">
+                <div className="border border-border/40 bg-background/30 p-2 text-xs">
+                  <div className="text-muted-foreground">当前工序</div>
+                  <div className="mt-0.5 font-mono text-sm text-amber-400">
+                    {activeOp.sequence}. {activeOp.operation_name}
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-xs text-muted-foreground">良品数</label>
+                    <Input type="number" min="0" value={form.good_qty} onChange={(e) => setForm({ ...form, good_qty: e.target.value })} placeholder="0" required />
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground">不良数</label>
+                    <Input type="number" min="0" value={form.scrap_qty} onChange={(e) => setForm({ ...form, scrap_qty: e.target.value })} placeholder="0" />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-xs text-muted-foreground">操作员</label>
+                    <Input value={form.operator} onChange={(e) => setForm({ ...form, operator: e.target.value })} placeholder="姓名" required />
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground">班次</label>
+                    <select
+                      className="flex h-9 w-full border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+                      value={form.shift_no}
+                      onChange={(e) => setForm({ ...form, shift_no: e.target.value as '白班' | '夜班' })}
+                    >
+                      {SHIFTS.map((s) => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-xs text-muted-foreground">检验类型</label>
+                    <select
+                      className="flex h-9 w-full border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+                      value={form.inspection_type}
+                      onChange={(e) => setForm({ ...form, inspection_type: e.target.value as InspectionType })}
+                    >
+                      {INSPECTION_TYPES.map((t) => <option key={t} value={t}>{INSPECTION_TYPE_LABELS[t]}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground">检验员</label>
+                    <Input value={form.inspector_name} onChange={(e) => setForm({ ...form, inspector_name: e.target.value })} placeholder="姓名" />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-xs text-muted-foreground">罐型规格</label>
+                    <Input value={form.can_spec} onChange={(e) => setForm({ ...form, can_spec: e.target.value })} placeholder="如:502#" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground">罐高(mm)</label>
+                    <Input type="number" value={form.can_height} onChange={(e) => setForm({ ...form, can_height: e.target.value })} placeholder="如:165" />
+                  </div>
                 </div>
                 <div>
-                  <label className="text-xs text-muted-foreground">不良数</label>
-                  <Input type="number" min="0" value={reportForm.scrap_qty} onChange={(e) => setReportForm({ ...reportForm, scrap_qty: e.target.value })} />
+                  <label className="text-xs text-muted-foreground">批次号</label>
+                  <Input value={form.batch_no} onChange={(e) => setForm({ ...form, batch_no: e.target.value })} placeholder="如:20260617-A(3)" />
                 </div>
-              </div>
-              <div>
-                <label className="text-xs text-muted-foreground">不良原因(选填)</label>
-                <Input value={reportForm.scrap_reason} onChange={(e) => setReportForm({ ...reportForm, scrap_reason: e.target.value })} placeholder="如:尺寸超差" />
-              </div>
-              <Button type="submit" className="w-full" disabled={submitting || wo.status !== 'in_progress'}>
-                提交报工
-              </Button>
-              {wo.status !== 'in_progress' && (
-                <p className="text-[11px] text-muted-foreground">工单开始生产后才能报工</p>
-              )}
-            </form>
+                <div>
+                  <label className="text-xs text-muted-foreground">不良原因(选填)</label>
+                  <Input value={form.scrap_reason} onChange={(e) => setForm({ ...form, scrap_reason: e.target.value })} placeholder="如:印铁划伤" />
+                </div>
+                <Button type="submit" className="w-full" disabled={submitting}>
+                  <Send className="mr-2 h-4 w-4" />提交报工（同时生成质量日报）
+                </Button>
+              </form>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -240,72 +337,78 @@ export function WorkOrderDetailView({ params }: { params: Promise<{ id: string }
       <Card className="border-border/60 bg-card/40">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
-            <Package className="h-4 w-4" />工序路线 ({operations.length} 道)
+            <Package className="h-4 w-4" />连续工序路线 ({operations.length} 道) — 点击切换报工
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {operations.length === 0 ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">未配置工序</p>
-          ) : (
-            <div className="space-y-2">
-              {operations.map((op, idx) => (
-                <div key={op.id} className="flex items-center gap-3 border border-border/30 bg-background/30 p-3">
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center border border-amber-500/40 font-mono text-sm text-amber-400">
-                    {op.sequence}
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
+            {operations.map((op) => {
+              const isActive = op.id === activeOpId;
+              return (
+                <button
+                  key={op.id}
+                  onClick={() => setActiveOpId(op.id)}
+                  className={`group relative border p-2 text-left transition-colors ${
+                    isActive
+                      ? 'border-amber-500/60 bg-amber-900/20'
+                      : 'border-border/40 bg-background/30 hover:border-border/70'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-mono text-[10px] text-muted-foreground">{op.sequence}/13</span>
+                    <span className="font-mono text-[10px] text-fg-2">{op.sequence}</span>
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium">{op.operation_name}</span>
-                      <StatusBadge kind="operation" value={op.status} />
-                    </div>
-                    <div className="mt-0.5 text-[11px] text-muted-foreground">
-                      工作中心: {op.equipment_name || op.equipment_code || '-'} · 标准工时: {op.standard_time_minutes || 0} 分钟 · 操作员: {op.operator_name || '-'}
-                    </div>
+                  <div className="mt-1 truncate text-xs font-medium text-foreground/90">{op.operation_name}</div>
+                  <div className="mt-1 flex items-baseline justify-between font-mono text-[10px]">
+                    <span className="text-emerald-400">{op.good_quantity || 0}</span>
+                    <span className="text-rose-400">-{op.scrap_quantity || 0}</span>
                   </div>
-                  <div className="text-right text-[11px] text-muted-foreground">
-                    <div>良品 <span className="font-mono text-foreground">{op.good_quantity || 0}</span></div>
-                    <div>不良 <span className="font-mono text-rose-400">{op.scrap_quantity || 0}</span></div>
-                  </div>
-                  {idx < operations.length - 1 && (
-                    <div className="absolute hidden" />
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
+                </button>
+              );
+            })}
+          </div>
         </CardContent>
       </Card>
 
       <Card className="border-border/60 bg-card/40">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
-            <History className="h-4 w-4" />报工历史 ({reports.length})
+            <History className="h-4 w-4" />
+            报工历史 — {activeOp?.operation_name || '-'} ({opReports.length})
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {reports.length === 0 ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">暂无报工记录</p>
+          {opReports.length === 0 ? (
+            <p className="py-8 text-center text-sm text-muted-foreground">该工序暂无报工记录</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border/40 text-left text-[11px] uppercase tracking-wider text-muted-foreground">
-                    <th className="pb-2 pr-4">报工时间</th>
-                    <th className="pb-2 pr-4">操作员</th>
-                    <th className="pb-2 pr-4">类型</th>
-                    <th className="pb-2 pr-4 text-right">良品</th>
-                    <th className="pb-2 pr-4 text-right">不良</th>
-                    <th className="pb-2">不良原因</th>
+                    <th className="pb-2 pr-3">报工时间</th>
+                    <th className="pb-2 pr-3">操作员</th>
+                    <th className="pb-2 pr-3">班次</th>
+                    <th className="pb-2 pr-3">检验类型</th>
+                    <th className="pb-2 pr-3 text-right">良品</th>
+                    <th className="pb-2 pr-3 text-right">不良</th>
+                    <th className="pb-2 pr-3">批次</th>
+                    <th className="pb-2">备注</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {reports.map((r) => (
+                  {opReports.map((r) => (
                     <tr key={r.id} className="border-b border-border/20">
-                      <td className="py-2 pr-4 font-mono text-xs text-muted-foreground">{formatDateTime(r.reported_at)}</td>
-                      <td className="py-2 pr-4">{r.operator_name}</td>
-                      <td className="py-2 pr-4"><StatusBadge kind="reportType" value={r.report_type} /></td>
-                      <td className="py-2 pr-4 text-right font-mono text-emerald-400">{r.good_quantity}</td>
-                      <td className="py-2 pr-4 text-right font-mono text-rose-400">{r.scrap_quantity}</td>
+                      <td className="py-2 pr-3 font-mono text-xs text-muted-foreground">{formatDateTime(r.reported_at)}</td>
+                      <td className="py-2 pr-3">{r.operator_name || '-'}</td>
+                      <td className="py-2 pr-3">
+                        <span className={`border px-1.5 py-0.5 text-[10px] ${SHIFT_TONE[r.shift_no || '白班'] || SHIFT_TONE['白班']}`}>
+                          {r.shift_no || '白班'}
+                        </span>
+                      </td>
+                      <td className="py-2 pr-3 text-xs text-muted-foreground">{(r as { inspection_type?: string }).inspection_type || '-'}</td>
+                      <td className="py-2 pr-3 text-right font-mono text-emerald-400">{formatNumber(r.good_quantity)}</td>
+                      <td className="py-2 pr-3 text-right font-mono text-rose-400">{formatNumber(r.scrap_quantity)}</td>
+                      <td className="py-2 pr-3 font-mono text-xs text-muted-foreground">{r.batch_no || '-'}</td>
                       <td className="py-2 text-xs text-muted-foreground">{r.scrap_reason || '-'}</td>
                     </tr>
                   ))}
