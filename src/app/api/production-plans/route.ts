@@ -132,6 +132,32 @@ export async function DELETE(request: NextRequest) {
     if (!id) {
       return NextResponse.json({ success: false, error: '缺少计划 id' }, { status: 400 });
     }
+    // 校验：开工中（生产中）的工单不允许移出七天生产计划
+    const c = getSupabaseClient();
+    const { data: plan } = await c
+      .from('production_plans')
+      .select('id, work_order_id')
+      .eq('id', id)
+      .maybeSingle();
+    if (plan && (plan as { work_order_id: string }).work_order_id) {
+      const woId = (plan as { work_order_id: string }).work_order_id;
+      const { data: wo } = await c
+        .from('work_orders')
+        .select('order_no, status')
+        .eq('id', woId)
+        .maybeSingle();
+      const st = (wo as { status?: string } | null)?.status;
+      if (st === '生产中' || st === 'in_progress') {
+        const orderNo = (wo as { order_no?: string }).order_no ?? woId;
+        return NextResponse.json(
+          {
+            success: false,
+            error: `工单 ${orderNo} 已开工（生产中），不允许移出七天生产计划`,
+          },
+          { status: 400 }
+        );
+      }
+    }
     await deletePlan(id);
     return NextResponse.json({ success: true });
   } catch (e) {
