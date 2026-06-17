@@ -620,19 +620,20 @@ function CreateWorkOrderDialog({
           </Field>
 
           <div className="grid grid-cols-2 gap-3">
-            <Field label="产品名称" required>
+            <Field label="产品名称（自动带入）" required>
               <Input
                 value={form.product_name}
-                onChange={(e) => setForm({ ...form, product_name: e.target.value })}
-                className="border-slate-800 bg-slate-900 text-slate-200"
+                readOnly
+                className="cursor-not-allowed border-slate-800 bg-slate-900/40 text-slate-400"
+                placeholder="选择料号后自动带入"
               />
             </Field>
-            <Field label="规格">
+            <Field label="规格（自动带入）">
               <Input
                 value={form.specification}
-                onChange={(e) => setForm({ ...form, specification: e.target.value })}
-                placeholder="自动带入"
-                className="border-slate-800 bg-slate-900 text-slate-200"
+                readOnly
+                className="cursor-not-allowed border-slate-800 bg-slate-900/40 text-slate-400"
+                placeholder="选择料号后自动带入"
               />
             </Field>
           </div>
@@ -648,7 +649,7 @@ function CreateWorkOrderDialog({
                 className="border-slate-800 bg-slate-900 text-slate-200"
               />
             </Field>
-            <Field label="产线" required>
+            <Field label="产线（自动带入）" required>
               <select
                 value={form.line_code}
                 onChange={(e) => {
@@ -661,8 +662,8 @@ function CreateWorkOrderDialog({
                         : f.rework_source_line_name,
                   }));
                 }}
-                disabled={form.order_type === "返工" && !!form.rework_source_line_name}
-                className="h-9 w-full rounded-sm border border-slate-800 bg-slate-900 px-2 font-mono text-xs text-slate-200 outline-none focus:border-orange-500 disabled:opacity-60"
+                disabled={form.order_type === "返工" ? false : true}
+                className="h-9 w-full cursor-not-allowed rounded-sm border border-slate-800 bg-slate-900/40 px-2 font-mono text-xs text-slate-400 outline-none focus:border-orange-500 disabled:opacity-70"
               >
                 <option value="">请选择产线</option>
                 {lines.map((l) => (

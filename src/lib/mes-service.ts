@@ -918,3 +918,149 @@ function dateAdd(iso: string, days: number): string {
 }
 
 export { CAN_PROCESS_NAMES };
+
+export interface CreateProductInput {
+  code: string;
+  name: string;
+  specification?: string | null;
+  unit?: string | null;
+  process_route?: string | null;
+  default_line_code?: string | null;
+  default_line_name?: string | null;
+}
+
+export async function createProduct(
+  input: CreateProductInput
+): Promise<Product> {
+  const code = (input.code ?? "").trim();
+  if (!code) throw new Error("料号不能为空");
+  if (!input.name?.trim()) throw new Error("产品名称不能为空");
+  const supa = getSupabaseClient();
+  // 料号唯一
+  const { data: exist } = await supa
+    .from("products")
+    .select("id, code")
+    .eq("code", code)
+    .maybeSingle();
+  if (exist) {
+    throw new Error(`料号「${code}」已存在`);
+  }
+  let lineName = input.default_line_name ?? null;
+  if (input.default_line_code && !lineName) {
+    const { data: ln } = await supa
+      .from("production_lines")
+      .select("name")
+      .eq("code", input.default_line_code)
+      .maybeSingle();
+    lineName = (ln as { name?: string } | null)?.name ?? input.default_line_code;
+  }
+  const row = {
+    code,
+    name: input.name.trim(),
+    specification: input.specification ?? null,
+    unit: input.unit ?? "罐",
+    process_route: input.process_route ?? null,
+    default_line_code: input.default_line_code ?? null,
+    default_line_name: lineName,
+  };
+  const { data, error } = await supa
+    .from("products")
+    .insert(row)
+    .select("*")
+    .single();
+  if (error) throw new Error(`创建产品失败：${error.message}`);
+  return data as Product;
+}
+
+export interface ImportProductsResult {
+  total: number;
+  inserted: number;
+  skippedDuplicates: number;
+  errors: { row: number; reason: string; code?: string }[];
+}
+
+/**
+ * 批量导入产品；按料号去重（已存在则跳过）
+ */
+export async function importProducts(
+  rows: CreateProductInput[]
+): Promise<ImportProductsResult> {
+  const supa = getSupabaseClient();
+  const result: ImportProductsResult = {
+    total: rows.length,
+    inserted: 0,
+    skippedDuplicates: 0,
+    errors: [],
+  };
+  if (rows.length === 0) return result;
+
+  // 1) 行内去重 + 校验
+  const seenInBatch = new Set<string>();
+  const validRows: CreateProductInput[] = [];
+  rows.forEach((r, idx) => {
+    const code = (r.code ?? "").trim();
+    if (!code) {
+      result.errors.push({ row: idx + 1, reason: "料号为空" });
+      return;
+    }
+    if (!r.name?.trim()) {
+      result.errors.push({ row: idx + 1, reason: "产品名称为空", code });
+      return;
+    }
+    if (seenInBatch.has(code)) {
+      result.skippedDuplicates++;
+      return;
+    }
+    seenInBatch.add(code);
+    validRows.push({ ...r, code });
+  });
+
+  // 2) DB 料号去重
+  const codes = Array.from(seenInBatch);
+  const { data: existing } = await supa
+    .from("products")
+    .select("code")
+    .in("code", codes);
+  const existSet = new Set((existing ?? []).map((e) => (e as { code: string }).code));
+  const toInsert = validRows.filter((r) => !existSet.has(r.code));
+
+  result.skippedDuplicates += validRows.length - toInsert.length;
+
+  // 3) 解析产线 name
+  const lineCodeSet = Array.from(
+    new Set(toInsert.map((r) => r.default_line_code).filter((x): x is string => !!x))
+  );
+  const lineMap = new Map<string, string>();
+  if (lineCodeSet.length > 0) {
+    const { data: lns } = await supa
+      .from("production_lines")
+      .select("code, name")
+      .in("code", lineCodeSet);
+    for (const l of lns ?? []) {
+      lineMap.set((l as { code: string }).code, (l as { code: string; name: string }).name);
+    }
+  }
+  const payload = toInsert.map((r) => ({
+    code: r.code,
+    name: r.name!.trim(),
+    specification: r.specification ?? null,
+    unit: r.unit ?? "罐",
+    process_route: r.process_route ?? null,
+    default_line_code: r.default_line_code ?? null,
+    default_line_name: r.default_line_code ? (lineMap.get(r.default_line_code) ?? r.default_line_code) : null,
+  }));
+
+  // 4) 分批插入
+  for (let i = 0; i < payload.length; i += 100) {
+    const chunk = payload.slice(i, i + 100);
+    const { error } = await supa.from("products").insert(chunk);
+    if (error) {
+      chunk.forEach((c) =>
+        result.errors.push({ row: -1, reason: error.message, code: c.code })
+      );
+    } else {
+      result.inserted += chunk.length;
+    }
+  }
+  return result;
+}
