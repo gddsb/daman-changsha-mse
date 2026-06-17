@@ -225,11 +225,17 @@ export interface LineStatusItem {
   todayPassRate: number;
 }
 
-export interface ProcessDefectStat {
-  process: string;
+export interface ProcessDefectBucket {
   inspected: number;
   scrap: number;
   scrapRate: number;
+}
+
+export interface ProcessDefectStat {
+  process: string;
+  today: ProcessDefectBucket;
+  yesterday: ProcessDefectBucket;
+  month: ProcessDefectBucket;
 }
 
 export interface RecentDefect {

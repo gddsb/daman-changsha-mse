@@ -10,7 +10,7 @@
 
 "use client";
 
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -153,45 +153,47 @@ export function DashboardView() {
               工序不良率排行
             </CardTitle>
           </CardHeader>
-          <CardContent className="pt-3">
-            {data.processDefectStats.length === 0 ? (
-              <p className="py-4 text-center text-xs text-slate-500">暂无报工数据</p>
-            ) : (
-              <div className="space-y-2">
-                {data.processDefectStats.slice(0, 7).map((p) => (
-                  <div key={p.process} className="space-y-1">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-slate-300">{p.process}</span>
-                      <span
-                        className={
-                          p.scrapRate > 2
-                            ? "font-mono text-rose-400"
-                            : p.scrapRate > 0.5
-                              ? "font-mono text-amber-400"
-                              : "font-mono text-slate-400"
-                        }
-                      >
-                        {p.scrapRate.toFixed(2)}%
-                      </span>
-                    </div>
-                    <Progress
-                      value={Math.min(p.scrapRate * 20, 100)}
-                      className={
-                        p.scrapRate > 2
-                          ? "h-1 bg-slate-800 [&>div]:bg-rose-500"
-                          : p.scrapRate > 0.5
-                            ? "h-1 bg-slate-800 [&>div]:bg-amber-500"
-                            : "h-1 bg-slate-800 [&>div]:bg-emerald-500"
-                      }
-                    />
-                    <div className="flex justify-between text-[10px] text-slate-500 font-mono">
-                      <span>检验 {p.inspected}</span>
-                      <span>不良 {p.scrap}</span>
+          <CardContent className="pt-2 px-3 pb-3">
+            <div className="grid grid-cols-[1fr_2.2fr] gap-x-2 gap-y-1 text-[11px]">
+              <div className="text-slate-500 font-medium pb-1 border-b border-slate-800">工序</div>
+              <div className="grid grid-cols-3 gap-1 pb-1 border-b border-slate-800 text-slate-500 font-medium">
+                <span className="text-center">今日</span>
+                <span className="text-center">昨日</span>
+                <span className="text-center">本月</span>
+              </div>
+              {data.processDefectStats.map((p) => {
+                const tone = (r: number) =>
+                  r > 2
+                    ? "text-rose-400"
+                    : r > 0.5
+                      ? "text-amber-400"
+                      : r > 0
+                        ? "text-emerald-400"
+                        : "text-slate-600";
+                const fmtRate = (r: number) =>
+                  r > 0 ? `${r.toFixed(2)}%` : "—";
+                const renderCell = (rate: number, inspected: number, scrap: number) => (
+                  <div className="text-center">
+                    <div className={`font-mono tabular-nums ${tone(rate)}`}>{fmtRate(rate)}</div>
+                    <div className="text-[10px] text-slate-600 font-mono tabular-nums">
+                      {inspected > 0 ? `${scrap}/${inspected}` : "0/0"}
                     </div>
                   </div>
-                ))}
-              </div>
-            )}
+                );
+                return (
+                  <Fragment key={p.process}>
+                    <div className="text-slate-300 truncate py-1.5 border-b border-slate-800/40">
+                      {p.process}
+                    </div>
+                    <div className="grid grid-cols-3 gap-1 py-1 border-b border-slate-800/40">
+                      {renderCell(p.today.scrapRate, p.today.inspected, p.today.scrap)}
+                      {renderCell(p.yesterday.scrapRate, p.yesterday.inspected, p.yesterday.scrap)}
+                      {renderCell(p.month.scrapRate, p.month.inspected, p.month.scrap)}
+                    </div>
+                  </Fragment>
+                );
+              })}
+            </div>
           </CardContent>
         </Card>
 

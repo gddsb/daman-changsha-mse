@@ -104,9 +104,11 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
   // 规则：制罐产线一次只能跑一条产线。当前"在制"工单数最多的产线标记为"运行"，
   // 其余为"待机"；无任何在制工单时全部为"待机"。
   // 排序键：在制工单数（降序）→ 最早开工时间（升序）→ 优先级（升序）
+  // 用户要求：仅"已开工"（in_progress/生产中/已暂停/paused）才算在制；
+  // "已下发/released" 还未真正开工，不进入在制清单，但允许产线状态显示"待机"。
   const inProgressStatuses = [
-    "已下发", "生产中", "已暂停", "开工", "开立",
-    "released", "in_progress", "paused",
+    "生产中", "已暂停", "开工", "开立",
+    "in_progress", "paused",
   ];
   const lineOrderCounts = new Map<string, number>();
   const lineActiveWorkOrders = new Map<string, WoRow[]>();
@@ -215,23 +217,57 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
     .slice(0, 8)
     .map((w) => mapWorkOrderRow(w));
 
-  // === 工序不良率 ===
-  const processMap = new Map<string, { inspected: number; scrap: number }>();
+  // === 工序不良率（今日 / 昨日 / 本月 三列） ===
+  const CAN_PROCESS_NAMES = [
+    "下料","小料检测","焊接","补图烘干","封口","测漏","离子风",
+    "卷封光检","倒罐光检","罐内光检","全检","码垛","包装",
+  ];
+  // 收集 reports 中所有报工日期，按降序去重；若无数据则退回到 today
+  const reportDays = Array.from(
+    new Set(reports.map((r) => (r.reported_at ?? "").slice(0, 10)).filter(Boolean)),
+  ).sort((a, b) => b.localeCompare(a));
+  const latestDay = reportDays[0] ?? today;
+  const prevDay = reportDays[1] ?? latestDay;
+  const monthPrefix = today.slice(0, 7); // YYYY-MM
+
+  const procMaps = {
+    today: new Map<string, { inspected: number; scrap: number }>(),
+    yesterday: new Map<string, { inspected: number; scrap: number }>(),
+    month: new Map<string, { inspected: number; scrap: number }>(),
+  };
   reports.forEach((r) => {
-    const process = r.process_name ?? "其他";
-    const entry = processMap.get(process) ?? { inspected: 0, scrap: 0 };
-    entry.inspected += (r.good_quantity ?? 0) + (r.scrap_quantity ?? 0);
-    entry.scrap += r.scrap_quantity ?? 0;
-    processMap.set(process, entry);
+    const proc = r.process_name ?? "其他";
+    const rDate = (r.reported_at ?? "").substring(0, 10);
+    const ins = (r.good_quantity ?? 0) + (r.scrap_quantity ?? 0);
+    const sc = r.scrap_quantity ?? 0;
+    if (rDate === latestDay) {
+      const e = procMaps.today.get(proc) ?? { inspected: 0, scrap: 0 };
+      e.inspected += ins; e.scrap += sc; procMaps.today.set(proc, e);
+    }
+    if (rDate === prevDay) {
+      const e = procMaps.yesterday.get(proc) ?? { inspected: 0, scrap: 0 };
+      e.inspected += ins; e.scrap += sc; procMaps.yesterday.set(proc, e);
+    }
+    if (rDate.startsWith(monthPrefix)) {
+      const e = procMaps.month.get(proc) ?? { inspected: 0, scrap: 0 };
+      e.inspected += ins; e.scrap += sc; procMaps.month.set(proc, e);
+    }
   });
-  const processDefectStats: ProcessDefectStat[] = Array.from(processMap.entries())
-    .map(([process, v]) => ({
-      process,
-      inspected: v.inspected,
-      scrap: v.scrap,
-      scrapRate: v.inspected > 0 ? (v.scrap / v.inspected) * 100 : 0,
+  const makeBucket = (v: { inspected: number; scrap: number } | undefined) => ({
+    inspected: v?.inspected ?? 0,
+    scrap: v?.scrap ?? 0,
+    scrapRate: v && v.inspected > 0 ? (v.scrap / v.inspected) * 100 : 0,
+  });
+  // 行 = 13 道固定工序（即便无数据也占位显示 0.00%）
+  const processDefectStats: ProcessDefectStat[] = CAN_PROCESS_NAMES
+    .map((proc) => ({
+      process: proc,
+      today: makeBucket(procMaps.today.get(proc)),
+      yesterday: makeBucket(procMaps.yesterday.get(proc)),
+      month: makeBucket(procMaps.month.get(proc)),
     }))
-    .sort((a, b) => b.scrapRate - a.scrapRate);
+    // 排序：按今日不良率降序（无数据排后）
+    .sort((a, b) => b.today.scrapRate - a.today.scrapRate);
 
   // === 最近不良 ===
   const recentDefects = reports
