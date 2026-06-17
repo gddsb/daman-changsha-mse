@@ -78,6 +78,23 @@ export function ProductionPlanView() {
   const totalPlanned = visiblePlans.reduce((s, p) => s + p.planned_quantity, 0);
   const orderCount = visiblePlans.length;
 
+  // 每天（按当前产线筛选）的小计：单数 + 数量
+  const daySummary = useMemo(() => {
+    const map: Record<string, { orderCount: number; qty: number; lineQty: Record<string, number>; lineCount: Record<string, number> }> = {};
+    for (const d of days) {
+      map[d.date] = { orderCount: 0, qty: 0, lineQty: {}, lineCount: {} };
+    }
+    for (const p of visiblePlans) {
+      const cell = map[p.plan_date];
+      if (!cell) continue;
+      cell.orderCount += 1;
+      cell.qty += p.planned_quantity;
+      cell.lineQty[p.line_code] = (cell.lineQty[p.line_code] ?? 0) + p.planned_quantity;
+      cell.lineCount[p.line_code] = (cell.lineCount[p.line_code] ?? 0) + 1;
+    }
+    return map;
+  }, [visiblePlans, days]);
+
   function plansAtCell(date: string, lineCode: string): ProductionPlan[] {
     return visiblePlans
       .filter((p) => p.plan_date === date && p.line_code === lineCode)
@@ -217,20 +234,93 @@ export function ProductionPlanView() {
       <div className="flex-1 overflow-auto">
         <div className="min-w-[1280px]">
           {/* 表头：日期 */}
-          <div className="sticky top-0 z-10 grid grid-cols-[60px_140px_repeat(7,minmax(0,1fr))] border-b border-slate-700 bg-slate-900">
-            <div className="border-r border-slate-800 px-3 py-2 text-center font-mono text-xs text-slate-500">产线</div>
-            <div className="border-r border-slate-800 px-3 py-2 font-mono text-xs text-slate-500">合计</div>
-            {days.map((d) => (
-              <div
-                key={d.date}
-                className={`border-r border-slate-800 px-3 py-2 text-center ${
-                  d.date === today ? "bg-orange-500/10 text-orange-300" : "text-slate-300"
-                }`}
-              >
-                <div className="font-mono text-sm font-semibold">{d.monthDay}</div>
-                <div className="font-mono text-xs text-slate-500">{d.label}</div>
+          <div className="sticky top-0 z-10 border-b border-slate-700 bg-slate-900">
+            <div className="grid grid-cols-[60px_140px_repeat(7,minmax(0,1fr))]">
+              <div className="border-r border-slate-800 px-3 py-2 text-center font-mono text-xs text-slate-500">
+                产线
               </div>
-            ))}
+              <div className="border-r border-slate-800 px-3 py-2 font-mono text-xs text-slate-500">
+                合计
+              </div>
+              {days.map((d) => {
+                const s = daySummary[d.date] ?? { orderCount: 0, qty: 0 };
+                return (
+                  <div
+                    key={d.date}
+                    className={`border-r border-slate-800 px-3 py-2 text-center ${
+                      d.date === today ? "bg-orange-500/10" : ""
+                    }`}
+                  >
+                    <div
+                      className={`font-mono text-sm font-semibold ${
+                        d.date === today ? "text-orange-300" : "text-slate-200"
+                      }`}
+                    >
+                      {d.monthDay}
+                    </div>
+                    <div
+                      className={`font-mono text-[10px] ${
+                        d.date === today ? "text-orange-400/80" : "text-slate-500"
+                      }`}
+                    >
+                      {d.label}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            {/* 第二行：每天计划合计（订单数 + 数量） */}
+            <div className="grid grid-cols-[60px_140px_repeat(7,minmax(0,1fr))] border-t border-slate-800/80">
+              <div className="border-r border-slate-800 px-3 py-1.5 text-center font-mono text-[10px] text-slate-600">
+                日合计
+              </div>
+              <div className="border-r border-slate-800 px-3 py-1.5 text-right font-mono text-[11px] text-slate-400">
+                <span className="tabular-nums">{orderCount}</span>
+                <span className="text-slate-600"> 单 · </span>
+                <span className="tabular-nums text-slate-200">{formatNumber(totalPlanned)}</span>
+                <span className="text-slate-600"> 罐</span>
+              </div>
+              {days.map((d) => {
+                const s = daySummary[d.date] ?? { orderCount: 0, qty: 0 };
+                const isWeekend = d.weekday === 0 || d.weekday === 6;
+                return (
+                  <div
+                    key={`sum-${d.date}`}
+                    className={`border-r border-slate-800 px-2 py-1.5 text-center font-mono text-[11px] ${
+                      d.date === today ? "bg-orange-500/10" : ""
+                    } ${isWeekend ? "text-slate-600" : "text-slate-300"}`}
+                    title={
+                      s.orderCount > 0
+                        ? `${d.date} · ${s.orderCount} 个订单 · 共 ${formatNumber(s.qty)} 罐`
+                        : `${d.date} · 暂无计划`
+                    }
+                  >
+                    {s.orderCount > 0 ? (
+                      <>
+                        <span
+                          className={`tabular-nums ${
+                            d.date === today ? "text-orange-300" : "text-slate-100"
+                          }`}
+                        >
+                          {formatNumber(s.qty)}
+                        </span>
+                        <span className="text-slate-600"> 罐</span>
+                        <span className="mx-1 text-slate-700">·</span>
+                        <span
+                          className={`tabular-nums ${
+                            d.date === today ? "text-orange-400/80" : "text-slate-500"
+                          }`}
+                        >
+                          {s.orderCount} 单
+                        </span>
+                      </>
+                    ) : (
+                      <span className="text-slate-700">—</span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
 
           {loading ? (
