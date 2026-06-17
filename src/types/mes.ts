@@ -78,7 +78,7 @@ export interface WorkOrderOperation {
   notes: string | null;
 }
 
-// 工单报工（顶层批次报工：开批/换线/人员/清场）
+// 工单报工（顶层批次报工：开批/换线/人员/清场）。同一工单同时只允许 1 个 status=活跃 的批次。
 export interface WorkOrderReport {
   id: string;
   work_order_id: string;
@@ -90,6 +90,8 @@ export interface WorkOrderReport {
   labor_workers: number;
   cleanup_minutes: number;
   notes: string;
+  status: "活跃" | "已关闭";
+  closed_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -98,16 +100,16 @@ export interface WorkOrderReport {
 export interface OperationReport {
   id: string;
   work_order_report_id: string;
-  operation_id: string;
-  process_name: string;
-  sequence: number;
-  material_code: string;
-  material_name: string;
-  material_batch_no: string;
+  operation_id: string | null;
+  process_name: string | null;
+  sequence: number | null;
+  material_code: string | null;
+  material_name: string | null;
+  material_batch_no: string | null;
   input_qty: number;
   defect_qty: number;
   qualified_qty: number;
-  notes: string;
+  notes: string | null;
   created_at: string;
   updated_at: string;
 }

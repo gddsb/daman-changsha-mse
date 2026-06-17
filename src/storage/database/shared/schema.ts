@@ -119,28 +119,43 @@ export const workOrderOperations = pgTable("work_order_operations", {
 });
 
 /**
- * 工序报工记录：报工数据是质量日报的数据源
+ * 工单报工（批次）— 一个工单可多次报工（多次开工/换批），同一工单同时只允许 1 个活跃批次。
  */
 export const workOrderReports = pgTable("work_order_reports", {
   id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
   workOrderId: varchar("work_order_id", { length: 36 }).notNull(),
+  batchNo: text("batch_no").notNull(),
+  startAt: timestamp("start_at", { withTimezone: true }).notNull().defaultNow(),
+  changeLineAt: timestamp("change_line_at", { withTimezone: true }),
+  skilledWorkers: integer("skilled_workers").notNull().default(0),
+  generalWorkers: integer("general_workers").notNull().default(0),
+  laborWorkers: integer("labor_workers").notNull().default(0),
+  cleanupMinutes: integer("cleanup_minutes").notNull().default(0),
+  notes: text("notes").notNull().default(""),
+  status: text("status").notNull().default("活跃"),
+  closedAt: timestamp("closed_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+});
+
+/**
+ * 工序报工 — 归属于某条工单报工批次。合格数量 = 投入 - 不良（自动算）。
+ */
+export const operationReports = pgTable("operation_reports", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  workOrderReportId: varchar("work_order_report_id", { length: 36 }).notNull(),
   operationId: varchar("operation_id", { length: 36 }),
-  workOrderNo: varchar("work_order_no", { length: 64 }).notNull(),
-  processName: varchar("process_name", { length: 64 }).notNull(),
-  lineCode: varchar("line_code", { length: 32 }).notNull(),
-  lineName: varchar("line_name", { length: 64 }).notNull(),
-  shiftNo: varchar("shift_no", { length: 16 }).notNull().default("白班"),
-  productCode: varchar("product_code", { length: 64 }).notNull(),
-  productName: varchar("product_name", { length: 128 }).notNull(),
-  canSpec: varchar("can_spec", { length: 64 }),
-  canHeight: integer("can_height"),
-  batchNo: varchar("batch_no", { length: 64 }),
-  inspectorName: varchar("inspector_name", { length: 64 }).notNull(),
-  goodQuantity: integer("good_quantity").notNull().default(0),
-  scrapQuantity: integer("scrap_quantity").notNull().default(0),
-  scrapReason: text("scrap_reason"),
-  reportedAt: timestamp("reported_at", { withTimezone: true }).defaultNow(),
+  processName: text("process_name"),
+  sequence: integer("sequence"),
+  materialCode: text("material_code"),
+  materialName: text("material_name"),
+  materialBatchNo: text("material_batch_no"),
+  inputQty: integer("input_qty").notNull().default(0),
+  defectQty: integer("defect_qty").notNull().default(0),
+  qualifiedQty: integer("qualified_qty").notNull().default(0),
   notes: text("notes"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
 });
 
 /* ============================================================

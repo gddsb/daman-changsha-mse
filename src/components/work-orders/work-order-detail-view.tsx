@@ -85,8 +85,19 @@ export function WorkOrderDetailView({ params }: { params: Promise<{ id: string }
   const [editingWoReportId, setEditingWoReportId] = useState<string | null>(null);
 
   // ====== 工序报工 表单 ======
-  const [opForm, setOpForm] = useState({
-    work_order_report_id: '', // 必须在选中某个工单报工后才能填
+  const [opForm, setOpForm] = useState<{
+    work_order_report_id: string;
+    operation_id: string;
+    process_name: string;
+    sequence: number;
+    material_code: string;
+    material_name: string;
+    material_batch_no: string;
+    input_qty: number;
+    defect_qty: number;
+    notes: string;
+  }>({
+    work_order_report_id: '',
     operation_id: '',
     process_name: '',
     sequence: 0,
@@ -209,6 +220,45 @@ export function WorkOrderDetailView({ params }: { params: Promise<{ id: string }
     }
   };
 
+  const handleCloseWoReport = async (reportId: string) => {
+    if (!confirm('关闭该工单报工单？关闭后不能再添加工序报工，需要再开新批次才能继续生产。')) return;
+    setSubmitting(true);
+    try {
+      const res = await fetch(`/api/work-orders/${id}/reports/${reportId}/status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'close' }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        await load();
+      } else {
+        alert(json.error || '关闭失败');
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleReopenWoReport = async (reportId: string) => {
+    setSubmitting(true);
+    try {
+      const res = await fetch(`/api/work-orders/${id}/reports/${reportId}/status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'reopen' }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        await load();
+      } else {
+        alert(json.error || '重开失败');
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const resetWoForm = () => {
     setWoForm({
       batch_no: '',
@@ -278,15 +328,15 @@ export function WorkOrderDetailView({ params }: { params: Promise<{ id: string }
   const handleEditOpReport = (r: OperationReport) => {
     setOpForm({
       work_order_report_id: r.work_order_report_id,
-      operation_id: r.operation_id,
-      process_name: r.process_name,
-      sequence: r.sequence,
-      material_code: r.material_code,
-      material_name: r.material_name,
-      material_batch_no: r.material_batch_no,
+      operation_id: r.operation_id ?? '',
+      process_name: r.process_name ?? '',
+      sequence: r.sequence ?? 0,
+      material_code: r.material_code ?? '',
+      material_name: r.material_name ?? '',
+      material_batch_no: r.material_batch_no ?? '',
       input_qty: r.input_qty,
       defect_qty: r.defect_qty,
-      notes: r.notes,
+      notes: r.notes ?? '',
     });
     setEditingOpReportId(r.id);
     setActiveOpId(r.operation_id || null);
@@ -425,6 +475,12 @@ export function WorkOrderDetailView({ params }: { params: Promise<{ id: string }
               </div>
             ) : (
               <form onSubmit={handleWoReportSubmit} className="space-y-3">
+                {!editingWoReportId && workOrderReports.some((r) => r.status === '活跃') && (
+                  <div className="flex items-center gap-2 rounded border border-emerald-700/40 bg-emerald-900/20 p-2 text-xs text-emerald-300">
+                    <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                    <span>该工单已存在活跃的工单报工单，请先在「工单报工历史」中关闭当前批次后再开新批次</span>
+                  </div>
+                )}
                 <div className="border border-border/40 bg-background/30 p-2 text-xs">
                   <div className="flex items-center justify-between">
                     <div className="text-muted-foreground">
@@ -523,7 +579,11 @@ export function WorkOrderDetailView({ params }: { params: Promise<{ id: string }
                     />
                   </div>
                 </div>
-                <Button type="submit" className="w-full" disabled={submitting}>
+                <Button
+                  type="submit"
+                  className="w-full"
+                  disabled={submitting || (!editingWoReportId && workOrderReports.some((r) => r.status === '活跃'))}
+                >
                   {editingWoReportId ? '保存修改' : '添加工单报工'}
                 </Button>
                 {!editingWoReportId && (
@@ -599,8 +659,12 @@ export function WorkOrderDetailView({ params }: { params: Promise<{ id: string }
                   >
                     <option value="" disabled>选择批次</option>
                     {workOrderReports.map((r) => (
-                      <option key={r.id} value={r.id}>
-                        {r.batch_no}（{formatDateTime(r.start_at)}）
+                      <option
+                        key={r.id}
+                        value={r.id}
+                        disabled={r.status === '已关闭' && r.id !== opForm.work_order_report_id}
+                      >
+                        {r.batch_no}（{formatDateTime(r.start_at)}）— {r.status}
                       </option>
                     ))}
                   </select>
@@ -729,6 +793,7 @@ export function WorkOrderDetailView({ params }: { params: Promise<{ id: string }
                 <thead>
                   <tr className="border-b border-border/40 text-left text-[11px] uppercase tracking-wider text-muted-foreground">
                     <th className="pb-2 pr-3">生产批号</th>
+                    <th className="pb-2 pr-3">状态</th>
                     <th className="pb-2 pr-3">开始时间</th>
                     <th className="pb-2 pr-3">换线时间</th>
                     <th className="pb-2 pr-3 text-right">技工</th>
@@ -743,17 +808,33 @@ export function WorkOrderDetailView({ params }: { params: Promise<{ id: string }
                   {workOrderReports.map((r) => {
                     const editable = !woIsClosed;
                     const isEditing = r.id === editingWoReportId;
+                    const isActive = r.status === '活跃';
                     const opCount = operationReports.filter((or) => or.work_order_report_id === r.id).length;
                     return (
                       <tr
                         key={r.id}
                         className={`border-b border-border/20 ${
-                          isEditing ? 'bg-amber-900/20' : ''
+                          isEditing ? 'bg-amber-900/20' : isActive ? 'bg-emerald-900/10' : ''
                         }`}
                       >
                         <td className="py-2 pr-3 font-mono text-amber-400">
                           {r.batch_no}
                           <span className="ml-1 text-[10px] text-muted-foreground">({opCount} 道工序)</span>
+                        </td>
+                        <td className="py-2 pr-3">
+                          {isActive ? (
+                            <span className="inline-flex items-center gap-1 rounded border border-emerald-500/40 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] text-emerald-400">
+                              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
+                              活跃
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 rounded border border-slate-500/40 bg-slate-500/10 px-1.5 py-0.5 text-[10px] text-slate-400">
+                              已关闭
+                              {r.closed_at && (
+                                <span className="ml-1 font-mono text-slate-500">{formatDateTime(r.closed_at).slice(5, 16)}</span>
+                              )}
+                            </span>
+                          )}
                         </td>
                         <td className="py-2 pr-3 font-mono text-xs text-muted-foreground">{formatDateTime(r.start_at)}</td>
                         <td className="py-2 pr-3 font-mono text-xs text-muted-foreground">
@@ -767,6 +848,26 @@ export function WorkOrderDetailView({ params }: { params: Promise<{ id: string }
                         <td className="py-2 pr-3 text-right">
                           {editable && (
                             <div className="flex justify-end gap-1">
+                              {isActive && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleCloseWoReport(r.id)}
+                                  className="rounded border border-slate-500/40 px-1.5 py-0.5 text-[10px] text-slate-300 hover:bg-slate-800"
+                                  title="关闭批次"
+                                >
+                                  关闭
+                                </button>
+                              )}
+                              {!isActive && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleReopenWoReport(r.id)}
+                                  className="rounded border border-emerald-500/40 px-1.5 py-0.5 text-[10px] text-emerald-400 hover:bg-emerald-900/20"
+                                  title="重新打开批次"
+                                >
+                                  重开
+                                </button>
+                              )}
                               <button
                                 type="button"
                                 onClick={() => handleEditWoReport(r)}

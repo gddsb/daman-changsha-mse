@@ -14,7 +14,15 @@ import type { Database } from "@/storage/database/shared/types";
 
 type WoRow = Database["public"]["Tables"]["work_orders"]["Row"];
 type LineRow = Database["public"]["Tables"]["production_lines"]["Row"];
-type ReportRow = Database["public"]["Tables"]["work_order_reports"]["Row"];
+type OpReportRow = Database["public"]["Tables"]["operation_reports"]["Row"];
+type WoReportRow = Database["public"]["Tables"]["work_order_reports"]["Row"];
+
+// operation_reports 不存 work_order_id，需要从 work_order_reports 间接查找
+// 返回 opReport 对应的 work_order_id；查不到时返回 ""
+function woIdFromOpReport(r: OpReportRow, woReports: WoReportRow[]): string {
+  const wr = woReports.find((x) => x.id === r.work_order_report_id);
+  return wr ? String(wr.work_order_id ?? "") : "";
+}
 type InspRow = Database["public"]["Tables"]["quality_inspections"]["Row"];
 type DefectRow = Database["public"]["Tables"]["defect_codes"]["Row"];
 type PlanRow = Database["public"]["Tables"]["production_plans"]["Row"];
@@ -46,13 +54,17 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
   const yesterday = daysAgo(1);
 
   // 并行拉取基础数据
-  const [woRes, lineRes, reportRes, inspRes, defectRes, planRes] = await Promise.all([
+  const [woRes, lineRes, opRes, wrRes, inspRes, defectRes, planRes] = await Promise.all([
     supa.from("work_orders").select("*"),
     supa.from("production_lines").select("*"),
     supa
+      .from("operation_reports")
+      .select("*")
+      .gte("created_at", `${day7}T00:00:00`),
+    supa
       .from("work_order_reports")
       .select("*")
-      .gte("reported_at", `${day7}T00:00:00`),
+      .gte("created_at", `${day7}T00:00:00`),
     supa
       .from("quality_inspections")
       .select("*")
@@ -67,7 +79,8 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
 
   const workOrders = (woRes.data ?? []) as WoRow[];
   const lines = (lineRes.data ?? []) as LineRow[];
-  const reports = (reportRes.data ?? []) as ReportRow[];
+  const opReports = (opRes.data ?? []) as OpReportRow[];
+  const woReports = (wrRes.data ?? []) as WoReportRow[];
   const inspections = (inspRes.data ?? []) as InspRow[];
   const defectCodes = (defectRes.data ?? []) as DefectRow[];
   const plans = (planRes.data ?? []) as PlanRow[];
@@ -214,14 +227,15 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
     .slice(0, 8)
     .map((w) => mapWorkOrderRow(w));
 
-  // === 工序不良率（今日 / 昨日 / 本月 三列） ===
+  // === 工序不良率（今日 / 昨日 / 本月 三列）===
+  // 数据源：operation_reports（工序报工）
   const CAN_PROCESS_NAMES = [
     "下料","小料检测","焊接","补图烘干","封口","测漏","离子风",
     "卷封光检","倒罐光检","罐内光检","全检","码垛","包装",
   ];
-  // 收集 reports 中所有报工日期，按降序去重；若无数据则退回到 today
+  // 收集 opReports 中所有报工日期，按降序去重；若无数据则退回到 today
   const reportDays = Array.from(
-    new Set(reports.map((r) => (r.reported_at ?? "").slice(0, 10)).filter(Boolean)),
+    new Set(opReports.map((r) => (r.created_at ?? "").slice(0, 10)).filter(Boolean)),
   ).sort((a, b) => b.localeCompare(a));
   const latestDay = reportDays[0] ?? today;
   const prevDay = reportDays[1] ?? latestDay;
@@ -232,11 +246,11 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
     yesterday: new Map<string, { inspected: number; scrap: number }>(),
     month: new Map<string, { inspected: number; scrap: number }>(),
   };
-  reports.forEach((r) => {
+  opReports.forEach((r) => {
     const proc = r.process_name ?? "其他";
-    const rDate = (r.reported_at ?? "").substring(0, 10);
-    const ins = (r.good_quantity ?? 0) + (r.scrap_quantity ?? 0);
-    const sc = r.scrap_quantity ?? 0;
+    const rDate = (r.created_at ?? "").substring(0, 10);
+    const ins = (r.input_qty ?? 0);
+    const sc = r.defect_qty ?? 0;
     if (rDate === latestDay) {
       const e = procMaps.today.get(proc) ?? { inspected: 0, scrap: 0 };
       e.inspected += ins; e.scrap += sc; procMaps.today.set(proc, e);
@@ -267,21 +281,21 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
     .sort((a, b) => b.today.scrapRate - a.today.scrapRate);
 
   // === 最近不良 ===
-  const recentDefects = reports
-    .filter((r) => (r.scrap_quantity ?? 0) > 0)
-    .sort((a, b) => (b.reported_at ?? "").localeCompare(a.reported_at ?? ""))
+  const recentDefects = opReports
+    .filter((r) => (r.defect_qty ?? 0) > 0)
+    .sort((a, b) => (b.created_at ?? "").localeCompare(a.created_at ?? ""))
     .slice(0, 5)
     .map((r) => {
-      const dc = defectCodes.find((d) => d.code === r.scrap_reason);
+      const wo = workOrders.find((w) => w.id === woIdFromOpReport(r, woReports));
       return {
         id: r.id,
-        work_order_no: r.work_order_no,
-        product_name: r.product_name ?? "",
+        work_order_no: wo?.order_no ?? "",
+        product_name: wo?.product_name ?? "",
         process_name: r.process_name,
-        line_name: r.line_name,
-        defect_code: r.scrap_reason,
-        scrap_quantity: r.scrap_quantity ?? 0,
-        reported_at: r.reported_at,
+        line_name: "",
+        defect_code: r.notes,
+        scrap_quantity: r.defect_qty ?? 0,
+        reported_at: r.created_at,
       };
     });
 

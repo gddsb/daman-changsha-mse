@@ -455,6 +455,8 @@ const toWorkOrderReportView = (r: Record<string, unknown>): WorkOrderReport => (
   labor_workers: Number(r.labor_workers ?? 0),
   cleanup_minutes: Number(r.cleanup_minutes ?? 0),
   notes: cn(r.notes),
+  status: (cn(r.status) || "活跃") as WorkOrderReport["status"],
+  closed_at: cn(r.closed_at),
   created_at: cn(r.created_at),
   updated_at: cn(r.updated_at),
 });
@@ -504,6 +506,20 @@ export async function createWorkOrderReport(input: CreateWorkOrderReportInput) {
     throw new Error("工单还未开工（开立/下发），请先开工后再做工单报工");
   }
 
+  // 同一工单同时只允许 1 个 status=活跃 的批次
+  const { data: active, error: aerr } = await c
+    .from("work_order_reports")
+    .select("id, batch_no")
+    .eq("work_order_id", input.work_order_id)
+    .eq("status", "活跃")
+    .maybeSingle();
+  if (aerr) throw aerr;
+  if (active) {
+    throw new Error(
+      `该工单存在未关闭的工单报工单（批次号：${cn(active.batch_no) || "—"}），请先关闭后再开新批次`,
+    );
+  }
+
   const insert = {
     work_order_id: input.work_order_id,
     batch_no: input.batch_no,
@@ -514,6 +530,7 @@ export async function createWorkOrderReport(input: CreateWorkOrderReportInput) {
     labor_workers: Math.max(0, Math.floor(input.labor_workers ?? 0)),
     cleanup_minutes: Math.max(0, Math.floor(input.cleanup_minutes ?? 0)),
     notes: input.notes ?? "",
+    status: "活跃",
   };
   const { data, error } = await c
     .from("work_order_reports")
@@ -539,6 +556,17 @@ export interface UpdateWorkOrderReportInput {
 
 export async function updateWorkOrderReport(input: UpdateWorkOrderReportInput) {
   const c = getSupabaseClient();
+  const { data: existing, error: gerr } = await c
+    .from("work_order_reports")
+    .select("id, work_order_id, status")
+    .eq("id", input.report_id)
+    .eq("work_order_id", input.work_order_id)
+    .maybeSingle();
+  if (gerr) throw gerr;
+  if (!existing) throw new Error("工单报工单不存在或不属于该工单");
+  if (cn((existing as Record<string, unknown>).status) === "已关闭") {
+    throw new Error("工单报工单已关闭，不允许修改");
+  }
   const { data: wo } = await c
     .from("work_orders")
     .select("id, status")
@@ -583,6 +611,63 @@ export async function deleteWorkOrderReport(reportId: string) {
   return { id: reportId };
 }
 
+/**
+ * 关闭工单报工单（批次）。关闭后该工单才能再开新批次。
+ */
+export async function closeWorkOrderReport(reportId: string) {
+  const c = getSupabaseClient();
+  const now = new Date().toISOString();
+  const { data, error } = await c
+    .from("work_order_reports")
+    .update({ status: "已关闭", closed_at: now, updated_at: now })
+    .eq("id", reportId)
+    .eq("status", "活跃")
+    .select()
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) throw new Error("工单报工单不存在或已关闭");
+  return toWorkOrderReportView(data as Record<string, unknown>);
+}
+
+/**
+ * 重新打开工单报工单（仅当同工单无其它活跃批次时）
+ */
+export async function reopenWorkOrderReport(reportId: string) {
+  const c = getSupabaseClient();
+  const { data: target, error: terr } = await c
+    .from("work_order_reports")
+    .select("id, work_order_id, status")
+    .eq("id", reportId)
+    .maybeSingle();
+  if (terr) throw terr;
+  if (!target) throw new Error("工单报工单不存在");
+  if (cn(target.status) === "活跃") return toWorkOrderReportView(target as Record<string, unknown>);
+
+  // 检查同工单是否已有活跃
+  const { data: other, error: oerr } = await c
+    .from("work_order_reports")
+    .select("id, batch_no")
+    .eq("work_order_id", cn(target.work_order_id))
+    .eq("status", "活跃")
+    .neq("id", reportId)
+    .maybeSingle();
+  if (oerr) throw oerr;
+  if (other) {
+    throw new Error(`该工单已有活跃的工单报工单（批次号：${cn(other.batch_no) || "—"}），请先关闭后再打开本批次`);
+  }
+
+  const now = new Date().toISOString();
+  const { data, error } = await c
+    .from("work_order_reports")
+    .update({ status: "活跃", closed_at: null, updated_at: now })
+    .eq("id", reportId)
+    .select()
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) throw new Error("工单报工单不存在");
+  return toWorkOrderReportView(data as Record<string, unknown>);
+}
+
 export interface CreateOperationReportInput {
   work_order_report_id: string;
   operation_id: string;
@@ -598,14 +683,17 @@ export interface CreateOperationReportInput {
 
 export async function createOperationReport(input: CreateOperationReportInput) {
   const c = getSupabaseClient();
-  // 1) 校验工单报工存在
+  // 1) 校验工单报工存在 & 未关闭
   const { data: wor, error: werr } = await c
     .from("work_order_reports")
-    .select("id, work_order_id, batch_no, start_at")
+    .select("id, work_order_id, batch_no, start_at, status")
     .eq("id", input.work_order_report_id)
     .maybeSingle();
   if (werr) throw werr;
   if (!wor) throw new Error("工单报工单不存在");
+  if (cn(wor.status) === "已关闭") {
+    throw new Error("工单报工单已关闭，不能再添加工序报工");
+  }
   if (!wor.start_at) throw new Error("工单报工单尚未填写开始时间");
   if (wor.batch_no && input.material_batch_no && String(wor.batch_no) === String(input.material_batch_no)) {
     // 允许相等（不影响），但记录提示
@@ -677,10 +765,13 @@ export async function updateOperationReport(input: UpdateOperationReportInput) {
   // 校验工单报工
   const { data: wor } = await c
     .from("work_order_reports")
-    .select("id, work_order_id")
+    .select("id, work_order_id, status")
     .eq("id", input.work_order_report_id)
     .maybeSingle();
   if (!wor) throw new Error("工单报工单不存在");
+  if (cn((wor as Record<string, unknown>).status) === "已关闭") {
+    throw new Error("工单报工单已关闭，不能再修改工序报工");
+  }
 
   // 校验工序报工存在
   const { data: existing, error: gerr } = await c
