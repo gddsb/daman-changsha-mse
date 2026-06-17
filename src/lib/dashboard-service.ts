@@ -73,39 +73,95 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
   const plans = (planRes.data ?? []) as PlanRow[];
 
   // === 今日产量 / 计划 ===
-  const todayReports = reports.filter((r) => (r.reported_at ?? "").slice(0, 10) === today);
-  const todayOutput = todayReports.reduce(
-    (s, r) => s + (r.good_quantity ?? 0) + (r.scrap_quantity ?? 0),
+  // 今日完工数 = 今日完工的工单的 completed_quantity 累加
+  // 不再按工序报工累加（一批罐会经 13 道工序，会被算 13 次）
+  const isCompleted = (s?: string | null) =>
+    s === "已完成" || s === "完工" || s === "closed" || s === "completed";
+  const todayCompletedWorkOrders = workOrders.filter(
+    (w) => isCompleted(w.status) && (w.actual_end_date ?? "").slice(0, 10) === today,
+  );
+  const todayOutput = todayCompletedWorkOrders.reduce(
+    (s, w) => s + (w.completed_quantity ?? 0),
     0,
   );
-  const todayScrap = todayReports.reduce((s, r) => s + (r.scrap_quantity ?? 0), 0);
+  const todayScrap = todayCompletedWorkOrders.reduce(
+    (s, w) => s + (w.scrap_quantity ?? 0),
+    0,
+  );
   const todayPlannedQty = plans
     .filter((p) => p.plan_date === today)
     .reduce((s, p) => s + (p.planned_quantity ?? 0), 0);
-  const yesterdayOutput = reports
-    .filter((r) => (r.reported_at ?? "").slice(0, 10) === yesterday)
-    .reduce((s, r) => s + (r.good_quantity ?? 0) + (r.scrap_quantity ?? 0), 0);
+  const yesterdayCompletedWorkOrders = workOrders.filter(
+    (w) => isCompleted(w.status) && (w.actual_end_date ?? "").slice(0, 10) === yesterday,
+  );
+  const yesterdayOutput = yesterdayCompletedWorkOrders.reduce(
+    (s, w) => s + (w.completed_quantity ?? 0),
+    0,
+  );
   const delta = todayOutput - yesterdayOutput;
 
   // === 产线状态 ===
+  // 规则：制罐产线一次只能跑一条产线。当前"在制"工单数最多的产线标记为"运行"，
+  // 其余为"待机"；无任何在制工单时全部为"待机"。
+  // 排序键：在制工单数（降序）→ 最早开工时间（升序）→ 优先级（升序）
+  const inProgressStatuses = [
+    "已下发", "生产中", "已暂停", "开工", "开立",
+    "released", "in_progress", "paused",
+  ];
+  const lineOrderCounts = new Map<string, number>();
+  const lineActiveWorkOrders = new Map<string, WoRow[]>();
+  workOrders.forEach((w) => {
+    if (w.line_code && inProgressStatuses.includes(w.status ?? "")) {
+      lineOrderCounts.set(w.line_code, (lineOrderCounts.get(w.line_code) ?? 0) + 1);
+      const arr = lineActiveWorkOrders.get(w.line_code) ?? [];
+      arr.push(w);
+      lineActiveWorkOrders.set(w.line_code, arr);
+    }
+  });
+  // 选出唯一一条"当前运行"产线
+  // 优先级：今日有 in_progress 工单（实际在跑）的产线 > 今日有完工产量的产线
+  //        > 在制工单数最多 > 最早开工
+  let activeLineCode: string | null = null;
+  const inProgressByLine = new Map<string, number>();
+  workOrders.forEach((w) => {
+    if (w.line_code && w.status === "in_progress") {
+      inProgressByLine.set(w.line_code, (inProgressByLine.get(w.line_code) ?? 0) + 1);
+    }
+  });
+  if (inProgressByLine.size > 0) {
+    activeLineCode = Array.from(inProgressByLine.entries()).sort((a, b) => b[1] - a[1])[0][0];
+  } else if (lineOrderCounts.size > 0) {
+    const sorted = Array.from(lineOrderCounts.entries()).sort((a, b) => {
+      if (b[1] !== a[1]) return b[1] - a[1];
+      const aEarliest = (lineActiveWorkOrders.get(a[0]) ?? [])
+        .map((w) => w.actual_start_date ?? w.planned_start_date ?? "")
+        .sort()[0] ?? "";
+      const bEarliest = (lineActiveWorkOrders.get(b[0]) ?? [])
+        .map((w) => w.actual_start_date ?? w.planned_start_date ?? "")
+        .sort()[0] ?? "";
+      return aEarliest.localeCompare(bEarliest);
+    });
+    activeLineCode = sorted[0]?.[0] ?? null;
+  }
   const lineStatus: LineStatusItem[] = lines.map((l) => {
-    const lineReports = todayReports.filter((r) => r.line_code === l.code);
-    const lineActual = lineReports.reduce(
-      (s, r) => s + (r.good_quantity ?? 0) + (r.scrap_quantity ?? 0),
-      0,
+    const lineTodayCompleted = workOrders.filter(
+      (w) =>
+        isCompleted(w.status) &&
+        (w.actual_end_date ?? "").slice(0, 10) === today &&
+        w.line_code === l.code,
     );
-    const lineScrap = lineReports.reduce((s, r) => s + (r.scrap_quantity ?? 0), 0);
-    const lineGood = lineReports.reduce((s, r) => s + (r.good_quantity ?? 0), 0);
+    const lineActual = lineTodayCompleted.reduce((s, w) => s + (w.completed_quantity ?? 0), 0);
+    const lineScrap = lineTodayCompleted.reduce((s, w) => s + (w.scrap_quantity ?? 0), 0);
+    const lineGood = lineActual - lineScrap;
     const linePlans = plans.filter((p) => p.line_code === l.code && p.plan_date === today);
     const linePlanned = linePlans.reduce((s, p) => s + (p.planned_quantity ?? 0), 0);
-    const lineOrderCount = workOrders.filter(
-      (w) => w.line_code === l.code && ["已下发", "生产中", "已暂停", "开工", "开立"].includes(w.status),
-    ).length;
+    // 动态产线状态：制罐产线一次只能跑一条，所以只有 activeLineCode 是"运行"
+    const derivedStatus = l.code === activeLineCode ? "运行" : "待机";
     return {
       code: l.code,
       name: l.name,
-      status: l.status,
-      orderCount: lineOrderCount,
+      status: derivedStatus,
+      orderCount: lineOrderCounts.get(l.code) ?? 0,
       todayPlanned: linePlanned,
       todayActual: lineActual,
       todayScrap: lineScrap,
@@ -122,16 +178,21 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
   const defectRate = totalSample > 0 ? (totalFail / totalSample) * 100 : 0;
 
   // === 7 日产量趋势 ===
+  // 完工数 = 工单 completed_quantity（按 actual_end_date 分桶）
+  // 这样能避免按每道工序报工累加导致的重复计算（一批罐经 13 道工序会被算 13 次）
   const trendMap = new Map<string, { planned: number; actual: number; scrap: number }>();
   for (let i = 6; i >= 0; i--) {
     trendMap.set(daysAgo(i), { planned: 0, actual: 0, scrap: 0 });
   }
-  reports.forEach((r) => {
-    const ds = (r.reported_at ?? "").slice(0, 10);
-    const entry = trendMap.get(ds);
-    if (entry) {
-      entry.actual += (r.good_quantity ?? 0) + (r.scrap_quantity ?? 0);
-      entry.scrap += r.scrap_quantity ?? 0;
+  workOrders.forEach((w) => {
+    const s = w.status ?? "";
+    if (s === "已完成" || s === "完工" || s === "closed" || s === "completed") {
+      const ds = (w.actual_end_date ?? w.planned_end_date ?? "").slice(0, 10);
+      const entry = trendMap.get(ds);
+      if (entry) {
+        entry.actual += w.completed_quantity ?? 0;
+        entry.scrap += w.scrap_quantity ?? 0;
+      }
     }
   });
   plans.forEach((p) => {
@@ -149,7 +210,7 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
 
   // === 进行中工单 ===
   const activeWorkOrders: WorkOrder[] = workOrders
-    .filter((w) => ["已下发", "生产中", "已暂停", "开工"].includes(w.status))
+    .filter((w) => inProgressStatuses.includes(w.status ?? ""))
     .sort((a, b) => (a.priority ?? 99) - (b.priority ?? 99))
     .slice(0, 8)
     .map((w) => mapWorkOrderRow(w));
@@ -200,9 +261,9 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
     },
     lines: {
       total: lines.length,
-      running: lineStatus.filter((l) => l.status === "运行").length,
-      idle: lineStatus.filter((l) => l.status === "停机").length,
-      maintenance: lineStatus.filter((l) => l.status === "维保").length,
+      running: activeLineCode ? 1 : 0,
+      idle: lines.length - (activeLineCode ? 1 : 0),
+      maintenance: 0,
     },
     quality: {
       firstPassRate,
