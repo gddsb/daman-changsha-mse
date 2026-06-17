@@ -307,6 +307,25 @@ export async function createWorkOrder(input: CreateWorkOrderInput) {
   }));
   await c.from("work_order_operations").insert(ops);
 
+  // 自动排入七天计划：取 planned_start_date 的日期部分作为 plan_date
+  const planDate = new Date(
+    (input.planned_start_date ?? new Date().toISOString()).split("T")[0] + "T00:00:00+08:00"
+  );
+  const planDateStr = `${planDate.getFullYear()}-${String(planDate.getMonth() + 1).padStart(2, "0")}-${String(planDate.getDate()).padStart(2, "0")}`;
+  await c.from("production_plans").insert({
+    plan_date: planDateStr,
+    line_code: input.line_code,
+    line_name: lineName,
+    work_order_id: (data as { id: string }).id,
+    work_order_no: orderNo,
+    product_code: input.product_code,
+    product_name: productName,
+    planned_quantity: input.planned_quantity,
+    priority,
+    status: "已排",
+    notes: input.notes ?? null,
+  });
+
   return toWoView(data as Record<string, unknown>);
 }
 
