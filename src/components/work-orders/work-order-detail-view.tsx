@@ -74,11 +74,17 @@ export function WorkOrderDetailView({ params }: { params: Promise<{ id: string }
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action }),
       });
-      const json = await res.json();
+      const text = await res.text();
+      let json: { success?: boolean; error?: string } = {};
+      try {
+        json = text ? JSON.parse(text) : {};
+      } catch {
+        json = { success: false, error: `服务返回非 JSON (HTTP ${res.status})` };
+      }
       if (json.success) {
         await load();
       } else {
-        alert(json.error || '操作失败');
+        alert(json.error || `操作失败 (HTTP ${res.status})`);
       }
     } finally {
       setSubmitting(false);
@@ -101,12 +107,18 @@ export function WorkOrderDetailView({ params }: { params: Promise<{ id: string }
           can_height: form.can_height ? Number(form.can_height) : null,
         }),
       });
-      const json = await res.json();
+      const text = await res.text();
+      let json: { success?: boolean; error?: string } = {};
+      try {
+        json = text ? JSON.parse(text) : {};
+      } catch {
+        json = { success: false, error: `服务返回非 JSON (HTTP ${res.status})` };
+      }
       if (json.success) {
         setForm({ ...form, good_qty: '', scrap_qty: '', scrap_reason: '' });
         await load();
       } else {
-        alert(json.error || '报工失败');
+        alert(json.error || `报工失败 (HTTP ${res.status})`);
       }
     } finally {
       setSubmitting(false);
