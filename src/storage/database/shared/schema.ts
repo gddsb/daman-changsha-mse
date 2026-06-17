@@ -1,0 +1,199 @@
+import {
+  pgTable,
+  pgEnum,
+  serial,
+  varchar,
+  text,
+  integer,
+  numeric,
+  date,
+  timestamp,
+  jsonb,
+  uuid,
+} from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+
+/* ============================================================
+ * 字典 / 基础数据
+ * ============================================================ */
+
+export const workshops = pgTable("workshops", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  code: varchar("code", { length: 32 }).notNull().unique(),
+  name: varchar("name", { length: 64 }).notNull(),
+  description: text("description"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+});
+
+export const products = pgTable("products", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  code: varchar("code", { length: 64 }).notNull().unique(),
+  name: varchar("name", { length: 128 }).notNull(),
+  specification: text("specification"),
+  unit: varchar("unit", { length: 16 }),
+  processRoute: text("process_route"),
+  source: varchar("source", { length: 16 }).notNull().default("manual"),
+  syncedAt: timestamp("synced_at", { withTimezone: true }).defaultNow(),
+});
+
+export const u9SalesOrders = pgTable("u9_sales_orders", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  salesOrderNo: varchar("sales_order_no", { length: 64 }).notNull().unique(),
+  customerCode: varchar("customer_code", { length: 64 }),
+  customerName: varchar("customer_name", { length: 128 }).notNull(),
+  productCode: varchar("product_code", { length: 64 }).notNull(),
+  productName: varchar("product_name", { length: 128 }).notNull(),
+  specification: text("specification"),
+  quantity: integer("quantity").notNull(),
+  unit: varchar("unit", { length: 16 }),
+  deliveryDate: date("delivery_date"),
+  status: varchar("status", { length: 32 }).notNull().default("待发货"),
+  syncedAt: timestamp("synced_at", { withTimezone: true }).defaultNow(),
+});
+
+/* ============================================================
+ * 工单管理
+ * ============================================================ */
+
+export const workOrders = pgTable("work_orders", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  orderNo: varchar("order_no", { length: 64 }).notNull().unique(),
+  salesOrderNo: varchar("sales_order_no", { length: 64 }),
+  productCode: varchar("product_code", { length: 64 }).notNull(),
+  productName: varchar("product_name", { length: 128 }).notNull(),
+  specification: varchar("specification", { length: 256 }),
+  plannedQuantity: integer("planned_quantity").notNull(),
+  completedQuantity: integer("completed_quantity").notNull().default(0),
+  scrapQuantity: integer("scrap_quantity").notNull().default(0),
+  status: varchar("status", { length: 32 }).notNull().default("计划中"),
+  priority: integer("priority").notNull().default(3),
+  workshopCode: varchar("workshop_code", { length: 32 }),
+  workshopName: varchar("workshop_name", { length: 64 }),
+  customerName: varchar("customer_name", { length: 128 }),
+  plannedStartDate: timestamp("planned_start_date", { withTimezone: true }),
+  plannedEndDate: timestamp("planned_end_date", { withTimezone: true }),
+  actualStartDate: timestamp("actual_start_date", { withTimezone: true }),
+  actualEndDate: timestamp("actual_end_date", { withTimezone: true }),
+  notes: text("notes"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+});
+
+export const workOrderOperations = pgTable("work_order_operations", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  workOrderId: varchar("work_order_id", { length: 36 }).notNull(),
+  sequence: integer("sequence").notNull(),
+  operationName: varchar("operation_name", { length: 64 }).notNull(),
+  workstation: varchar("workstation", { length: 64 }),
+  equipmentCode: varchar("equipment_code", { length: 32 }),
+  standardTimeMinutes: integer("standard_time_minutes"),
+  status: varchar("status", { length: 32 }).notNull().default("待开始"),
+  operatorName: varchar("operator_name", { length: 64 }),
+  goodQuantity: integer("good_quantity").notNull().default(0),
+  scrapQuantity: integer("scrap_quantity").notNull().default(0),
+  startTime: timestamp("start_time", { withTimezone: true }),
+  endTime: timestamp("end_time", { withTimezone: true }),
+});
+
+export const workOrderReports = pgTable("work_order_reports", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  workOrderId: varchar("work_order_id", { length: 36 }).notNull(),
+  operationId: varchar("operation_id", { length: 36 }),
+  reportType: varchar("report_type", { length: 32 }).notNull(),
+  operatorName: varchar("operator_name", { length: 64 }).notNull(),
+  goodQuantity: integer("good_quantity").notNull().default(0),
+  scrapQuantity: integer("scrap_quantity").notNull().default(0),
+  scrapReason: text("scrap_reason"),
+  reportedAt: timestamp("reported_at", { withTimezone: true }).defaultNow(),
+  notes: text("notes"),
+});
+
+/* ============================================================
+ * 设备管理
+ * ============================================================ */
+
+export const equipment = pgTable("equipment", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  code: varchar("code", { length: 32 }).notNull().unique(),
+  name: varchar("name", { length: 64 }).notNull(),
+  type: varchar("type", { length: 32 }).notNull(),
+  model: varchar("model", { length: 64 }),
+  manufacturer: varchar("manufacturer", { length: 64 }),
+  workshopCode: varchar("workshop_code", { length: 32 }),
+  workshopName: varchar("workshop_name", { length: 64 }),
+  status: varchar("status", { length: 32 }).notNull().default("待机"),
+  currentWorkOrderNo: varchar("current_work_order_no", { length: 64 }),
+  lastMaintenanceDate: date("last_maintenance_date"),
+  nextMaintenanceDate: date("next_maintenance_date"),
+  oeeTarget: numeric("oee_target", { precision: 5, scale: 2 }).default("85.00"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+});
+
+export const equipmentOee = pgTable("equipment_oee", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  equipmentCode: varchar("equipment_code", { length: 32 }).notNull(),
+  recordDate: date("record_date").notNull(),
+  plannedTimeMinutes: integer("planned_time_minutes").notNull().default(480),
+  runTimeMinutes: integer("run_time_minutes").notNull().default(0),
+  downtimeMinutes: integer("downtime_minutes").notNull().default(0),
+  goodQuantity: integer("good_quantity").notNull().default(0),
+  totalQuantity: integer("total_quantity").notNull().default(0),
+  availability: numeric("availability", { precision: 5, scale: 2 }).default("0"),
+  performance: numeric("performance", { precision: 5, scale: 2 }).default("0"),
+  quality: numeric("quality", { precision: 5, scale: 2 }).default("0"),
+  oee: numeric("oee", { precision: 5, scale: 2 }).default("0"),
+});
+
+export const equipmentMaintenance = pgTable("equipment_maintenance", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  equipmentCode: varchar("equipment_code", { length: 32 }).notNull(),
+  equipmentName: varchar("equipment_name", { length: 64 }).notNull(),
+  maintenanceType: varchar("maintenance_type", { length: 32 }).notNull(),
+  plannedDate: date("planned_date").notNull(),
+  completedDate: date("completed_date"),
+  operatorName: varchar("operator_name", { length: 64 }),
+  status: varchar("status", { length: 32 }).notNull().default("待执行"),
+  description: text("description"),
+  cost: numeric("cost", { precision: 12, scale: 2 }),
+  notes: text("notes"),
+});
+
+/* ============================================================
+ * 质量管理
+ * ============================================================ */
+
+export const defectCodes = pgTable("defect_codes", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  code: varchar("code", { length: 32 }).notNull().unique(),
+  name: varchar("name", { length: 64 }).notNull(),
+  category: varchar("category", { length: 32 }).notNull(),
+  severity: varchar("severity", { length: 16 }).notNull().default("一般"),
+});
+
+export const qualityInspections = pgTable("quality_inspections", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  inspectionNo: varchar("inspection_no", { length: 64 }).notNull().unique(),
+  workOrderId: varchar("work_order_id", { length: 36 }),
+  workOrderNo: varchar("work_order_no", { length: 64 }),
+  inspectionType: varchar("inspection_type", { length: 32 }).notNull(),
+  productCode: varchar("product_code", { length: 64 }).notNull(),
+  productName: varchar("product_name", { length: 128 }).notNull(),
+  batchNo: varchar("batch_no", { length: 64 }),
+  inspectorName: varchar("inspector_name", { length: 64 }).notNull(),
+  inspectionTime: timestamp("inspection_time", { withTimezone: true }).defaultNow(),
+  sampleSize: integer("sample_size").notNull().default(1),
+  result: varchar("result", { length: 32 }).notNull().default("合格"),
+  defectCode: varchar("defect_code", { length: 32 }),
+  defectDescription: text("defect_description"),
+  measurements: jsonb("measurements"),
+  notes: text("notes"),
+});
+
+/* ============================================================
+ * 系统
+ * ============================================================ */
+
+export const healthCheck = pgTable("health_check", {
+  id: serial().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).defaultNow(),
+});

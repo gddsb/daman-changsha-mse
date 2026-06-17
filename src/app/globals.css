@@ -35,103 +35,155 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
-  --radius-2xl: calc(var(--radius) + 8px);
-  --radius-3xl: calc(var(--radius) + 12px);
-  --radius-4xl: calc(var(--radius) + 16px);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-info: var(--info);
+  --color-brand: var(--brand);
+  --color-cyan: var(--cyan);
+  --radius-sm: 2px;
+  --radius-md: 3px;
+  --radius-lg: 4px;
+  --radius-xl: 6px;
+  --radius-2xl: 8px;
+  --radius-3xl: 12px;
+  --radius-4xl: 16px;
   --font-sans:
-    'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', ui-sans-serif,
+    'Inter', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', ui-sans-serif,
     system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
     'Helvetica Neue', Arial, sans-serif;
   --font-mono:
-    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono',
-    'Courier New', monospace;
+    'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    'Liberation Mono', 'Courier New', monospace;
   --font-serif:
     'Noto Serif SC', 'Songti SC', 'SimSun', ui-serif, Georgia, Cambria,
     'Times New Roman', Times, serif;
 }
 
 :root {
-  --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --radius: 0.25rem;
+  /* 浅色留作 fallback，但默认走深色 */
+  --background: #F5F6FA;
+  --foreground: #1A2030;
+  --card: #FFFFFF;
+  --card-foreground: #1A2030;
+  --popover: #FFFFFF;
+  --popover-foreground: #1A2030;
+  --primary: #F97316;
+  --primary-foreground: #0A0E1A;
+  --secondary: #EEF0F5;
+  --secondary-foreground: #1A2030;
+  --muted: #EEF0F5;
+  --muted-foreground: #6B7592;
+  --accent: #EEF0F5;
+  --accent-foreground: #1A2030;
+  --destructive: #EF4444;
+  --border: #E2E5EE;
+  --input: #E2E5EE;
+  --ring: #F97316;
+  --success: #22C55E;
+  --warning: #EAB308;
+  --info: #3B82F6;
+  --brand: #F97316;
+  --cyan: #06B6D4;
+  --chart-1: #06B6D4;
+  --chart-2: #22C55E;
+  --chart-3: #EAB308;
+  --chart-4: #F97316;
+  --chart-5: #EF4444;
+  --sidebar: #FFFFFF;
+  --sidebar-foreground: #1A2030;
+  --sidebar-primary: #F97316;
+  --sidebar-primary-foreground: #0A0E1A;
+  --sidebar-accent: #EEF0F5;
+  --sidebar-accent-foreground: #1A2030;
+  --sidebar-border: #E2E5EE;
+  --sidebar-ring: #F97316;
 }
 
-.dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+/* MES 强制深色模式 — 工业管控台调性 */
+.dark, html {
+  --background: #0A0E1A;
+  --foreground: #E8ECF4;
+  --card: #111726;
+  --card-foreground: #E8ECF4;
+  --popover: #111726;
+  --popover-foreground: #E8ECF4;
+  --primary: #F97316;
+  --primary-foreground: #0A0E1A;
+  --secondary: #1A2030;
+  --secondary-foreground: #E8ECF4;
+  --muted: #1A2030;
+  --muted-foreground: #A0AABE;
+  --accent: #1A2030;
+  --accent-foreground: #E8ECF4;
+  --destructive: #EF4444;
+  --border: #1F2738;
+  --input: #1F2738;
+  --ring: #F97316;
+  --success: #22C55E;
+  --warning: #EAB308;
+  --info: #3B82F6;
+  --brand: #F97316;
+  --cyan: #06B6D4;
+  --chart-1: #06B6D4;
+  --chart-2: #22C55E;
+  --chart-3: #EAB308;
+  --chart-4: #F97316;
+  --chart-5: #EF4444;
+  --sidebar: #0A0E1A;
+  --sidebar-foreground: #E8ECF4;
+  --sidebar-primary: #F97316;
+  --sidebar-primary-foreground: #0A0E1A;
+  --sidebar-accent: #1A2030;
+  --sidebar-accent-foreground: #E8ECF4;
+  --sidebar-border: #1F2738;
+  --sidebar-ring: #F97316;
 }
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
-  body {
+  html, body {
     @apply bg-background text-foreground;
+  }
+  body {
+    @apply font-sans;
+    font-feature-settings: "cv11", "ss01", "ss03";
   }
 }
 
-body {
-  @apply font-sans;
+/* 数字等宽对齐 */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* 实时数据脉动点 */
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+.pulse-dot {
+  animation: pulse-dot 1.6s ease-in-out infinite;
+}
+
+/* 滚动条美化（深色） */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #2D3548;
+  border-radius: 2px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #3D4558;
+}
+
+/* 等宽数字用于表格和 KPI */
+.font-mono, code, kbd {
+  font-feature-settings: "tnum";
 }
