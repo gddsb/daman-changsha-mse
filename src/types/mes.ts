@@ -78,40 +78,96 @@ export interface WorkOrderOperation {
   notes: string | null;
 }
 
-// 工单报工（顶层批次报工：开批/换线/人员/清场）。同一工单同时只允许 1 个 status=活跃 的批次。
+// 工单报工主表（顶层批次报工：开批/人员/工时）。唯一索引 (work_order_no, batch_no, finish_seq)。
+// 同一工单同时只允许 1 个 status=进行中 的批次。
+// 字段双兼容：DB 实际存新字段（start_at/end_at/skilled_workers/...），但 UI 仍可访问旧字段名（change_line_at/cleanup_minutes/...）
 export interface WorkOrderReport {
   id: string;
-  work_order_id: string;
+  work_order_no: string;
+  work_order_id: string;                  // 兼容旧 UI（=work_order_no）
   batch_no: string;
+  finish_seq: number;
   start_at: string;
-  change_line_at: string | null;
+  change_line_at: string | null;          // 兼容旧 UI（=start_at 拷贝）
+  end_at: string | null;
   skilled_workers: number;
   general_workers: number;
   labor_workers: number;
-  cleanup_minutes: number;
-  notes: string;
+  cleanup_minutes: number;                // 兼容旧 UI（=0，新模型无此字段）
+  other_workers: number;
+  abnormal_minutes: number;
+  man_hours: number;
+  fill_time: string;
   status: "活跃" | "已关闭";
+  notes: string;
+  created_at: string;
+  updated_at: string;
   closed_at: string | null;
+}
+
+// 工序报工主表（每道工序 1 条。首道 quantity=投入、中道留空、末道=成品）。唯一索引 (work_order_no, batch_no, finish_seq, process_code)。
+// 字段双兼容：DB 实际存新字段（process_code/quantity/incoming_defect_*），但 UI 仍可访问旧字段名（operation_id/material_code/input_qty/defect_qty）
+export interface OperationReport {
+  id: string;
+  work_order_no: string;
+  work_order_id: string;                  // 兼容旧 UI
+  batch_no: string;
+  finish_seq: number;
+  work_order_report_id: string;           // 兼容旧 UI（=work_order_no+batch_no+finish_seq 拼接）
+  process_code: string;                   // 工序号（如 PROC-01）
+  process_name: string;
+  operation_id: string;                   // 兼容旧 UI（=process_code）
+  sequence: number;
+  material_code: string;                  // 兼容旧 UI（空）
+  material_name: string;                  // 兼容旧 UI（=process_name 兼容）
+  material_batch_no: string;              // 兼容旧 UI（空）
+  quantity: number | null;                // 首道=投入、中道=留空、末道=成品
+  input_qty: number;                      // 兼容旧 UI（=quantity || 0）
+  incoming_defect_piece: number;
+  incoming_defect_lid: number;
+  process_defect_piece: number;
+  process_defect_lid: number;
+  incoming_defect_total: number;
+  process_defect_total: number;
+  defect_qty: number;                     // 兼容旧 UI（=incoming+process 合计）
+  qualified_qty: number;
+  notes: string;
   created_at: string;
   updated_at: string;
 }
 
-// 工序报工（物料/批次/投入/不良，合格自动 = 投入-不良）
-export interface OperationReport {
+// 工序不良子表（每个工序可挂多条不良记录）
+export interface OperationDefect {
   id: string;
-  work_order_report_id: string;
-  operation_id: string | null;
-  process_name: string | null;
-  sequence: number | null;
-  material_code: string | null;
-  material_name: string | null;
-  material_batch_no: string | null;
-  input_qty: number;
+  work_order_no: string;
+  work_order_id: string;                  // 兼容旧 UI
+  batch_no: string;
+  finish_seq: number;
+  process_code: string;
+  defect_category: "制程不良" | "来料不良";
+  defect_name: string;
   defect_qty: number;
-  qualified_qty: number;
-  notes: string | null;
+  unit: "小片" | "带盖";
+  notes: string;
   created_at: string;
-  updated_at: string;
+}
+
+// 停机时间表（每个工单报工批次可挂多条停机记录，异常工时由本表汇总）
+export interface EquipmentDowntime {
+  id: string;
+  work_order_no: string;
+  work_order_id: string;                  // 兼容旧 UI
+  batch_no: string;
+  finish_seq: number;
+  equipment_code: string;
+  downtime_start: string | null;
+  downtime_type: string;
+  fault_desc: string;
+  fix_at: string | null;
+  duration_minutes: number | null;
+  confirmed_by: string;
+  notes: string;
+  created_at: string;
 }
 
 // ====== 制罐业务新增 ======

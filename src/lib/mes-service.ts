@@ -443,43 +443,99 @@ export async function updateWorkOrderStatus(id: string, status: string) {
 }
 
 // ==================== 两级报工（工单报工 + 工序报工） ====================
+//
+// 适配层：UI 仍消费旧 WorkOrderReport / OperationReport 形状（含 change_line_at/cleanup_minutes/
+// material_code/input_qty/defect_qty/work_order_report_id 等旧字段），但底层数据来自新表
+// work_order_reports / operation_reports / operation_defects / equipment_downtime（按
+// work_order_no + batch_no + finish_seq 三元组关联）。
 
-const toWorkOrderReportView = (r: Record<string, unknown>): WorkOrderReport => ({
-  id: String(r.id),
-  work_order_id: String(r.work_order_id),
-  batch_no: cn(r.batch_no),
-  start_at: cn(r.start_at),
-  change_line_at: cn(r.change_line_at),
-  skilled_workers: Number(r.skilled_workers ?? 0),
-  general_workers: Number(r.general_workers ?? 0),
-  labor_workers: Number(r.labor_workers ?? 0),
-  cleanup_minutes: Number(r.cleanup_minutes ?? 0),
-  notes: cn(r.notes),
-  status: (cn(r.status) || "活跃") as WorkOrderReport["status"],
-  closed_at: cn(r.closed_at),
-  created_at: cn(r.created_at),
-  updated_at: cn(r.updated_at),
-});
+// 旧表 work_order_reports 已被新表替代。所有函数读 work_order_reports 新表。
+// 旧字段兼容映射：
+//   work_order_id      -> work_order_no
+//   change_line_at     -> null（新表无此字段）
+//   cleanup_minutes    -> 0
+//   其他字段含义保持一致
+const toWorkOrderReportView = (r: Record<string, unknown>): WorkOrderReport => {
+  const start = cn(r.start_at);
+  const workOrderNo = cn(r.work_order_no);
+  const batchNo = cn(r.batch_no);
+  const finishSeq = Number(r.finish_seq ?? 0);
+  const worId = workOrderNo && batchNo ? `${workOrderNo}-${batchNo}-${finishSeq}` : cn(r.id);
+  return {
+    id: cn(r.id),
+    work_order_no: workOrderNo,
+    work_order_id: workOrderNo,
+    batch_no: batchNo,
+    finish_seq: finishSeq,
+    start_at: start,
+    change_line_at: null,
+    end_at: r.end_at ? cn(r.end_at) : null,
+    skilled_workers: Number(r.skilled_workers ?? 0),
+    general_workers: Number(r.general_workers ?? 0),
+    labor_workers: Number(r.labor_workers ?? 0),
+    cleanup_minutes: 0,
+    other_workers: Number(r.other_workers ?? 0),
+    abnormal_minutes: Number(r.abnormal_minutes ?? 0),
+    man_hours: Number(r.man_hours ?? 0),
+    fill_time: cn(r.fill_time),
+    status: (cn(r.status) || "活跃") as WorkOrderReport["status"],
+    notes: cn(r.notes),
+    created_at: cn(r.created_at),
+    updated_at: cn(r.updated_at),
+    closed_at: r.closed_at ? cn(r.closed_at) : null,
+  };
+  // 备注:worId 已合并到 id 字段中以便 UI 用 id 关联工序报工
+  void worId;
+};
 
-const toOperationReportView = (r: Record<string, unknown>): OperationReport => ({
-  id: String(r.id),
-  work_order_report_id: String(r.work_order_report_id),
-  operation_id: cn(r.operation_id),
-  process_name: cn(r.process_name),
-  sequence: Number(r.sequence ?? 0),
-  material_code: cn(r.material_code),
-  material_name: cn(r.material_name),
-  material_batch_no: cn(r.material_batch_no),
-  input_qty: Number(r.input_qty ?? 0),
-  defect_qty: Number(r.defect_qty ?? 0),
-  qualified_qty: Number(r.qualified_qty ?? 0),
-  notes: cn(r.notes),
-  created_at: cn(r.created_at),
-  updated_at: cn(r.updated_at),
-});
+const toOperationReportView = (r: Record<string, unknown>): OperationReport => {
+  const workOrderNo = cn(r.work_order_no);
+  const batchNo = cn(r.batch_no);
+  const finishSeq = Number(r.finish_seq ?? 0);
+  const processCode = cn(r.process_code);
+  const quantity = r.quantity == null ? null : Number(r.quantity);
+  const incomingTotal = Number(r.incoming_defect_total ?? 0);
+  const processTotal = Number(r.process_defect_total ?? 0);
+  const defectQty = incomingTotal + processTotal;
+  return {
+    id: cn(r.id),
+    work_order_no: workOrderNo,
+    work_order_id: workOrderNo,
+    batch_no: batchNo,
+    finish_seq: finishSeq,
+    work_order_report_id: cn(r.work_order_no) && cn(r.batch_no) ? `${workOrderNo}-${batchNo}-${finishSeq}` : cn(r.id),
+    process_code: processCode,
+    process_name: cn(r.process_name),
+    operation_id: processCode,
+    sequence: Number(r.sequence ?? 0),
+    material_code: "",
+    material_name: cn(r.process_name),
+    material_batch_no: "",
+    quantity,
+    input_qty: quantity ?? 0,
+    incoming_defect_piece: Number(r.incoming_defect_piece ?? 0),
+    incoming_defect_lid: Number(r.incoming_defect_lid ?? 0),
+    process_defect_piece: Number(r.process_defect_piece ?? 0),
+    process_defect_lid: Number(r.process_defect_lid ?? 0),
+    incoming_defect_total: incomingTotal,
+    process_defect_total: processTotal,
+    defect_qty: defectQty,
+    qualified_qty: Number(r.qualified_qty ?? 0),
+    notes: "",
+    created_at: cn(r.created_at),
+    updated_at: cn(r.updated_at),
+  };
+};
+
+// 通过 work_order_report_id（旧 UI 拼接的 `${workOrderNo}-${batchNo}-${finishSeq}`）解析出三元组
+function parseWorId(worId: string): { workOrderNo: string; batchNo: string; finishSeq: number } | null {
+  const m = worId.match(/^(.+)-(.+)-(\d+)$/);
+  if (!m) return null;
+  return { workOrderNo: m[1], batchNo: m[2], finishSeq: Number(m[3]) };
+}
 
 export interface CreateWorkOrderReportInput {
-  work_order_id: string;
+  work_order_id: string;       // 旧字段：实际是 work_order_no
   batch_no: string;
   start_at: string;
   change_line_at?: string | null;
@@ -492,10 +548,12 @@ export interface CreateWorkOrderReportInput {
 
 export async function createWorkOrderReport(input: CreateWorkOrderReportInput) {
   const c = getSupabaseClient();
+  const workOrderNo = input.work_order_id;
+  // 校验工单
   const { data: wo, error: werr } = await c
     .from("work_orders")
-    .select("id, status")
-    .eq("id", input.work_order_id)
+    .select("id, status, order_no")
+    .eq("order_no", workOrderNo)
     .maybeSingle();
   if (werr) throw werr;
   if (!wo) throw new Error("工单不存在");
@@ -506,11 +564,22 @@ export async function createWorkOrderReport(input: CreateWorkOrderReportInput) {
     throw new Error("工单还未开工（开立/下发），请先开工后再做工单报工");
   }
 
+  // 同一工单+批号下的下一个完工顺序号
+  const { data: existing, error: eerr } = await c
+    .from("work_order_reports")
+    .select("finish_seq")
+    .eq("work_order_no", workOrderNo)
+    .eq("batch_no", input.batch_no)
+    .order("finish_seq", { ascending: false })
+    .limit(1);
+  if (eerr) throw eerr;
+  const finishSeq = existing && existing.length > 0 ? Number((existing[0] as { finish_seq: number }).finish_seq) + 1 : 1;
+
   // 同一工单同时只允许 1 个 status=活跃 的批次
   const { data: active, error: aerr } = await c
     .from("work_order_reports")
     .select("id, batch_no")
-    .eq("work_order_id", input.work_order_id)
+    .eq("work_order_no", workOrderNo)
     .eq("status", "活跃")
     .maybeSingle();
   if (aerr) throw aerr;
@@ -521,16 +590,18 @@ export async function createWorkOrderReport(input: CreateWorkOrderReportInput) {
   }
 
   const insert = {
-    work_order_id: input.work_order_id,
+    work_order_no: workOrderNo,
     batch_no: input.batch_no,
+    finish_seq: finishSeq,
     start_at: input.start_at,
-    change_line_at: input.change_line_at || null,
     skilled_workers: Math.max(0, Math.floor(input.skilled_workers ?? 0)),
     general_workers: Math.max(0, Math.floor(input.general_workers ?? 0)),
     labor_workers: Math.max(0, Math.floor(input.labor_workers ?? 0)),
-    cleanup_minutes: Math.max(0, Math.floor(input.cleanup_minutes ?? 0)),
+    other_workers: 0,
+    abnormal_minutes: 0,
     notes: input.notes ?? "",
     status: "活跃",
+    fill_time: new Date().toISOString(),
   };
   const { data, error } = await c
     .from("work_order_reports")
@@ -556,58 +627,84 @@ export interface UpdateWorkOrderReportInput {
 
 export async function updateWorkOrderReport(input: UpdateWorkOrderReportInput) {
   const c = getSupabaseClient();
+  const workOrderNo = input.work_order_id;
+  // 先取出 work_order_reports 行（按 id）
   const { data: existing, error: gerr } = await c
     .from("work_order_reports")
-    .select("id, work_order_id, status")
+    .select("*")
     .eq("id", input.report_id)
-    .eq("work_order_id", input.work_order_id)
     .maybeSingle();
   if (gerr) throw gerr;
-  if (!existing) throw new Error("工单报工单不存在或不属于该工单");
-  if (cn((existing as Record<string, unknown>).status) === "已关闭") {
+  if (!existing) throw new Error("工单报工单不存在");
+  const existRow = existing as Record<string, unknown>;
+  if (cn(existRow.work_order_no) !== workOrderNo) {
+    throw new Error("工单报工单不属于该工单");
+  }
+  if (cn(existRow.status) === "已关闭") {
     throw new Error("工单报工单已关闭，不允许修改");
   }
   const { data: wo } = await c
     .from("work_orders")
     .select("id, status")
-    .eq("id", input.work_order_id)
+    .eq("order_no", workOrderNo)
     .maybeSingle();
   if (!wo) throw new Error("工单不存在");
   if (wo.status === "完工" || wo.status === "超期完工") {
     throw new Error("工单已完工/超期完工，不允许修改工单报工");
   }
-  const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  // 顺便重算 man_hours（如果 end_at 或异常分钟有变）
+  const startAt = input.start_at ?? cn(existRow.start_at);
+  const endAt = existRow.end_at ? cn(existRow.end_at) : null;
+  const skilled = input.skilled_workers !== undefined ? input.skilled_workers : Number(existRow.skilled_workers ?? 0);
+  const general = input.general_workers !== undefined ? input.general_workers : Number(existRow.general_workers ?? 0);
+  const labor = input.labor_workers !== undefined ? input.labor_workers : Number(existRow.labor_workers ?? 0);
+  const other = Number(existRow.other_workers ?? 0);
+  const abnormal = Number(existRow.abnormal_minutes ?? 0);
+  let manHours = Number(existRow.man_hours ?? 0);
+  if (endAt) {
+    const minutes = (new Date(endAt).getTime() - new Date(startAt).getTime()) / 60000 - abnormal;
+    const people = Math.max(0, skilled) + Math.max(0, general) + Math.max(0, labor) + Math.max(0, other);
+    manHours = minutes > 0 ? Math.round((minutes * people) / 60 * 100) / 100 : 0;
+  }
+  const patch: Record<string, unknown> = { updated_at: new Date().toISOString(), man_hours: manHours };
   if (input.batch_no !== undefined) patch.batch_no = input.batch_no;
   if (input.start_at !== undefined) patch.start_at = input.start_at;
-  if (input.change_line_at !== undefined) patch.change_line_at = input.change_line_at;
   if (input.skilled_workers !== undefined) patch.skilled_workers = Math.max(0, Math.floor(input.skilled_workers));
   if (input.general_workers !== undefined) patch.general_workers = Math.max(0, Math.floor(input.general_workers));
   if (input.labor_workers !== undefined) patch.labor_workers = Math.max(0, Math.floor(input.labor_workers));
-  if (input.cleanup_minutes !== undefined) patch.cleanup_minutes = Math.max(0, Math.floor(input.cleanup_minutes));
   if (input.notes !== undefined) patch.notes = input.notes;
   const { data, error } = await c
     .from("work_order_reports")
     .update(patch)
     .eq("id", input.report_id)
-    .eq("work_order_id", input.work_order_id)
     .select()
     .maybeSingle();
   if (error) throw error;
-  if (!data) throw new Error("工单报工单不存在或不属于该工单");
+  if (!data) throw new Error("工单报工单不存在");
   return toWorkOrderReportView(data as Record<string, unknown>);
 }
 
 export async function deleteWorkOrderReport(reportId: string) {
   const c = getSupabaseClient();
-  // 强删：级联会先删工序报工
-  const { data, error } = await c
+  // 先删除关联的工序报工 + 停机 + 不良
+  const { data: wor } = await c
+    .from("work_order_reports")
+    .select("work_order_no, batch_no, finish_seq")
+    .eq("id", reportId)
+    .maybeSingle();
+  if (!wor) throw new Error("工单报工单不存在");
+  const worRow = wor as Record<string, unknown>;
+  const workOrderNo = cn(worRow.work_order_no);
+  const batchNo = cn(worRow.batch_no);
+  const finishSeq = Number(worRow.finish_seq ?? 0);
+  await c.from("operation_reports").delete().eq("work_order_no", workOrderNo).eq("batch_no", batchNo).eq("finish_seq", finishSeq);
+  await c.from("operation_defects").delete().eq("work_order_no", workOrderNo).eq("batch_no", batchNo).eq("finish_seq", finishSeq);
+  await c.from("equipment_downtime").delete().eq("work_order_no", workOrderNo).eq("batch_no", batchNo).eq("finish_seq", finishSeq);
+  const { error } = await c
     .from("work_order_reports")
     .delete()
-    .eq("id", reportId)
-    .select("id")
-    .maybeSingle();
+    .eq("id", reportId);
   if (error) throw error;
-  if (!data) throw new Error("工单报工单不存在");
   return { id: reportId };
 }
 
@@ -636,18 +733,19 @@ export async function reopenWorkOrderReport(reportId: string) {
   const c = getSupabaseClient();
   const { data: target, error: terr } = await c
     .from("work_order_reports")
-    .select("id, work_order_id, status")
+    .select("id, work_order_no, status")
     .eq("id", reportId)
     .maybeSingle();
   if (terr) throw terr;
   if (!target) throw new Error("工单报工单不存在");
-  if (cn(target.status) === "活跃") return toWorkOrderReportView(target as Record<string, unknown>);
+  const targetRow = target as Record<string, unknown>;
+  if (cn(targetRow.status) === "活跃") return toWorkOrderReportView(targetRow);
 
   // 检查同工单是否已有活跃
   const { data: other, error: oerr } = await c
     .from("work_order_reports")
     .select("id, batch_no")
-    .eq("work_order_id", cn(target.work_order_id))
+    .eq("work_order_no", cn(targetRow.work_order_no))
     .eq("status", "活跃")
     .neq("id", reportId)
     .maybeSingle();
@@ -669,8 +767,8 @@ export async function reopenWorkOrderReport(reportId: string) {
 }
 
 export interface CreateOperationReportInput {
-  work_order_report_id: string;
-  operation_id: string;
+  work_order_report_id: string;   // 旧字段：实际是 `${workOrderNo}-${batchNo}-${finishSeq}` 拼接
+  operation_id: string;            // 旧字段：实际是 process_code
   process_name: string;
   sequence: number;
   material_code?: string;
@@ -683,65 +781,89 @@ export interface CreateOperationReportInput {
 
 export async function createOperationReport(input: CreateOperationReportInput) {
   const c = getSupabaseClient();
+  const parsed = parseWorId(input.work_order_report_id);
+  if (!parsed) {
+    throw new Error("工单报工单 ID 格式错误");
+  }
+  const { workOrderNo, batchNo, finishSeq } = parsed;
+  const processCode = input.operation_id;
+
   // 1) 校验工单报工存在 & 未关闭
   const { data: wor, error: werr } = await c
     .from("work_order_reports")
-    .select("id, work_order_id, batch_no, start_at, status")
-    .eq("id", input.work_order_report_id)
+    .select("id, status, start_at")
+    .eq("work_order_no", workOrderNo)
+    .eq("batch_no", batchNo)
+    .eq("finish_seq", finishSeq)
     .maybeSingle();
   if (werr) throw werr;
   if (!wor) throw new Error("工单报工单不存在");
   if (cn(wor.status) === "已关闭") {
     throw new Error("工单报工单已关闭，不能再添加工序报工");
   }
-  if (!wor.start_at) throw new Error("工单报工单尚未填写开始时间");
-  if (wor.batch_no && input.material_batch_no && String(wor.batch_no) === String(input.material_batch_no)) {
-    // 允许相等（不影响），但记录提示
-  }
-  // 2) 校验工序存在
-  const { data: op, error: oerr } = await c
-    .from("work_order_operations")
-    .select("id, work_order_id, sequence, operation_name")
-    .eq("id", input.operation_id)
-    .maybeSingle();
-  if (oerr) throw oerr;
-  if (!op) throw new Error("工序不存在");
+  if (!cn(wor.start_at)) throw new Error("工单报工单尚未填写开始时间");
 
+  // 2) 第一道工序未完成前,后续工序不允许报工
+  if (input.sequence > 1) {
+    const { data: firstOp, error: fErr } = await c
+      .from("operation_reports")
+      .select("id")
+      .eq("work_order_no", workOrderNo)
+      .eq("batch_no", batchNo)
+      .eq("finish_seq", finishSeq)
+      .eq("sequence", 1)
+      .maybeSingle();
+    if (fErr) throw fErr;
+    if (!firstOp) {
+      throw new Error("请先完成第 1 道工序报工后,再报后续工序");
+    }
+  }
+
+  const totalProcesses = 8;
+  const isFirst = input.sequence === 1;
+  const isLast = input.sequence === totalProcesses;
   const inputQty = Math.max(0, Math.floor(input.input_qty ?? 0));
   const defectQty = Math.max(0, Math.floor(input.defect_qty ?? 0));
-  const qualifiedQty = Math.max(0, inputQty - defectQty);
-
+  // 旧 UI 总是传 input_qty + defect_qty；新模型下：首道用 input_qty 当 quantity，末道也用 input_qty 当 quantity，中间 6 道用 null
+  let quantity: number | null;
+  if (isFirst || isLast) {
+    if (inputQty <= 0) {
+      throw new Error(isFirst ? "首道工序必须填写投入数量" : "末道工序必须填写成品数量");
+    }
+    quantity = inputQty;
+  } else {
+    quantity = null;
+  }
+  // 不良数拆分：旧 UI 用 defect_qty（合计），新模型用 incoming + process 各 2 字段
+  // 这里把合计写到 process_defect_lid（占位），保持 qualified_qty = quantity - defectQty
+  const qualified = quantity == null ? 0 : Math.max(0, quantity - defectQty);
   const { data, error } = await c
     .from("operation_reports")
-    .insert({
-      work_order_report_id: input.work_order_report_id,
-      operation_id: input.operation_id,
-      process_name: input.process_name || (op as { operation_name: string }).operation_name,
-      sequence: Math.max(0, Math.floor(input.sequence ?? 0)),
-      material_code: input.material_code ?? "",
-      material_name: input.material_name ?? "",
-      material_batch_no: input.material_batch_no ?? "",
-      input_qty: inputQty,
-      defect_qty: defectQty,
-      qualified_qty: qualifiedQty,
-      notes: input.notes ?? "",
-    })
+    .upsert(
+      {
+        work_order_no: workOrderNo,
+        batch_no: batchNo,
+        finish_seq: finishSeq,
+        process_code: processCode,
+        process_name: input.process_name,
+        sequence: Math.max(0, Math.floor(input.sequence ?? 0)),
+        quantity,
+        incoming_defect_piece: 0,
+        incoming_defect_lid: 0,
+        process_defect_piece: 0,
+        process_defect_lid: defectQty,
+        incoming_defect_total: 0,
+        process_defect_total: defectQty,
+        qualified_qty: qualified,
+      },
+      { onConflict: "work_order_no,batch_no,finish_seq,process_code" },
+    )
     .select()
     .single();
   if (error) throw error;
 
-  // 3) 累加工序累计
-  await c
-    .from("work_order_operations")
-    .update({
-      good_quantity: qualifiedQty,
-      scrap_quantity: defectQty,
-      end_time: new Date().toISOString(),
-    })
-    .eq("id", input.operation_id);
-
-  // 4) 累加工单累计（按所有工序报工的合格 + 不良）
-  await recomputeWorkOrderTotals(input.work_order_report_id);
+  // 同步到 work_order_operations（兼容旧 UI / 老业务）
+  await syncOperationAggregate(workOrderNo, processCode, qualified, defectQty);
 
   return toOperationReportView(data as Record<string, unknown>);
 }
@@ -762,11 +884,17 @@ export interface UpdateOperationReportInput {
 
 export async function updateOperationReport(input: UpdateOperationReportInput) {
   const c = getSupabaseClient();
+  const parsed = parseWorId(input.work_order_report_id);
+  if (!parsed) throw new Error("工单报工单 ID 格式错误");
+  const { workOrderNo, batchNo, finishSeq } = parsed;
+
   // 校验工单报工
   const { data: wor } = await c
     .from("work_order_reports")
-    .select("id, work_order_id, status")
-    .eq("id", input.work_order_report_id)
+    .select("id, status")
+    .eq("work_order_no", workOrderNo)
+    .eq("batch_no", batchNo)
+    .eq("finish_seq", finishSeq)
     .maybeSingle();
   if (!wor) throw new Error("工单报工单不存在");
   if (cn((wor as Record<string, unknown>).status) === "已关闭") {
@@ -778,16 +906,19 @@ export async function updateOperationReport(input: UpdateOperationReportInput) {
     .from("operation_reports")
     .select("*")
     .eq("id", input.report_id)
-    .eq("work_order_report_id", input.work_order_report_id)
     .maybeSingle();
   if (gerr) throw gerr;
-  if (!existing) throw new Error("工序报工单不存在或不属于该工单报工单");
+  if (!existing) throw new Error("工序报工单不存在");
+  const existRow = existing as Record<string, unknown>;
+  if (cn(existRow.work_order_no) !== workOrderNo) {
+    throw new Error("工序报工单不属于该工单报工单");
+  }
 
   // 校验工单
   const { data: wo } = await c
     .from("work_orders")
     .select("id, status")
-    .eq("id", wor.work_order_id)
+    .eq("order_no", workOrderNo)
     .maybeSingle();
   if (!wo) throw new Error("工单不存在");
   if (wo.status === "完工" || wo.status === "超期完工") {
@@ -795,29 +926,30 @@ export async function updateOperationReport(input: UpdateOperationReportInput) {
   }
 
   const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
-  if (input.operation_id !== undefined) patch.operation_id = input.operation_id;
   if (input.process_name !== undefined) patch.process_name = input.process_name;
   if (input.sequence !== undefined) patch.sequence = Math.max(0, Math.floor(input.sequence));
-  if (input.material_code !== undefined) patch.material_code = input.material_code;
-  if (input.material_name !== undefined) patch.material_name = input.material_name;
-  if (input.material_batch_no !== undefined) patch.material_batch_no = input.material_batch_no;
-  let inputQty: number | undefined;
-  let defectQty: number | undefined;
-  if (input.input_qty !== undefined) {
-    inputQty = Math.max(0, Math.floor(input.input_qty));
-    patch.input_qty = inputQty;
+  const newInputQty =
+    input.input_qty !== undefined
+      ? Math.max(0, Math.floor(input.input_qty))
+      : Number(existRow.quantity ?? 0);
+  const newDefectQty =
+    input.defect_qty !== undefined
+      ? Math.max(0, Math.floor(input.defect_qty))
+      : Number(existRow.process_defect_total ?? 0);
+  const seq = Number(existRow.sequence ?? 0);
+  const totalProcesses = 8;
+  const isFirst = seq === 1;
+  const isLast = seq === totalProcesses;
+  let quantity: number | null;
+  if (isFirst || isLast) {
+    quantity = newInputQty;
+  } else {
+    quantity = null;
   }
-  if (input.defect_qty !== undefined) {
-    defectQty = Math.max(0, Math.floor(input.defect_qty));
-    patch.defect_qty = defectQty;
-  }
-  // 重新计算合格
-  if (inputQty !== undefined || defectQty !== undefined) {
-    const finalInput = inputQty !== undefined ? inputQty : Number((existing as { input_qty: number }).input_qty ?? 0);
-    const finalDefect = defectQty !== undefined ? defectQty : Number((existing as { defect_qty: number }).defect_qty ?? 0);
-    patch.qualified_qty = Math.max(0, finalInput - finalDefect);
-  }
-  if (input.notes !== undefined) patch.notes = input.notes;
+  patch.quantity = quantity;
+  patch.process_defect_lid = newDefectQty;
+  patch.process_defect_total = newDefectQty;
+  patch.qualified_qty = quantity == null ? 0 : Math.max(0, quantity - newDefectQty);
 
   const { data, error } = await c
     .from("operation_reports")
@@ -827,63 +959,83 @@ export async function updateOperationReport(input: UpdateOperationReportInput) {
     .single();
   if (error) throw error;
 
-  // 更新工序累计
-  if (patch.qualified_qty !== undefined || patch.defect_qty !== undefined) {
-    await c
-      .from("work_order_operations")
-      .update({
-        good_quantity: Number((data as { qualified_qty: number }).qualified_qty ?? 0),
-        scrap_quantity: Number((data as { defect_qty: number }).defect_qty ?? 0),
-        end_time: new Date().toISOString(),
-      })
-      .eq("id", (data as { operation_id: string }).operation_id);
-  }
-
-  // 重算工单累计
-  await recomputeWorkOrderTotals(input.work_order_report_id);
+  // 同步 work_order_operations
+  await syncOperationAggregate(
+    workOrderNo,
+    cn(existRow.process_code),
+    Number((data as Record<string, unknown>).qualified_qty ?? 0),
+    newDefectQty,
+  );
 
   return toOperationReportView(data as Record<string, unknown>);
 }
 
 export async function deleteOperationReport(reportId: string) {
   const c = getSupabaseClient();
-  // 拿到 work_order_report_id 以便重算
+  // 拿到工序报工的 process_code + work_order_no 以便同步
   const { data: op } = await c
     .from("operation_reports")
-    .select("id, work_order_report_id, operation_id, qualified_qty, defect_qty")
+    .select("id, work_order_no, batch_no, finish_seq, process_code, sequence, qualified_qty, process_defect_total")
     .eq("id", reportId)
     .maybeSingle();
   if (!op) throw new Error("工序报工单不存在");
+  const opRow = op as Record<string, unknown>;
+  // 首道工序存在后续工序时,不允许删除
+  if (Number(opRow.sequence ?? 0) === 1) {
+    const { count } = await c
+      .from("operation_reports")
+      .select("id", { count: "exact", head: true })
+      .eq("work_order_no", cn(opRow.work_order_no))
+      .eq("batch_no", cn(opRow.batch_no))
+      .eq("finish_seq", Number(opRow.finish_seq ?? 0))
+      .gt("sequence", 1);
+    if ((count ?? 0) > 0) {
+      throw new Error("首道工序报工存在后续工序,不可删除");
+    }
+  }
   const { error } = await c.from("operation_reports").delete().eq("id", reportId);
   if (error) throw error;
-  // 清零工序累计
-  await c
-    .from("work_order_operations")
-    .update({ good_quantity: 0, scrap_quantity: 0, end_time: null })
-    .eq("id", (op as { operation_id: string }).operation_id);
-  await recomputeWorkOrderTotals((op as { work_order_report_id: string }).work_order_report_id);
+  await syncOperationAggregate(
+    cn(opRow.work_order_no),
+    cn(opRow.process_code),
+    0,
+    0,
+  );
   return { id: reportId };
 }
 
-async function recomputeWorkOrderTotals(workOrderReportId: string) {
+async function syncOperationAggregate(
+  workOrderNo: string,
+  processCode: string,
+  qualified: number,
+  defect: number,
+) {
+  // 兼容旧业务:同步到 work_order_operations（按 process_name 匹配）
+  if (!processCode) return;
   const c = getSupabaseClient();
-  const { data: wor } = await c
-    .from("work_order_reports")
-    .select("work_order_id")
-    .eq("id", workOrderReportId)
+  const { data: dict } = await c
+    .from("process_dictionary")
+    .select("process_name")
+    .eq("process_code", processCode)
     .maybeSingle();
-  if (!wor) return;
-  const workOrderId = (wor as { work_order_id: string }).work_order_id;
-  const { data: rows } = await c
-    .from("operation_reports")
-    .select("qualified_qty, defect_qty")
-    .eq("work_order_report_id", workOrderReportId);
-  const totalGood = (rows ?? []).reduce((s, r) => s + Number((r as { qualified_qty: number }).qualified_qty ?? 0), 0);
-  const totalDefect = (rows ?? []).reduce((s, r) => s + Number((r as { defect_qty: number }).defect_qty ?? 0), 0);
-  await c
-    .from("work_orders")
-    .update({ completed_quantity: totalGood, scrap_quantity: totalDefect, updated_at: new Date().toISOString() })
-    .eq("id", workOrderId);
+  const processName = cn((dict as { process_name?: string } | null)?.process_name);
+  if (!processName) return;
+  const { data: ops } = await c
+    .from("work_order_operations")
+    .select("id")
+    .eq("work_order_id", workOrderNo)
+    .eq("operation_name", processName);
+  if (!ops || ops.length === 0) return;
+  for (const op of ops) {
+    await c
+      .from("work_order_operations")
+      .update({
+        good_quantity: qualified,
+        scrap_quantity: defect,
+        end_time: new Date().toISOString(),
+      })
+      .eq("id", (op as { id: string }).id);
+  }
 }
 
 // ==================== 报检（生成 quality_inspections 记录） ====================
@@ -1435,5 +1587,907 @@ export async function listReportSummaries(): Promise<ReportSummary[]> {
     return { workOrder: wo, reports, totalGood, totalDefect };
   });
 
+  return result;
+}
+
+// ==================== 报工模块 V2（2026-06-23 重构） ====================
+
+export type WorkOrderReportStatus = "活跃" | "已关闭";
+
+export interface WorkOrderReportV2 {
+  id: string;
+  workOrderNo: string;
+  batchNo: string;
+  finishSeq: number;
+  startAt: string;
+  endAt: string | null;
+  skilledWorkers: number;
+  generalWorkers: number;
+  laborWorkers: number;
+  otherWorkers: number;
+  abnormalMinutes: number;
+  manHours: number;
+  fillTime: string | null;
+  status: WorkOrderReportStatus;
+  closedAt: string | null;
+  notes: string;
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+
+export interface OperationReportV2 {
+  id: string;
+  workOrderNo: string;
+  batchNo: string;
+  finishSeq: number;
+  processCode: string;
+  processName: string;
+  sequence: number;
+  quantity: number | null;
+  incomingDefectPiece: number;
+  incomingDefectLid: number;
+  processDefectPiece: number;
+  processDefectLid: number;
+  incomingDefectTotal: number;
+  processDefectTotal: number;
+  qualifiedQty: number;
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+
+export interface OperationDefectV2 {
+  id: string;
+  workOrderNo: string;
+  batchNo: string;
+  finishSeq: number;
+  processCode: string;
+  defectCategory: string;
+  defectName: string;
+  defectQty: number;
+  unit: string;
+  notes: string;
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+
+export interface EquipmentDowntimeV2 {
+  id: string;
+  workOrderNo: string;
+  batchNo: string;
+  finishSeq: number;
+  equipmentCode: string;
+  downtimeStart: string;
+  downtimeType: string;
+  faultDesc: string;
+  fixAt: string | null;
+  durationMinutes: number;
+  confirmedBy: string;
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+
+function toWoReportV2(r: Record<string, unknown>): WorkOrderReportV2 {
+  return {
+    id: String(r.id),
+    workOrderNo: String(r.work_order_no ?? ""),
+    batchNo: String(r.batch_no ?? ""),
+    finishSeq: Number(r.finish_seq ?? 0),
+    startAt: String(r.start_at ?? ""),
+    endAt: r.end_at ? String(r.end_at) : null,
+    skilledWorkers: Number(r.skilled_workers ?? 0),
+    generalWorkers: Number(r.general_workers ?? 0),
+    laborWorkers: Number(r.labor_workers ?? 0),
+    otherWorkers: Number(r.other_workers ?? 0),
+    abnormalMinutes: Number(r.abnormal_minutes ?? 0),
+    manHours: Number(r.man_hours ?? 0),
+    fillTime: r.fill_time ? String(r.fill_time) : null,
+    status: (r.status === "已关闭" ? "已关闭" : "活跃") as WorkOrderReportStatus,
+    closedAt: r.closed_at ? String(r.closed_at) : null,
+    notes: String(r.notes ?? ""),
+    createdAt: r.created_at ? String(r.created_at) : null,
+    updatedAt: r.updated_at ? String(r.updated_at) : null,
+  };
+}
+
+function toOpReportV2(r: Record<string, unknown>): OperationReportV2 {
+  return {
+    id: String(r.id),
+    workOrderNo: String(r.work_order_no ?? ""),
+    batchNo: String(r.batch_no ?? ""),
+    finishSeq: Number(r.finish_seq ?? 0),
+    processCode: String(r.process_code ?? ""),
+    processName: String(r.process_name ?? ""),
+    sequence: Number(r.sequence ?? 0),
+    quantity: r.quantity == null ? null : Number(r.quantity),
+    incomingDefectPiece: Number(r.incoming_defect_piece ?? 0),
+    incomingDefectLid: Number(r.incoming_defect_lid ?? 0),
+    processDefectPiece: Number(r.process_defect_piece ?? 0),
+    processDefectLid: Number(r.process_defect_lid ?? 0),
+    incomingDefectTotal: Number(r.incoming_defect_total ?? 0),
+    processDefectTotal: Number(r.process_defect_total ?? 0),
+    qualifiedQty: Number(r.qualified_qty ?? 0),
+    createdAt: r.created_at ? String(r.created_at) : null,
+    updatedAt: r.updated_at ? String(r.updated_at) : null,
+  };
+}
+
+function toDefectV2(r: Record<string, unknown>): OperationDefectV2 {
+  return {
+    id: String(r.id),
+    workOrderNo: String(r.work_order_no ?? ""),
+    batchNo: String(r.batch_no ?? ""),
+    finishSeq: Number(r.finish_seq ?? 0),
+    processCode: String(r.process_code ?? ""),
+    defectCategory: String(r.defect_category ?? ""),
+    defectName: String(r.defect_name ?? ""),
+    defectQty: Number(r.defect_qty ?? 0),
+    unit: String(r.unit ?? ""),
+    notes: String(r.notes ?? ""),
+    createdAt: r.created_at ? String(r.created_at) : null,
+    updatedAt: r.updated_at ? String(r.updated_at) : null,
+  };
+}
+
+function toDowntimeV2(r: Record<string, unknown>): EquipmentDowntimeV2 {
+  return {
+    id: String(r.id),
+    workOrderNo: String(r.work_order_no ?? ""),
+    batchNo: String(r.batch_no ?? ""),
+    finishSeq: Number(r.finish_seq ?? 0),
+    equipmentCode: String(r.equipment_code ?? ""),
+    downtimeStart: String(r.downtime_start ?? ""),
+    downtimeType: String(r.downtime_type ?? ""),
+    faultDesc: String(r.fault_desc ?? ""),
+    fixAt: r.fix_at ? String(r.fix_at) : null,
+    durationMinutes: Number(r.duration_minutes ?? 0),
+    confirmedBy: String(r.confirmed_by ?? ""),
+    createdAt: r.created_at ? String(r.created_at) : null,
+    updatedAt: r.updated_at ? String(r.updated_at) : null,
+  };
+}
+
+function toInt(v: unknown): number {
+  const n = Number(v ?? 0);
+  if (!Number.isFinite(n)) return 0;
+  return Math.round(n);
+}
+
+function calcManHours(
+  startAt: string,
+  endAt: string | null,
+  abnormalMinutes: number,
+  skilled: number,
+  general: number,
+  labor: number,
+  other: number
+): number {
+  if (!endAt) return 0;
+  const start = new Date(startAt).getTime();
+  const end = new Date(endAt).getTime();
+  if (end <= start) return 0;
+  const minutes = (end - start) / 60000 - Number(abnormalMinutes ?? 0);
+  if (minutes <= 0) return 0;
+  const people = Number(skilled ?? 0) + Number(general ?? 0) + Number(labor ?? 0) + Number(other ?? 0);
+  return Math.round((minutes * people) / 60 * 100) / 100;
+}
+
+function calcQualified(quantity: number | null, incoming: number, process: number): number {
+  if (quantity == null) return 0;
+  const v = quantity - incoming - process;
+  return v < 0 ? 0 : v;
+}
+
+export interface ProcessDictionaryItem {
+  id: string;
+  processCode: string;
+  processName: string;
+  sequence: number;
+}
+
+export async function listProcessDictionary(): Promise<ProcessDictionaryItem[]> {
+  const c = getSupabaseClient();
+  const { data, error } = await c
+    .from("process_dictionary")
+    .select("id, process_code, process_name, sequence")
+    .order("sequence", { ascending: true });
+  if (error) throw error;
+  return (data ?? []).map((r) => ({
+    id: String(r.id),
+    processCode: String(r.process_code),
+    processName: String(r.process_name),
+    sequence: Number(r.sequence ?? 0),
+  }));
+}
+
+async function nextFinishSeq(
+  c: ReturnType<typeof getSupabaseClient>,
+  workOrderNo: string,
+  batchNo: string
+): Promise<number> {
+  const { data, error } = await c
+    .from("work_order_reports")
+    .select("finish_seq")
+    .eq("work_order_no", workOrderNo)
+    .eq("batch_no", batchNo)
+    .order("finish_seq", { ascending: false })
+    .limit(1);
+  if (error) throw error;
+  const list = (data ?? []) as Array<{ finish_seq: number }>;
+  return list.length === 0 ? 1 : Number(list[0].finish_seq) + 1;
+}
+
+export async function listWorkOrderReportsV2(workOrderNo: string): Promise<WorkOrderReportV2[]> {
+  const c = getSupabaseClient();
+  const { data, error } = await c
+    .from("work_order_reports")
+    .select("*")
+    .eq("work_order_no", workOrderNo)
+    .order("finish_seq", { ascending: false });
+  if (error) throw error;
+  return (data ?? []).map((r) => toWoReportV2(r as Record<string, unknown>));
+}
+
+export async function listAllWorkOrderReportsV2(limit = 500): Promise<WorkOrderReportV2[]> {
+  const c = getSupabaseClient();
+  const { data, error } = await c
+    .from("work_order_reports")
+    .select("*")
+    .order("start_at", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return (data ?? []).map((r) => toWoReportV2(r as Record<string, unknown>));
+}
+
+export interface CreateWorkOrderReportV2Input {
+  workOrderNo: string;
+  batchNo: string;
+  startAt: string;
+  skilledWorkers?: number;
+  generalWorkers?: number;
+  laborWorkers?: number;
+  otherWorkers?: number;
+  abnormalMinutes?: number;
+  notes?: string;
+}
+
+export async function createWorkOrderReportV2(input: CreateWorkOrderReportV2Input): Promise<WorkOrderReportV2> {
+  const c = getSupabaseClient();
+  const seq = await nextFinishSeq(c, input.workOrderNo, input.batchNo);
+  const { data, error } = await c
+    .from("work_order_reports")
+    .insert({
+      work_order_no: input.workOrderNo,
+      batch_no: input.batchNo,
+      finish_seq: seq,
+      start_at: input.startAt,
+      skilled_workers: toInt(input.skilledWorkers),
+      general_workers: toInt(input.generalWorkers),
+      labor_workers: toInt(input.laborWorkers),
+      other_workers: toInt(input.otherWorkers),
+      abnormal_minutes: toInt(input.abnormalMinutes),
+      notes: input.notes ?? "",
+      status: "活跃",
+      fill_time: new Date().toISOString(),
+    })
+    .select()
+    .single();
+  if (error) throw error;
+  return toWoReportV2(data as Record<string, unknown>);
+}
+
+export interface UpdateWorkOrderReportV2Input {
+  endAt?: string | null;
+  skilledWorkers?: number;
+  generalWorkers?: number;
+  laborWorkers?: number;
+  otherWorkers?: number;
+  abnormalMinutes?: number;
+  notes?: string;
+}
+
+export async function updateWorkOrderReportV2(
+  id: string,
+  patch: UpdateWorkOrderReportV2Input
+): Promise<WorkOrderReportV2> {
+  const c = getSupabaseClient();
+  const { data: cur, error: curErr } = await c
+    .from("work_order_reports")
+    .select("*")
+    .eq("id", id)
+    .single();
+  if (curErr) throw curErr;
+  const curRow = cur as Record<string, unknown>;
+  if (curRow.status === "已关闭") {
+    throw new Error("已关闭的报工批次不可修改");
+  }
+  const startAt = String(curRow.start_at ?? "");
+  const newEnd = patch.endAt === undefined ? (cn(curRow.end_at) || null) : patch.endAt;
+  if (newEnd && startAt && new Date(newEnd).getTime() < new Date(startAt).getTime()) {
+    throw new Error("完工时间不能小于开工时间");
+  }
+  const skilled = patch.skilledWorkers ?? Number(curRow.skilled_workers ?? 0);
+  const general = patch.generalWorkers ?? Number(curRow.general_workers ?? 0);
+  const labor = patch.laborWorkers ?? Number(curRow.labor_workers ?? 0);
+  const other = patch.otherWorkers ?? Number(curRow.other_workers ?? 0);
+  const abnormal = patch.abnormalMinutes ?? Number(curRow.abnormal_minutes ?? 0);
+  const manHours = calcManHours(startAt, newEnd, abnormal, skilled, general, labor, other);
+  const { data, error } = await c
+    .from("work_order_reports")
+    .update({
+      end_at: newEnd,
+      skilled_workers: toInt(skilled),
+      general_workers: toInt(general),
+      labor_workers: toInt(labor),
+      other_workers: toInt(other),
+      abnormal_minutes: toInt(abnormal),
+      man_hours: manHours,
+      notes: patch.notes ?? String(curRow.notes ?? ""),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", id)
+    .select()
+    .single();
+  if (error) throw error;
+  return toWoReportV2(data as Record<string, unknown>);
+}
+
+export async function deleteWorkOrderReportV2(id: string): Promise<void> {
+  const c = getSupabaseClient();
+  const { data: cur, error: curErr } = await c
+    .from("work_order_reports")
+    .select("status")
+    .eq("id", id)
+    .single();
+  if (curErr) throw curErr;
+  if ((cur as { status?: string })?.status === "已关闭") {
+    throw new Error("已关闭的报工批次不可删除");
+  }
+  const { error } = await c.from("work_order_reports").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function closeWorkOrderReportV2(id: string): Promise<WorkOrderReportV2> {
+  const c = getSupabaseClient();
+  const { data: cur, error: curErr } = await c
+    .from("work_order_reports")
+    .select("status")
+    .eq("id", id)
+    .single();
+  if (curErr) throw curErr;
+  if ((cur as { status?: string })?.status === "已关闭") {
+    throw new Error("批次已关闭");
+  }
+  const { data, error } = await c
+    .from("work_order_reports")
+    .update({
+      status: "已关闭",
+      closed_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", id)
+    .select()
+    .single();
+  if (error) throw error;
+  return toWoReportV2(data as Record<string, unknown>);
+}
+
+export async function listOperationReportsV2(
+  workOrderNo: string,
+  batchNo: string,
+  finishSeq: number
+): Promise<OperationReportV2[]> {
+  const c = getSupabaseClient();
+  const { data, error } = await c
+    .from("operation_reports")
+    .select("*")
+    .eq("work_order_no", workOrderNo)
+    .eq("batch_no", batchNo)
+    .eq("finish_seq", finishSeq)
+    .order("sequence", { ascending: true });
+  if (error) throw error;
+  return (data ?? []).map((r) => toOpReportV2(r as Record<string, unknown>));
+}
+
+export interface UpsertOperationReportV2Input {
+  workOrderNo: string;
+  batchNo: string;
+  finishSeq: number;
+  processCode: string;
+  processName: string;
+  sequence: number;
+  quantity?: number | null;
+  incomingDefectPiece?: number;
+  incomingDefectLid?: number;
+  processDefectPiece?: number;
+  processDefectLid?: number;
+}
+
+export async function upsertOperationReportV2(input: UpsertOperationReportV2Input): Promise<OperationReportV2> {
+  const c = getSupabaseClient();
+  const { data: batch, error: batchErr } = await c
+    .from("work_order_reports")
+    .select("status")
+    .eq("work_order_no", input.workOrderNo)
+    .eq("batch_no", input.batchNo)
+    .eq("finish_seq", input.finishSeq)
+    .single();
+  if (batchErr) throw batchErr;
+  if ((batch as { status?: string })?.status === "已关闭") {
+    throw new Error("已关闭的报工批次不可添加工序报工");
+  }
+  if (input.sequence > 1) {
+    const { data: firstOp, error: firstErr } = await c
+      .from("operation_reports")
+      .select("id")
+      .eq("work_order_no", input.workOrderNo)
+      .eq("batch_no", input.batchNo)
+      .eq("finish_seq", input.finishSeq)
+      .eq("sequence", 1)
+      .maybeSingle();
+    if (firstErr) throw firstErr;
+    if (!firstOp) {
+      throw new Error("请先完成第 1 道工序报工后,再报后续工序");
+    }
+  }
+  const totalProcesses = 8;
+  const isFirst = input.sequence === 1;
+  const isLast = input.sequence === totalProcesses;
+  let quantity: number | null = input.quantity ?? null;
+  if (isFirst || isLast) {
+    if (quantity == null || quantity < 0) {
+      throw new Error(isFirst ? "首道工序必须填写投入数量" : "末道工序必须填写成品数量");
+    }
+  } else {
+    quantity = null;
+  }
+  const incoming = toInt(input.incomingDefectPiece) + toInt(input.incomingDefectLid);
+  const process = toInt(input.processDefectPiece) + toInt(input.processDefectLid);
+  const qualified = calcQualified(quantity, incoming, process);
+  const row = {
+    work_order_no: input.workOrderNo,
+    batch_no: input.batchNo,
+    finish_seq: input.finishSeq,
+    process_code: input.processCode,
+    process_name: input.processName,
+    sequence: input.sequence,
+    quantity,
+    incoming_defect_piece: toInt(input.incomingDefectPiece),
+    incoming_defect_lid: toInt(input.incomingDefectLid),
+    process_defect_piece: toInt(input.processDefectPiece),
+    process_defect_lid: toInt(input.processDefectLid),
+    incoming_defect_total: incoming,
+    process_defect_total: process,
+    qualified_qty: qualified,
+    updated_at: new Date().toISOString(),
+  };
+  const { data, error } = await c
+    .from("operation_reports")
+    .upsert(row, { onConflict: "work_order_no,batch_no,finish_seq,process_code" })
+    .select()
+    .single();
+  if (error) throw error;
+  return toOpReportV2(data as Record<string, unknown>);
+}
+
+export async function deleteOperationReportV2(id: string): Promise<void> {
+  const c = getSupabaseClient();
+  const { data: cur, error: curErr } = await c
+    .from("operation_reports")
+    .select("work_order_no, batch_no, finish_seq, sequence")
+    .eq("id", id)
+    .single();
+  if (curErr) throw curErr;
+  const curRow = cur as Record<string, unknown>;
+  const { data: batch, error: bErr } = await c
+    .from("work_order_reports")
+    .select("status")
+    .eq("work_order_no", curRow.work_order_no)
+    .eq("batch_no", curRow.batch_no)
+    .eq("finish_seq", curRow.finish_seq)
+    .single();
+  if (bErr) throw bErr;
+  if ((batch as { status?: string })?.status === "已关闭") {
+    throw new Error("已关闭的报工批次不可删除工序报工");
+  }
+  if (Number(curRow.sequence ?? 0) === 1) {
+    const { count, error: cntErr } = await c
+      .from("operation_reports")
+      .select("id", { count: "exact", head: true })
+      .eq("work_order_no", curRow.work_order_no)
+      .eq("batch_no", curRow.batch_no)
+      .eq("finish_seq", curRow.finish_seq)
+      .gt("sequence", 1);
+    if (cntErr) throw cntErr;
+    if ((count ?? 0) > 0) {
+      throw new Error("首道工序报工存在后续工序,不可删除");
+    }
+  }
+  const { error } = await c.from("operation_reports").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function listOperationDefectsV2(
+  workOrderNo: string,
+  batchNo: string,
+  finishSeq: number,
+  processCode: string
+): Promise<OperationDefectV2[]> {
+  const c = getSupabaseClient();
+  const { data, error } = await c
+    .from("operation_defects")
+    .select("*")
+    .eq("work_order_no", workOrderNo)
+    .eq("batch_no", batchNo)
+    .eq("finish_seq", finishSeq)
+    .eq("process_code", processCode)
+    .order("created_at", { ascending: true });
+  if (error) throw error;
+  return (data ?? []).map((r) => toDefectV2(r as Record<string, unknown>));
+}
+
+export interface UpsertOperationDefectV2Input {
+  workOrderNo: string;
+  batchNo: string;
+  finishSeq: number;
+  processCode: string;
+  defectCategory: string;
+  defectName: string;
+  defectQty: number;
+  unit: string;
+  notes?: string;
+}
+
+export async function upsertOperationDefectV2(input: UpsertOperationDefectV2Input): Promise<OperationDefectV2> {
+  const c = getSupabaseClient();
+  const { data: batch, error: bErr } = await c
+    .from("work_order_reports")
+    .select("status")
+    .eq("work_order_no", input.workOrderNo)
+    .eq("batch_no", input.batchNo)
+    .eq("finish_seq", input.finishSeq)
+    .single();
+  if (bErr) throw bErr;
+  if ((batch as { status?: string })?.status === "已关闭") {
+    throw new Error("已关闭的报工批次不可操作不良记录");
+  }
+  const { data: op, error: opErr } = await c
+    .from("operation_reports")
+    .select("id")
+    .eq("work_order_no", input.workOrderNo)
+    .eq("batch_no", input.batchNo)
+    .eq("finish_seq", input.finishSeq)
+    .eq("process_code", input.processCode)
+    .maybeSingle();
+  if (opErr) throw opErr;
+  if (!op) {
+    throw new Error("请先完成对应工序报工");
+  }
+  const row = {
+    work_order_no: input.workOrderNo,
+    batch_no: input.batchNo,
+    finish_seq: input.finishSeq,
+    process_code: input.processCode,
+    defect_category: input.defectCategory,
+    defect_name: input.defectName,
+    defect_qty: toInt(input.defectQty),
+    unit: input.unit,
+    notes: input.notes ?? "",
+    updated_at: new Date().toISOString(),
+  };
+  const { data, error } = await c
+    .from("operation_defects")
+    .upsert(row, {
+      onConflict: "work_order_no,batch_no,finish_seq,process_code,defect_category,defect_name,unit",
+    })
+    .select()
+    .single();
+  if (error) throw error;
+  return toDefectV2(data as Record<string, unknown>);
+}
+
+export async function deleteOperationDefectV2(id: string): Promise<void> {
+  const c = getSupabaseClient();
+  const { data: cur, error: curErr } = await c
+    .from("operation_defects")
+    .select("work_order_no, batch_no, finish_seq")
+    .eq("id", id)
+    .single();
+  if (curErr) throw curErr;
+  const curRow = cur as Record<string, unknown>;
+  const { data: batch, error: bErr } = await c
+    .from("work_order_reports")
+    .select("status")
+    .eq("work_order_no", curRow.work_order_no)
+    .eq("batch_no", curRow.batch_no)
+    .eq("finish_seq", curRow.finish_seq)
+    .single();
+  if (bErr) throw bErr;
+  if ((batch as { status?: string })?.status === "已关闭") {
+    throw new Error("已关闭的报工批次不可操作不良记录");
+  }
+  const { error } = await c.from("operation_defects").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function listEquipmentDowntimeV2(
+  workOrderNo: string,
+  batchNo: string,
+  finishSeq: number
+): Promise<EquipmentDowntimeV2[]> {
+  const c = getSupabaseClient();
+  const { data, error } = await c
+    .from("equipment_downtime")
+    .select("*")
+    .eq("work_order_no", workOrderNo)
+    .eq("batch_no", batchNo)
+    .eq("finish_seq", finishSeq)
+    .order("downtime_start", { ascending: true });
+  if (error) throw error;
+  return (data ?? []).map((r) => toDowntimeV2(r as Record<string, unknown>));
+}
+
+export interface CreateEquipmentDowntimeV2Input {
+  workOrderNo: string;
+  batchNo: string;
+  finishSeq: number;
+  equipmentCode: string;
+  downtimeStart: string;
+  downtimeType?: string;
+  faultDesc?: string;
+  fixAt?: string | null;
+  confirmedBy?: string;
+}
+
+export async function createEquipmentDowntimeV2(input: CreateEquipmentDowntimeV2Input): Promise<EquipmentDowntimeV2> {
+  const c = getSupabaseClient();
+  const { data: batch, error: bErr } = await c
+    .from("work_order_reports")
+    .select("status")
+    .eq("work_order_no", input.workOrderNo)
+    .eq("batch_no", input.batchNo)
+    .eq("finish_seq", input.finishSeq)
+    .single();
+  if (bErr) throw bErr;
+  if ((batch as { status?: string })?.status === "已关闭") {
+    throw new Error("已关闭的报工批次不可操作停机记录");
+  }
+  const fixAt = input.fixAt ?? null;
+  let durationMinutes = 0;
+  if (fixAt) {
+    const ms = new Date(fixAt).getTime() - new Date(input.downtimeStart).getTime();
+    durationMinutes = Math.max(0, Math.round(ms / 60000));
+  }
+  const { data, error } = await c
+    .from("equipment_downtime")
+    .insert({
+      work_order_no: input.workOrderNo,
+      batch_no: input.batchNo,
+      finish_seq: input.finishSeq,
+      equipment_code: input.equipmentCode,
+      downtime_start: input.downtimeStart,
+      downtime_type: input.downtimeType ?? "",
+      fault_desc: input.faultDesc ?? "",
+      fix_at: fixAt,
+      duration_minutes: durationMinutes,
+      confirmed_by: input.confirmedBy ?? "",
+    })
+    .select()
+    .single();
+  if (error) throw error;
+  return toDowntimeV2(data as Record<string, unknown>);
+}
+
+export async function updateEquipmentDowntimeV2(
+  id: string,
+  patch: Partial<CreateEquipmentDowntimeV2Input>
+): Promise<EquipmentDowntimeV2> {
+  const c = getSupabaseClient();
+  const { data: cur, error: curErr } = await c
+    .from("equipment_downtime")
+    .select("*")
+    .eq("id", id)
+    .single();
+  if (curErr) throw curErr;
+  const curRow = cur as Record<string, unknown>;
+  const { data: batch, error: bErr } = await c
+    .from("work_order_reports")
+    .select("status")
+    .eq("work_order_no", curRow.work_order_no)
+    .eq("batch_no", curRow.batch_no)
+    .eq("finish_seq", curRow.finish_seq)
+    .single();
+  if (bErr) throw bErr;
+  if ((batch as { status?: string })?.status === "已关闭") {
+    throw new Error("已关闭的报工批次不可操作停机记录");
+  }
+  const fixAt = patch.fixAt !== undefined ? patch.fixAt : (cn(curRow.fix_at) || null);
+  const downtimeStart = patch.downtimeStart ?? String(curRow.downtime_start ?? "");
+  let durationMinutes = Number(curRow.duration_minutes ?? 0);
+  if (fixAt) {
+    const ms = new Date(fixAt).getTime() - new Date(downtimeStart).getTime();
+    durationMinutes = Math.max(0, Math.round(ms / 60000));
+  }
+  const { data, error } = await c
+    .from("equipment_downtime")
+    .update({
+      equipment_code: patch.equipmentCode ?? String(curRow.equipment_code ?? ""),
+      downtime_start: downtimeStart,
+      downtime_type: patch.downtimeType ?? String(curRow.downtime_type ?? ""),
+      fault_desc: patch.faultDesc ?? String(curRow.fault_desc ?? ""),
+      fix_at: fixAt,
+      duration_minutes: durationMinutes,
+      confirmed_by: patch.confirmedBy ?? String(curRow.confirmed_by ?? ""),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", id)
+    .select()
+    .single();
+  if (error) throw error;
+  return toDowntimeV2(data as Record<string, unknown>);
+}
+
+export async function deleteEquipmentDowntimeV2(id: string): Promise<void> {
+  const c = getSupabaseClient();
+  const { data: cur, error: curErr } = await c
+    .from("equipment_downtime")
+    .select("work_order_no, batch_no, finish_seq")
+    .eq("id", id)
+    .single();
+  if (curErr) throw curErr;
+  const curRow = cur as Record<string, unknown>;
+  const { data: batch, error: bErr } = await c
+    .from("work_order_reports")
+    .select("status")
+    .eq("work_order_no", curRow.work_order_no)
+    .eq("batch_no", curRow.batch_no)
+    .eq("finish_seq", curRow.finish_seq)
+    .single();
+  if (bErr) throw bErr;
+  if ((batch as { status?: string })?.status === "已关闭") {
+    throw new Error("已关闭的报工批次不可操作停机记录");
+  }
+  const { error } = await c.from("equipment_downtime").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export interface CompletionCheckResult {
+  ok: boolean;
+  message: string;
+  data?: {
+    firstInput: number;
+    lastOutput: number;
+    totalIncomingDefect: number;
+    totalProcessDefect: number;
+    expected: number;
+    diff: number;
+  };
+}
+
+export async function checkCompletionBalanceV2(
+  workOrderNo: string,
+  batchNo: string,
+  finishSeq: number
+): Promise<CompletionCheckResult> {
+  const c = getSupabaseClient();
+  const { data, error } = await c
+    .from("operation_reports")
+    .select("sequence, quantity, incoming_defect_total, process_defect_total")
+    .eq("work_order_no", workOrderNo)
+    .eq("batch_no", batchNo)
+    .eq("finish_seq", finishSeq)
+    .order("sequence", { ascending: true });
+  if (error) throw error;
+  const list = (data ?? []) as Array<{
+    sequence: number;
+    quantity: number | null;
+    incoming_defect_total: number;
+    process_defect_total: number;
+  }>;
+  if (list.length < 8) {
+    return { ok: false, message: `工序报工未完成（当前 ${list.length}/8 道）` };
+  }
+  const first = list[0];
+  const last = list[list.length - 1];
+  if (first.quantity == null) {
+    return { ok: false, message: "首道工序未填写投入数量" };
+  }
+  if (last.quantity == null) {
+    return { ok: false, message: "末道工序未填写成品数量" };
+  }
+  const totalIncoming = list.reduce((s, r) => s + Number(r.incoming_defect_total ?? 0), 0);
+  const totalProcess = list.reduce((s, r) => s + Number(r.process_defect_total ?? 0), 0);
+  const expected = Number(first.quantity) - totalIncoming - totalProcess;
+  const diff = expected - Number(last.quantity);
+  if (diff === 0) {
+    return {
+      ok: true,
+      message: "完工一致性校验通过",
+      data: {
+        firstInput: Number(first.quantity),
+        lastOutput: Number(last.quantity),
+        totalIncomingDefect: totalIncoming,
+        totalProcessDefect: totalProcess,
+        expected,
+        diff,
+      },
+    };
+  }
+  return {
+    ok: false,
+    message: `完工一致性校验不通过: 期望 ${expected}, 实际 ${last.quantity}, 差额 ${diff}`,
+    data: {
+      firstInput: Number(first.quantity),
+      lastOutput: Number(last.quantity),
+      totalIncomingDefect: totalIncoming,
+      totalProcessDefect: totalProcess,
+      expected,
+      diff,
+    },
+  };
+}
+
+export interface ReportSummaryV2 {
+  workOrder: WorkOrder;
+  batches: WorkOrderReportV2[];
+  operationReports: OperationReportV2[];
+  totalQualified: number;
+  totalDefect: number;
+}
+
+export async function listReportSummariesV2(): Promise<ReportSummaryV2[]> {
+  const c = getSupabaseClient();
+  const { data: reports, error: rErr } = await c
+    .from("work_order_reports")
+    .select("*")
+    .order("start_at", { ascending: false })
+    .limit(500);
+  if (rErr) throw rErr;
+  const reportList = (reports ?? []) as Record<string, unknown>[];
+  if (reportList.length === 0) return [];
+  const { data: ops, error: oErr } = await c
+    .from("operation_reports")
+    .select("*")
+    .limit(2000);
+  if (oErr) throw oErr;
+  const opList = (ops ?? []) as Record<string, unknown>[];
+  const workOrderNos = Array.from(new Set(reportList.map((r) => String(r.work_order_no))));
+  const { data: wos, error: wErr } = await c
+    .from("work_orders")
+    .select("*")
+    .in("order_no", workOrderNos);
+  if (wErr) throw wErr;
+  const woList = (wos ?? []) as Record<string, unknown>[];
+  const result: ReportSummaryV2[] = [];
+  for (const wo of woList) {
+    const woOrderNo = String(wo.order_no ?? "");
+    const batches = reportList
+      .filter((r) => String(r.work_order_no) === woOrderNo)
+      .map((r) => toWoReportV2(r));
+    const opReports = opList
+      .filter((o) => {
+        const woNo = String(o.work_order_no ?? "");
+        const batch = String(o.batch_no ?? "");
+        const seq = Number(o.finish_seq ?? 0);
+        return batches.some(
+          (b) =>
+            b.workOrderNo === woNo &&
+            b.batchNo === batch &&
+            b.finishSeq === seq
+        );
+      })
+      .map((o) => toOpReportV2(o));
+    const totalQualified = opReports.reduce((s, o) => s + Number(o.qualifiedQty ?? 0), 0);
+    const totalDefect = opReports.reduce(
+      (s, o) => s + Number(o.incomingDefectTotal ?? 0) + Number(o.processDefectTotal ?? 0),
+      0
+    );
+    result.push({
+      workOrder: toWoView(wo),
+      batches,
+      operationReports: opReports,
+      totalQualified,
+      totalDefect,
+    });
+  }
   return result;
 }
