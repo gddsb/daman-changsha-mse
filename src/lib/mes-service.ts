@@ -582,15 +582,17 @@ export interface CreateWorkOrderReportInput {
 
 export async function createWorkOrderReport(input: CreateWorkOrderReportInput) {
   const c = getSupabaseClient();
-  const workOrderNo = input.work_order_id;
-  // 校验工单
+  const inputId = input.work_order_id;
+  const isUuid = /^[0-9a-f-]{36}$/i.test(inputId);
+  // 校验工单（支持 UUID 和 工单号 两种入参）
   const { data: wo, error: werr } = await c
     .from("work_orders")
     .select("id, status, order_no")
-    .eq("order_no", workOrderNo)
+    .eq(isUuid ? "id" : "order_no", inputId)
     .maybeSingle();
   if (werr) throw werr;
   if (!wo) throw new Error("工单不存在");
+  const workOrderNo = String(wo.order_no);
   if (wo.status === "完工" || wo.status === "超期完工") {
     throw new Error("工单已完工/超期完工，不能再创建工单报工");
   }
