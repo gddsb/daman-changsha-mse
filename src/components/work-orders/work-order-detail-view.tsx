@@ -6,6 +6,15 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 import { StatusBadge } from '@/components/shared/status-badge';
 import { ProgressBar } from '@/components/shared/progress-bar';
 import {
@@ -71,18 +80,13 @@ export function WorkOrderDetailView({ params }: { params: Promise<{ id: string }
   // 选中查看的工序（下方历史用）
   const [activeOpId, setActiveOpId] = useState<string | null>(null);
 
-  // ====== 工单报工 表单 ======
+  // ====== 工单报工 表单(精简:只录生产批号+开始时间) ======
   const [woForm, setWoForm] = useState({
     batch_no: '',
     start_at: nowLocalStr(),
-    change_line_at: '',
-    skilled_workers: 0,
-    general_workers: 0,
-    labor_workers: 0,
-    cleanup_minutes: 0,
-    notes: '',
   });
   const [editingWoReportId, setEditingWoReportId] = useState<string | null>(null);
+  const [woDialogOpen, setWoDialogOpen] = useState(false);
 
   // ====== 工序报工 表单 ======
   const [opForm, setOpForm] = useState<{
@@ -169,18 +173,13 @@ export function WorkOrderDetailView({ params }: { params: Promise<{ id: string }
         body: JSON.stringify({
           batch_no: woForm.batch_no,
           start_at: localStrToIso(woForm.start_at),
-          change_line_at: woForm.change_line_at ? localStrToIso(woForm.change_line_at) : null,
-          skilled_workers: Number(woForm.skilled_workers),
-          general_workers: Number(woForm.general_workers),
-          labor_workers: Number(woForm.labor_workers),
-          cleanup_minutes: Number(woForm.cleanup_minutes),
-          notes: woForm.notes,
         }),
       });
       const json = await res.json();
       if (json.success) {
         resetWoForm();
         setEditingWoReportId(null);
+        setWoDialogOpen(false);
         await load();
       } else {
         alert(json.error || '保存失败');
@@ -190,18 +189,19 @@ export function WorkOrderDetailView({ params }: { params: Promise<{ id: string }
     }
   };
 
-  const handleEditWoReport = (r: WorkOrderReport) => {
+  const openCreateWoDialog = () => {
+    resetWoForm();
+    setEditingWoReportId(null);
+    setWoDialogOpen(true);
+  };
+
+  const openEditWoDialog = (r: WorkOrderReport) => {
     setWoForm({
       batch_no: r.batch_no,
       start_at: isoToLocalStr(r.start_at),
-      change_line_at: isoToLocalStr(r.change_line_at),
-      skilled_workers: r.skilled_workers,
-      general_workers: r.general_workers,
-      labor_workers: r.labor_workers,
-      cleanup_minutes: r.cleanup_minutes,
-      notes: r.notes,
     });
     setEditingWoReportId(r.id);
+    setWoDialogOpen(true);
   };
 
   const handleDeleteWoReport = async (reportId: string) => {
@@ -263,12 +263,6 @@ export function WorkOrderDetailView({ params }: { params: Promise<{ id: string }
     setWoForm({
       batch_no: '',
       start_at: nowLocalStr(),
-      change_line_at: '',
-      skilled_workers: 0,
-      general_workers: 0,
-      labor_workers: 0,
-      cleanup_minutes: 0,
-      notes: '',
     });
   };
 
@@ -460,10 +454,12 @@ export function WorkOrderDetailView({ params }: { params: Promise<{ id: string }
         {/* ===== 工单报工 ===== */}
         <Card className="border-border/60 bg-card/40">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Send className="h-4 w-4" />工单报工
-              <span className="text-[10px] font-normal text-muted-foreground">
-                ({workOrderReports.length} 条批次)
+            <CardTitle className="flex items-center justify-between text-base">
+              <span className="flex items-center gap-2">
+                <Send className="h-4 w-4" />工单报工
+                <span className="text-[10px] font-normal text-muted-foreground">
+                  ({workOrderReports.length} 条批次)
+                </span>
               </span>
             </CardTitle>
           </CardHeader>
@@ -474,124 +470,96 @@ export function WorkOrderDetailView({ params }: { params: Promise<{ id: string }
                 <span>工单开工后（生产中 / 暂停）才能做工单报工</span>
               </div>
             ) : (
-              <form onSubmit={handleWoReportSubmit} className="space-y-3">
-                {!editingWoReportId && workOrderReports.some((r) => r.status === '活跃') && (
+              <div className="space-y-3">
+                {workOrderReports.some((r) => r.status === '活跃') ? (
                   <div className="flex items-center gap-2 rounded border border-emerald-700/40 bg-emerald-900/20 p-2 text-xs text-emerald-300">
                     <AlertCircle className="h-3.5 w-3.5 shrink-0" />
                     <span>该工单已存在活跃的工单报工单，请先在「工单报工历史」中关闭当前批次后再开新批次</span>
                   </div>
-                )}
-                <div className="border border-border/40 bg-background/30 p-2 text-xs">
-                  <div className="flex items-center justify-between">
-                    <div className="text-muted-foreground">
-                      {editingWoReportId ? '正在修改工单报工单' : '新建批次'}
-                    </div>
-                    {editingWoReportId && (
-                      <button
+                ) : (
+                  <Dialog open={woDialogOpen} onOpenChange={setWoDialogOpen}>
+                    <DialogTrigger asChild>
+                      <Button
                         type="button"
-                        onClick={() => {
-                          setEditingWoReportId(null);
-                          resetWoForm();
-                        }}
-                        className="text-[10px] text-amber-400 hover:underline"
+                        className="w-full"
+                        onClick={openCreateWoDialog}
                       >
-                        取消修改
-                      </button>
-                    )}
-                  </div>
-                </div>
-                <div>
-                  <label className="text-xs text-muted-foreground">
-                    生产批号 <span className="text-rose-400">*</span>
-                  </label>
-                  <Input
-                    value={woForm.batch_no}
-                    onChange={(e) => setWoForm({ ...woForm, batch_no: e.target.value })}
-                    placeholder="如：B20260618-001"
-                    required
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="text-xs text-muted-foreground">
-                      开始时间 <span className="text-rose-400">*</span>
-                    </label>
-                    <Input
-                      type="datetime-local"
-                      value={woForm.start_at}
-                      onChange={(e) => setWoForm({ ...woForm, start_at: e.target.value })}
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs text-muted-foreground">换线时间</label>
-                    <Input
-                      type="datetime-local"
-                      value={woForm.change_line_at}
-                      onChange={(e) => setWoForm({ ...woForm, change_line_at: e.target.value })}
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-3 gap-2">
-                  <div>
-                    <label className="text-xs text-muted-foreground">技工人数</label>
-                    <Input
-                      type="number"
-                      min="0"
-                      value={woForm.skilled_workers}
-                      onChange={(e) => setWoForm({ ...woForm, skilled_workers: Number(e.target.value) })}
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs text-muted-foreground">普工人数</label>
-                    <Input
-                      type="number"
-                      min="0"
-                      value={woForm.general_workers}
-                      onChange={(e) => setWoForm({ ...woForm, general_workers: Number(e.target.value) })}
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs text-muted-foreground">劳务工人数</label>
-                    <Input
-                      type="number"
-                      min="0"
-                      value={woForm.labor_workers}
-                      onChange={(e) => setWoForm({ ...woForm, labor_workers: Number(e.target.value) })}
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="text-xs text-muted-foreground">清场时间(分钟)</label>
-                    <Input
-                      type="number"
-                      min="0"
-                      value={woForm.cleanup_minutes}
-                      onChange={(e) => setWoForm({ ...woForm, cleanup_minutes: Number(e.target.value) })}
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs text-muted-foreground">备注</label>
-                    <Input
-                      value={woForm.notes}
-                      onChange={(e) => setWoForm({ ...woForm, notes: e.target.value })}
-                    />
-                  </div>
-                </div>
-                <Button
-                  type="submit"
-                  className="w-full"
-                  disabled={submitting || (!editingWoReportId && workOrderReports.some((r) => r.status === '活跃'))}
-                >
-                  {editingWoReportId ? '保存修改' : '添加工单报工'}
-                </Button>
-                {!editingWoReportId && (
-                  <p className="text-center text-[10px] text-muted-foreground">
-                    表单内容已自动暂存，未点击「添加工单报工」前不会保存到数据库
-                  </p>
+                        <Send className="mr-1 h-3 w-3" />添加工单报工
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="border-border/60 bg-card sm:max-w-md">
+                      <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                          <Send className="h-4 w-4" />添加工单报工
+                        </DialogTitle>
+                        <DialogDescription>
+                          录入生产批号与开工时间,作为该批次的抬头,后续工序报工将以该批次为上下文。
+                        </DialogDescription>
+                      </DialogHeader>
+                      <form onSubmit={handleWoReportSubmit} className="space-y-3">
+                        <div>
+                          <label className="text-xs text-muted-foreground">
+                            生产批号 <span className="text-rose-400">*</span>
+                          </label>
+                          <Input
+                            value={woForm.batch_no}
+                            onChange={(e) => setWoForm({ ...woForm, batch_no: e.target.value })}
+                            placeholder="如：B20260618-001"
+                            required
+                            autoFocus
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs text-muted-foreground">
+                            开始时间 <span className="text-rose-400">*</span>
+                          </label>
+                          <Input
+                            type="datetime-local"
+                            value={woForm.start_at}
+                            onChange={(e) => setWoForm({ ...woForm, start_at: e.target.value })}
+                            required
+                          />
+                        </div>
+                        <DialogFooter className="gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => setWoDialogOpen(false)}
+                            disabled={submitting}
+                          >
+                            <XIcon className="mr-1 h-3 w-3" />取消
+                          </Button>
+                          <Button type="submit" disabled={submitting}>
+                            <CheckCircle2 className="mr-1 h-3 w-3" />
+                            {editingWoReportId ? '保存修改' : '确认录入'}
+                          </Button>
+                        </DialogFooter>
+                      </form>
+                    </DialogContent>
+                  </Dialog>
                 )}
-              </form>
+
+                {workOrderReports.length > 0 && (
+                  <div className="border border-border/40 bg-background/30 p-2 text-xs">
+                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground">当前活跃批次</div>
+                    {(() => {
+                      const active = workOrderReports.find((r) => r.status === '活跃') || workOrderReports[0];
+                      return (
+                        <div className="mt-1 grid grid-cols-2 gap-2 font-mono">
+                          <div>
+                            <span className="text-muted-foreground">批号 </span>
+                            <span className="text-amber-400">{active.batch_no}</span>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground">开工 </span>
+                            <span className="text-foreground/90">{formatDateTime(active.start_at)}</span>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
+              </div>
             )}
           </CardContent>
         </Card>
@@ -621,6 +589,37 @@ export function WorkOrderDetailView({ params }: { params: Promise<{ id: string }
               <p className="py-4 text-center text-xs text-muted-foreground">请选择工序</p>
             ) : (
               <form onSubmit={handleOpReportSubmit} className="space-y-3">
+                {/* 抬头：当前批次信息(从工单报工继承) */}
+                {(() => {
+                  const currentBatchId = opForm.work_order_report_id || workOrderReports[0]?.id || '';
+                  const currentBatch = workOrderReports.find((r) => r.id === currentBatchId);
+                  return (
+                    <div className="border border-amber-500/30 bg-amber-900/10 p-2.5">
+                      <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-amber-300/80">
+                        <ChevronRight className="h-3 w-3" />当前报工批次(抬头)
+                      </div>
+                      <div className="mt-1.5 flex items-center gap-3 text-sm">
+                        <div>
+                          <span className="text-[10px] text-muted-foreground">生产批号</span>
+                          <div className="font-mono text-amber-400">{currentBatch?.batch_no || '-'}</div>
+                        </div>
+                        <div className="h-7 w-px bg-border/40" />
+                        <div>
+                          <span className="text-[10px] text-muted-foreground">开工时间</span>
+                          <div className="font-mono text-foreground/90">{currentBatch ? formatDateTime(currentBatch.start_at) : '-'}</div>
+                        </div>
+                        <div className="h-7 w-px bg-border/40" />
+                        <div>
+                          <span className="text-[10px] text-muted-foreground">状态</span>
+                          <div className={`font-mono ${currentBatch?.status === '活跃' ? 'text-emerald-400' : 'text-slate-400'}`}>
+                            {currentBatch?.status || '-'}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 <div className="border border-border/40 bg-background/30 p-2 text-xs">
                   <div className="flex items-center justify-between">
                     <div className="text-muted-foreground">
@@ -646,7 +645,7 @@ export function WorkOrderDetailView({ params }: { params: Promise<{ id: string }
 
                 <div>
                   <label className="text-xs text-muted-foreground">
-                    所属工单报工批次 <span className="text-rose-400">*</span>
+                    切换报工批次 <span className="text-rose-400">*</span>
                   </label>
                   <select
                     className="flex h-9 w-full border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
@@ -657,7 +656,6 @@ export function WorkOrderDetailView({ params }: { params: Promise<{ id: string }
                     }}
                     required
                   >
-                    <option value="" disabled>选择批次</option>
                     {workOrderReports.map((r) => (
                       <option
                         key={r.id}
@@ -870,7 +868,7 @@ export function WorkOrderDetailView({ params }: { params: Promise<{ id: string }
                               )}
                               <button
                                 type="button"
-                                onClick={() => handleEditWoReport(r)}
+                                onClick={() => openEditWoDialog(r)}
                                 className="rounded border border-amber-500/40 px-1.5 py-0.5 text-[10px] text-amber-400 hover:bg-amber-900/20"
                                 title="修改"
                               >
