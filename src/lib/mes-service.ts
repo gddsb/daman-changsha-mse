@@ -369,43 +369,77 @@ export async function createWorkOrder(input: CreateWorkOrderInput) {
   return toWoView(data as Record<string, unknown>);
 }
 
-export async function getWorkOrder(id: string) {
+export async function getWorkOrder(
+  id: string
+): Promise<{
+  workOrder: WorkOrder;
+  operations: WorkOrderOperation[];
+  workOrderReports: WorkOrderReport[];
+  operationReports: OperationReport[];
+} | null> {
   const c = getSupabaseClient();
+  const isUuid = /^[0-9a-f-]{36}$/i.test(id);
   const { data: wo, error } = await c
     .from("work_orders")
     .select("*")
-    .eq("id", id)
+    .eq(isUuid ? "id" : "order_no", id)
     .maybeSingle();
   if (error) throw error;
   if (!wo) return null;
 
-  const { data: ops } = await c
-    .from("work_order_operations")
-    .select("*")
-    .eq("work_order_id", id)
+  const woUuid = String(wo.id);
+  const orderNo = String(wo.order_no);
+
+  const { data: pd } = await c
+    .from("process_dictionary")
+    .select("id, process_code, process_name, sequence")
     .order("sequence", { ascending: true });
+  let ops: Array<Record<string, unknown>>;
+  if (pd && pd.length > 0) {
+    ops = pd.map((p) => ({
+      id: `pd-${p.process_code}`,
+      work_order_id: woUuid,
+      sequence: Number(p.sequence),
+      operation_name: String(p.process_name),
+      status: "待开工",
+      good_quantity: 0,
+      scrap_quantity: 0,
+    }));
+  } else {
+    const { data: legacyOps } = await c
+      .from("work_order_operations")
+      .select("*")
+      .eq("work_order_id", woUuid)
+      .order("sequence", { ascending: true });
+    ops = legacyOps ?? [];
+  }
 
   const { data: woReports } = await c
     .from("work_order_reports")
     .select("*")
-    .eq("work_order_id", id)
+    .eq("work_order_no", orderNo)
     .order("start_at", { ascending: false })
     .limit(50);
 
-  const woReportIds = (woReports ?? []).map((r) => r.id);
-  let opReports: any[] = [];
-  if (woReportIds.length) {
+  let opReports: Array<Record<string, unknown>> = [];
+  if (woReports && woReports.length > 0) {
+    const orFilters: string[] = [];
+    for (const r of woReports) {
+      orFilters.push(
+        `and(work_order_no.eq.${orderNo},batch_no.eq.${String(r.batch_no)},finish_seq.eq.${Number(r.finish_seq)})`
+      );
+    }
     const { data: ors } = await c
       .from("operation_reports")
       .select("*")
-      .in("work_order_report_id", woReportIds)
+      .or(orFilters.join(","))
       .order("sequence", { ascending: true });
     opReports = ors ?? [];
   }
 
   return {
     workOrder: toWoView(wo as Record<string, unknown>),
-    operations: (ops ?? []).map(toOpView),
+    operations: ops.map(toOpView),
     workOrderReports: (woReports ?? []).map(toWorkOrderReportView),
     operationReports: opReports.map(toOperationReportView),
   };

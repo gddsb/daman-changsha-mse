@@ -50,8 +50,8 @@ const NAV_GROUPS: NavGroup[] = [
     icon: ClipboardList,
     children: [
       { href: '/work-orders', label: '工单管理', icon: ClipboardList },
-      { href: '/reports', label: '报工管理', icon: ClipboardEdit },
       { href: '/production-plan', label: '七天计划', icon: CalendarRange },
+      { href: '/reports', label: '报工管理', icon: ClipboardEdit },
     ],
   },
   {

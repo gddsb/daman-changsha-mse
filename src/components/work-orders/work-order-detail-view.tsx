@@ -763,7 +763,7 @@ export function WorkOrderDetailView({ params }: { params: Promise<{ id: string }
                   }`}
                 >
                   <div className="flex items-center justify-between">
-                    <span className="font-mono text-[10px] text-muted-foreground">{op.sequence}/13</span>
+                    <span className="font-mono text-[10px] text-muted-foreground">{op.sequence}/8</span>
                   </div>
                   <div className="mt-1 truncate text-xs font-medium text-foreground/90">{op.operation_name}</div>
                   <div className="mt-1 flex items-baseline justify-between font-mono text-[10px]">

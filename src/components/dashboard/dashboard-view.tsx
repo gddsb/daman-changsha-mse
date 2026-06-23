@@ -150,7 +150,7 @@ export function DashboardView() {
         <Card className="border-slate-800 bg-slate-900/60">
           <CardHeader className="border-b border-slate-800 pb-2">
             <CardTitle className="text-sm font-medium text-slate-200">
-              工序不良率排行
+              工序不良 TOP3
             </CardTitle>
           </CardHeader>
           <CardContent className="pt-2 px-3 pb-3">
@@ -161,7 +161,7 @@ export function DashboardView() {
                 <span className="text-center">昨日</span>
                 <span className="text-center">本月</span>
               </div>
-              {data.processDefectStats.map((p) => {
+              {data.processDefectStats.slice(0, 3).map((p) => {
                 const tone = (r: number) =>
                   r > 2
                     ? "text-rose-400"
@@ -172,11 +172,13 @@ export function DashboardView() {
                         : "text-slate-600";
                 const fmtRate = (r: number) =>
                   r > 0 ? `${r.toFixed(2)}%` : "—";
-                const renderCell = (rate: number, inspected: number, scrap: number) => (
+                const renderCell = (scrap: number, rate: number) => (
                   <div className="text-center">
-                    <div className={`font-mono tabular-nums ${tone(rate)}`}>{fmtRate(rate)}</div>
-                    <div className="text-[10px] text-slate-600 font-mono tabular-nums">
-                      {inspected > 0 ? `${scrap}/${inspected}` : "0/0"}
+                    <div className="text-slate-200 font-mono tabular-nums">
+                      {scrap > 0 ? `${scrap}罐` : "—"}
+                    </div>
+                    <div className={`text-[10px] font-mono tabular-nums ${tone(rate)}`}>
+                      {fmtRate(rate)}
                     </div>
                   </div>
                 );
@@ -186,9 +188,9 @@ export function DashboardView() {
                       {p.process}
                     </div>
                     <div className="grid grid-cols-3 gap-1 py-1 border-b border-slate-800/40">
-                      {renderCell(p.today.scrapRate, p.today.inspected, p.today.scrap)}
-                      {renderCell(p.yesterday.scrapRate, p.yesterday.inspected, p.yesterday.scrap)}
-                      {renderCell(p.month.scrapRate, p.month.inspected, p.month.scrap)}
+                      {renderCell(p.today.scrap, p.today.scrapRate)}
+                      {renderCell(p.yesterday.scrap, p.yesterday.scrapRate)}
+                      {renderCell(p.month.scrap, p.month.scrapRate)}
                     </div>
                   </Fragment>
                 );
