@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   ClipboardList,
   CalendarRange,
+  FileText,
   ShieldCheck,
   Package,
   Wrench,
@@ -50,6 +51,7 @@ const NAV_GROUPS: NavGroup[] = [
     children: [
       { href: '/work-orders', label: '工单管理', icon: ClipboardList },
       { href: '/production-plan', label: '七天计划', icon: CalendarRange },
+      { href: '/reports', label: '生产报工', icon: FileText },
     ],
   },
   {

@@ -450,6 +450,182 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["daily_quality_reports"]["Insert"]>;
         Relationships: [];
       };
+work_order_reports: {
+  Row: {
+    id: string;
+    report_no: string | null;
+    work_order_id: string;
+    work_order_no: string;
+    completion_seq: number;
+    batch_no: string;
+    start_time: string;
+    end_time: string | null;
+    skilled_worker_count: number | null;
+    regular_worker_count: number | null;
+    contract_worker_count: number | null;
+    other_worker_count: number | null;
+    input_quantity: number | null;
+    pass_quantity: number | null;
+    fail_quantity: number | null;
+    is_closed: number | null;
+    close_type: string | null;
+    created_at: string | null;
+  };
+  Insert: {
+    id?: string;
+    report_no?: string | null;
+    work_order_id: string;
+    work_order_no: string;
+    completion_seq?: number;
+    batch_no: string;
+    start_time: string;
+    end_time?: string | null;
+    skilled_worker_count?: number | null;
+    regular_worker_count?: number | null;
+    contract_worker_count?: number | null;
+    other_worker_count?: number | null;
+    input_quantity?: number | null;
+    pass_quantity?: number | null;
+    fail_quantity?: number | null;
+    is_closed?: number | null;
+    close_type?: string | null;
+    created_at?: string | null;
+  };
+  Update: Partial<Database["public"]["Tables"]["work_order_reports"]["Insert"]>;
+  Relationships: [];
+};
+operation_reports: {
+  Row: {
+    id: string;
+    work_order_report_id: string;
+    work_order_no: string;
+    batch_no: string;
+    operation_seq: number;
+    operation_name: string;
+    input_quantity: number | null;
+    pass_quantity: number | null;
+    fail_quantity: number | null;
+    incoming_defect_piece: number | null;
+    incoming_defect_cover: number | null;
+    process_defect_piece: number | null;
+    process_defect_cover: number | null;
+    report_time: string | null;
+    created_at: string | null;
+  };
+  Insert: {
+    id?: string;
+    work_order_report_id: string;
+    work_order_no: string;
+    batch_no: string;
+    operation_seq: number;
+    operation_name: string;
+    input_quantity?: number | null;
+    pass_quantity?: number | null;
+    fail_quantity?: number | null;
+    incoming_defect_piece?: number | null;
+    incoming_defect_cover?: number | null;
+    process_defect_piece?: number | null;
+    process_defect_cover?: number | null;
+    report_time?: string | null;
+    created_at?: string | null;
+  };
+  Update: Partial<Database["public"]["Tables"]["operation_reports"]["Insert"]>;
+  Relationships: [];
+};
+operation_defects: {
+  Row: {
+    id: string;
+    work_order_report_id: string;
+    work_order_no: string;
+    batch_no: string;
+    defect_category: string;
+    defect_name: string;
+    defect_quantity: number | null;
+    unit: string | null;
+    created_at: string | null;
+  };
+  Insert: {
+    id?: string;
+    work_order_report_id: string;
+    work_order_no: string;
+    batch_no: string;
+    defect_category: string;
+    defect_name: string;
+    defect_quantity?: number | null;
+    unit?: string | null;
+    created_at?: string | null;
+  };
+  Update: Partial<Database["public"]["Tables"]["operation_defects"]["Insert"]>;
+  Relationships: [];
+};
+equipment_downtime: {
+  Row: {
+    id: string;
+    work_order_report_id: string;
+    work_order_no: string;
+    batch_no: string;
+    anomaly_type: string;
+    equipment_code: string | null;
+    downtime_type: string | null;
+    problem_description: string | null;
+    start_time: string;
+    end_time: string;
+    duration_minutes: number | null;
+    confirmer: string | null;
+    created_at: string | null;
+  };
+  Insert: {
+    id?: string;
+    work_order_report_id: string;
+    work_order_no: string;
+    batch_no: string;
+    anomaly_type: string;
+    equipment_code?: string | null;
+    downtime_type?: string | null;
+    problem_description?: string | null;
+    start_time: string;
+    end_time: string;
+    duration_minutes?: number | null;
+    confirmer?: string | null;
+    created_at?: string | null;
+  };
+  Update: Partial<Database["public"]["Tables"]["equipment_downtime"]["Insert"]>;
+  Relationships: [];
+};
+process_infos: {
+  Row: {
+    id: string;
+    work_order_report_id: string;
+    work_order_no: string;
+    batch_no: string;
+    completion_seq: number;
+    operation_seq: number;
+    operation_name: string | null;
+    material_batch_no: string | null;
+    quantity: number | null;
+    material_label_image: string | null;
+    incoming_defect_image: string | null;
+    process_defect_image: string | null;
+    created_at: string | null;
+  };
+  Insert: {
+    id?: string;
+    work_order_report_id: string;
+    work_order_no: string;
+    batch_no: string;
+    completion_seq: number;
+    operation_seq: number;
+    operation_name?: string | null;
+    material_batch_no?: string | null;
+    quantity?: number | null;
+    material_label_image?: string | null;
+    incoming_defect_image?: string | null;
+    process_defect_image?: string | null;
+    created_at?: string | null;
+  };
+  Update: Partial<Database["public"]["Tables"]["process_infos"]["Insert"]>;
+  Relationships: [];
+};
       health_check: {
         Row: {
           id: number;

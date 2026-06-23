@@ -1,22 +1,25 @@
 "use client";
 
-import { use, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Skeleton } from '@/components/ui/skeleton';
-import { StatusBadge } from '@/components/shared/status-badge';
-import { ProgressBar } from '@/components/shared/progress-bar';
+import { use, useEffect, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import { StatusBadge } from "@/components/shared/status-badge";
+import { ProgressBar } from "@/components/shared/progress-bar";
+import { ReportDialog } from "@/components/work-orders/report-dialog";
 import {
   ArrowLeft,
   Factory,
   History,
   Package,
   AlertCircle,
-} from 'lucide-react';
-import { formatDate, formatDateTime, formatNumber } from '@/lib/format';
-import { WO_STATUS_LABELS } from '@/lib/constants';
-import type { WorkOrder, WorkOrderOperation } from '@/types/mes';
+  FileText,
+  Play,
+} from "lucide-react";
+import { formatDate, formatDateTime, formatNumber } from "@/lib/format";
+import { WO_STATUS_LABELS } from "@/lib/constants";
+import type { WorkOrder, WorkOrderOperation, WorkOrderReport } from "@/types/mes";
 
 type DetailResponse = {
   workOrder: WorkOrder;
@@ -28,23 +31,36 @@ export function WorkOrderDetailView({ params }: { params: Promise<{ id: string }
   const router = useRouter();
   const [data, setData] = useState<DetailResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [reports, setReports] = useState<WorkOrderReport[]>([]);
+  const [showReportDialog, setShowReportDialog] = useState(false);
+  const [editingReport, setEditingReport] = useState<WorkOrderReport | null>(null);
+
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const r = await fetch(`/api/work-orders/${id}`, { cache: "no-store" });
+      const j = await r.json();
+      if (j?.success) setData(j.data as DetailResponse);
+      else setData(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [id]);
+
+  const fetchReports = useCallback(async () => {
+    try {
+      const r = await fetch(`/api/reports?work_order_id=${id}`, { cache: "no-store" });
+      const j = await r.json();
+      if (j?.success) setReports(j.data);
+    } catch (e) {
+      console.error("fetch reports error", e);
+    }
+  }, [id]);
 
   useEffect(() => {
-    let alive = true;
-    setLoading(true);
-    fetch(`/api/work-orders/${id}`)
-      .then((r) => r.json())
-      .then((json) => {
-        if (!alive) return;
-        if (json?.success) setData(json.data as DetailResponse);
-        else setData(null);
-      })
-      .catch(() => alive && setData(null))
-      .finally(() => alive && setLoading(false));
-    return () => {
-      alive = false;
-    };
-  }, [id]);
+    fetchData();
+    fetchReports();
+  }, [fetchData, fetchReports]);
 
   if (loading) {
     return (
@@ -77,6 +93,9 @@ export function WorkOrderDetailView({ params }: { params: Promise<{ id: string }
     ? Math.min(100, Math.round((wo.completed_quantity / wo.quantity) * 100))
     : 0;
 
+  const canReport = wo.status === "生产中";
+  const hasOpenReport = reports.some((r) => !r.is_closed);
+
   return (
     <div className="space-y-4 p-6">
       {/* 顶部 */}
@@ -98,6 +117,36 @@ export function WorkOrderDetailView({ params }: { params: Promise<{ id: string }
             </div>
           </div>
         </div>
+        <div className="flex items-center gap-2">
+          {canReport && !hasOpenReport && (
+            <Button
+              onClick={() => {
+                setEditingReport(null);
+                setShowReportDialog(true);
+              }}
+              className="gap-1.5 bg-orange-500 hover:bg-orange-600 text-white"
+            >
+              <Play className="h-4 w-4" />
+              开始报工
+            </Button>
+          )}
+          {canReport && hasOpenReport && (
+            <Button
+              variant="outline"
+              onClick={() => {
+                const open = reports.find((r) => !r.is_closed);
+                if (open) {
+                  setEditingReport(open);
+                  setShowReportDialog(true);
+                }
+              }}
+              className="gap-1.5 border-amber-500/40 text-amber-500 hover:bg-amber-500/10"
+            >
+              <FileText className="h-4 w-4" />
+              继续报工
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* 工单基本信息 */}
@@ -118,7 +167,8 @@ export function WorkOrderDetailView({ params }: { params: Promise<{ id: string }
             <Field label="产线" value={wo.line_name} />
             <Field label="计划数量" value={formatNumber(wo.quantity) + " " + wo.unit} mono />
             <Field label="已完工" value={formatNumber(wo.completed_quantity) + " " + wo.unit} mono />
-            <Field label="不良数" value={formatNumber(wo.scrap_quantity) + " " + wo.unit} mono />            <Field label="计划开始" value={wo.planned_start_date === "—" ? "—" : formatDate(wo.planned_start_date)} />
+            <Field label="不良数" value={formatNumber(wo.scrap_quantity) + " " + wo.unit} mono />
+            <Field label="计划开始" value={wo.planned_start_date === "—" ? "—" : formatDate(wo.planned_start_date)} />
             <Field label="计划结束" value={wo.planned_end_date === "—" ? "—" : formatDate(wo.planned_end_date)} />
             <Field label="实际开始" value={wo.actual_start_date === "—" ? "—" : formatDateTime(wo.actual_start_date)} />
             <Field label="实际结束" value={wo.actual_end_date === "—" ? "—" : formatDateTime(wo.actual_end_date)} />
@@ -137,6 +187,87 @@ export function WorkOrderDetailView({ params }: { params: Promise<{ id: string }
           {wo.notes && wo.notes !== "—" && (
             <div className="mt-3 rounded border border-border/60 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
               备注: {wo.notes}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* 报工批次列表 */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between text-base">
+            <span className="flex items-center gap-2">
+              <FileText className="h-4 w-4" />
+              报工批次（{reports.length}）
+            </span>
+            {reports.length > 0 && (
+              <Button variant="ghost" size="sm" onClick={fetchReports} className="text-xs text-fg-2">
+                刷新
+              </Button>
+            )}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {reports.length === 0 ? (
+            <div className="py-6 text-center text-sm text-muted-foreground">
+              暂无报工批次
+              {canReport && (
+                <span className="ml-1 text-orange-500">点击右上「开始报工」创建第一批次</span>
+              )}
+              {!canReport && wo.status !== "生产中" && (
+                <span className="ml-1 text-fg-3">（工单需先开工才能报工）</span>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {reports.map((r) => (
+                <div
+                  key={r.id}
+                  className={
+                    "rounded border px-3 py-2 text-sm " +
+                    (r.is_closed
+                      ? "border-line bg-bg-1/40"
+                      : "border-amber-500/30 bg-amber-500/5")
+                  }
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <span className="font-mono text-fg-0">#{r.completion_seq}</span>
+                      <span className="font-mono text-fg-0">{r.batch_no}</span>
+                      <span className="text-xs text-fg-2">
+                        开工 {formatDateTime(r.start_time)}
+                      </span>
+                      {r.end_time && (
+                        <span className="text-xs text-fg-2">
+                          完工 {formatDateTime(r.end_time)}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-xs text-fg-1">
+                        投入 {r.input_quantity} / 合格 {r.pass_quantity} / 不良 {r.fail_quantity}
+                      </span>
+                      {r.is_closed ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-sm border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 text-xs">
+                          {r.close_type === "auto" ? "自动关闭" : "手工关闭"}
+                        </span>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setEditingReport(r);
+                            setShowReportDialog(true);
+                          }}
+                          className="h-6 text-xs border-amber-500/40 text-amber-500 hover:bg-amber-500/10"
+                        >
+                          录入工序 / 结束
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </CardContent>
@@ -199,6 +330,27 @@ export function WorkOrderDetailView({ params }: { params: Promise<{ id: string }
           </ul>
         </CardContent>
       </Card>
+
+      {/* 报工弹窗 */}
+      {showReportDialog && (
+        <ReportDialog
+          open={showReportDialog}
+          onOpenChange={(o) => {
+            setShowReportDialog(o);
+            if (!o) {
+              setEditingReport(null);
+              fetchReports();
+            }
+          }}
+          workOrder={wo}
+          operations={operations}
+          editingReport={editingReport}
+          onSuccess={() => {
+            fetchReports();
+            fetchData();
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -267,3 +267,109 @@ export interface DashboardSummary {
   recentDefects: RecentDefect[];
   lastUpdated: string;
 }
+
+// =====================================================================
+// 报工管理（工单报工主表 + 4 张子表）
+// =====================================================================
+
+/** 报工状态：进行中 / 已关闭 */
+export type WorkOrderReportStatus = "进行中" | "已关闭";
+
+/** 报工关闭类型：自动 / 手工 */
+export type WorkOrderReportCloseType = "auto" | "manual" | null;
+
+/** 工单报工主表 */
+export interface WorkOrderReport {
+  id: string;
+  report_no: string;
+  work_order_id: string;
+  work_order_no: string;
+  completion_seq: number;
+  batch_no: string;
+  start_time: string;
+  end_time: string | null;
+  skilled_worker_count: number;
+  regular_worker_count: number;
+  contract_worker_count: number;
+  other_worker_count: number;
+  input_quantity: number;
+  pass_quantity: number;
+  fail_quantity: number;
+  is_closed: boolean;
+  close_type: WorkOrderReportCloseType;
+  created_at: string;
+}
+
+/** 工序报工子表 */
+export interface OperationReport {
+  id: string;
+  work_order_report_id: string;
+  work_order_no: string;
+  batch_no: string;
+  operation_seq: number;
+  operation_name: string;
+  input_quantity: number;
+  pass_quantity: number;
+  fail_quantity: number;
+  incoming_defect_piece: number;
+  incoming_defect_cover: number;
+  process_defect_piece: number;
+  process_defect_cover: number;
+  report_time: string;
+  created_at: string;
+}
+
+/** 工序不良子表 */
+export interface OperationDefect {
+  id: string;
+  work_order_report_id: string;
+  work_order_no: string;
+  batch_no: string;
+  defect_category: "制程不良" | "来料不良";
+  defect_name: string;
+  defect_quantity: number;
+  unit: "小片" | "带盖" | null;
+  created_at: string;
+}
+
+/** 异常工时子表 */
+export interface EquipmentDowntime {
+  id: string;
+  work_order_report_id: string;
+  work_order_no: string;
+  batch_no: string;
+  anomaly_type: "设备故障" | "来料不良" | "其它原因";
+  equipment_code: string;
+  downtime_type: string;
+  problem_description: string;
+  start_time: string;
+  end_time: string;
+  duration_minutes: number;
+  confirmer: string;
+  created_at: string;
+}
+
+/** 制程信息子表 */
+export interface ProcessInfo {
+  id: string;
+  work_order_report_id: string;
+  work_order_no: string;
+  batch_no: string;
+  completion_seq: number;
+  operation_seq: number;
+  operation_name: string;
+  material_batch_no: string;
+  quantity: number;
+  material_label_image: string;
+  incoming_defect_image: string;
+  process_defect_image: string;
+  created_at: string;
+}
+
+/** 报工完整快照（主表 + 子表汇总，给详情页用） */
+export interface WorkOrderReportDetail extends WorkOrderReport {
+  operations: OperationReport[];
+  defects: OperationDefect[];
+  downtimes: EquipmentDowntime[];
+  process_infos: ProcessInfo[];
+}

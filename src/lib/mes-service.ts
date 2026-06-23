@@ -739,3 +739,490 @@ export async function importProducts(
   return result;
 }
 
+
+/* ============================================================
+ * 报工管理（工单报工主表 + 4 张子表）
+ *
+ * 业务流程：
+ *   1. 工单必须已开工（status = 生产中）才能开始报工
+ *   2. 同一工单可以有多个工单报工批次（completion_seq 自增 1..N）
+ *      - 当前已报工批次未关闭时，禁止创建新批次
+ *   3. 工序报工：每批次下可对每道工序报工；首道工序报工后所有工序可报工
+ *   4. 工单结束：
+ *      - 报工数量达到 planned_quantity → 自动关闭（is_closed=1, close_type=auto）
+ *      - 未达到 planned_quantity → 手工关闭（is_closed=1, close_type=manual）
+ *      - 关闭前一致性检查：input - sum(fail) = pass（按整工单聚合）
+ * ============================================================ */
+
+import type {
+  WorkOrderReport,
+  OperationReport,
+  OperationDefect,
+  EquipmentDowntime,
+  ProcessInfo,
+  WorkOrderReportDetail,
+} from "@/types/mes";
+
+const toReportView = (r: Record<string, unknown>): WorkOrderReport => ({
+  id: String(r.id),
+  report_no: cn(r.report_no),
+  work_order_id: String(r.work_order_id),
+  work_order_no: String(r.work_order_no),
+  completion_seq: Number(r.completion_seq ?? 1),
+  batch_no: String(r.batch_no ?? ""),
+  start_time: String(r.start_time ?? ""),
+  end_time: r.end_time ? String(r.end_time) : null,
+  skilled_worker_count: Number(r.skilled_worker_count ?? 0),
+  regular_worker_count: Number(r.regular_worker_count ?? 0),
+  contract_worker_count: Number(r.contract_worker_count ?? 0),
+  other_worker_count: Number(r.other_worker_count ?? 0),
+  input_quantity: Number(r.input_quantity ?? 0),
+  pass_quantity: Number(r.pass_quantity ?? 0),
+  fail_quantity: Number(r.fail_quantity ?? 0),
+  is_closed: Boolean(r.is_closed),
+  close_type: (r.close_type as WorkOrderReport["close_type"]) ?? null,
+  created_at: String(r.created_at ?? ""),
+});
+
+const toOpReportView = (r: Record<string, unknown>): OperationReport => ({
+  id: String(r.id),
+  work_order_report_id: String(r.work_order_report_id),
+  work_order_no: String(r.work_order_no ?? ""),
+  batch_no: String(r.batch_no ?? ""),
+  operation_seq: Number(r.operation_seq ?? 0),
+  operation_name: String(r.operation_name ?? ""),
+  input_quantity: Number(r.input_quantity ?? 0),
+  pass_quantity: Number(r.pass_quantity ?? 0),
+  fail_quantity: Number(r.fail_quantity ?? 0),
+  incoming_defect_piece: Number(r.incoming_defect_piece ?? 0),
+  incoming_defect_cover: Number(r.incoming_defect_cover ?? 0),
+  process_defect_piece: Number(r.process_defect_piece ?? 0),
+  process_defect_cover: Number(r.process_defect_cover ?? 0),
+  report_time: String(r.report_time ?? ""),
+  created_at: String(r.created_at ?? ""),
+});
+
+const toOpDefectView = (r: Record<string, unknown>): OperationDefect => ({
+  id: String(r.id),
+  work_order_report_id: String(r.work_order_report_id),
+  work_order_no: String(r.work_order_no ?? ""),
+  batch_no: String(r.batch_no ?? ""),
+  defect_category: (r.defect_category as OperationDefect["defect_category"]) ?? "制程不良",
+  defect_name: String(r.defect_name ?? ""),
+  defect_quantity: Number(r.defect_quantity ?? 0),
+  unit: (r.unit as OperationDefect["unit"]) ?? null,
+  created_at: String(r.created_at ?? ""),
+});
+
+const toDowntimeView = (r: Record<string, unknown>): EquipmentDowntime => ({
+  id: String(r.id),
+  work_order_report_id: String(r.work_order_report_id),
+  work_order_no: String(r.work_order_no ?? ""),
+  batch_no: String(r.batch_no ?? ""),
+  anomaly_type: (r.anomaly_type as EquipmentDowntime["anomaly_type"]) ?? "其它原因",
+  equipment_code: String(r.equipment_code ?? ""),
+  downtime_type: String(r.downtime_type ?? ""),
+  problem_description: String(r.problem_description ?? ""),
+  start_time: String(r.start_time ?? ""),
+  end_time: String(r.end_time ?? ""),
+  duration_minutes: Number(r.duration_minutes ?? 0),
+  confirmer: String(r.confirmer ?? ""),
+  created_at: String(r.created_at ?? ""),
+});
+
+const toProcessInfoView = (r: Record<string, unknown>): ProcessInfo => ({
+  id: String(r.id),
+  work_order_report_id: String(r.work_order_report_id),
+  work_order_no: String(r.work_order_no ?? ""),
+  batch_no: String(r.batch_no ?? ""),
+  completion_seq: Number(r.completion_seq ?? 1),
+  operation_seq: Number(r.operation_seq ?? 0),
+  operation_name: String(r.operation_name ?? ""),
+  material_batch_no: String(r.material_batch_no ?? ""),
+  quantity: Number(r.quantity ?? 0),
+  material_label_image: String(r.material_label_image ?? ""),
+  incoming_defect_image: String(r.incoming_defect_image ?? ""),
+  process_defect_image: String(r.process_defect_image ?? ""),
+  created_at: String(r.created_at ?? ""),
+});
+
+/* ---------- 列表 / 详情 ---------- */
+
+export async function listReports(filter: { workOrderId?: string; workOrderNo?: string } = {}): Promise<WorkOrderReport[]> {
+  const supa = getSupabaseClient();
+  let q = supa.from("work_order_reports").select("*").order("created_at", { ascending: false });
+  if (filter.workOrderId) q = q.eq("work_order_id", filter.workOrderId);
+  if (filter.workOrderNo) q = q.eq("work_order_no", filter.workOrderNo);
+  const { data, error } = await q;
+  if (error) throw new Error(`查询报工列表失败: ${error.message}`);
+  return (data ?? []).map(toReportView);
+}
+
+export async function getReportDetail(id: string): Promise<WorkOrderReportDetail | null> {
+  const supa = getSupabaseClient();
+  const { data: r, error } = await supa.from("work_order_reports").select("*").eq("id", id).maybeSingle();
+  if (error) throw new Error(`查询报工详情失败: ${error.message}`);
+  if (!r) return null;
+  const report = toReportView(r);
+
+  const [ops, defs, dts, pis] = await Promise.all([
+    supa.from("operation_reports").select("*").eq("work_order_report_id", id).order("operation_seq"),
+    supa.from("operation_defects").select("*").eq("work_order_report_id", id).order("created_at"),
+    supa.from("equipment_downtime").select("*").eq("work_order_report_id", id).order("start_time"),
+    supa.from("process_infos").select("*").eq("work_order_report_id", id).order("operation_seq"),
+  ]);
+
+  return {
+    ...report,
+    operations: (ops.data ?? []).map(toOpReportView),
+    defects: (defs.data ?? []).map(toOpDefectView),
+    downtimes: (dts.data ?? []).map(toDowntimeView),
+    process_infos: (pis.data ?? []).map(toProcessInfoView),
+  };
+}
+
+/* ---------- 工单报工（主表） ---------- */
+
+export interface CreateReportInput {
+  work_order_id: string;
+  batch_no: string;
+  start_time: string;
+  skilled_worker_count?: number;
+  regular_worker_count?: number;
+  contract_worker_count?: number;
+  other_worker_count?: number;
+}
+
+/** 创建工单报工主表批次。
+ *  规则：
+ *   - 工单必须已开工（status = 生产中）才能开始报工
+ *   - 同一工单存在未关闭批次时禁止创建新批次
+ *   - completion_seq 自动 = max + 1
+ */
+export async function createReport(input: CreateReportInput): Promise<WorkOrderReport> {
+  const supa = getSupabaseClient();
+
+  // 1) 校验工单已开工
+  const { data: wo, error: woErr } = await supa
+    .from("work_orders")
+    .select("id, order_no, status, planned_quantity, completed_quantity")
+    .eq("id", input.work_order_id)
+    .maybeSingle();
+  if (woErr) throw new Error(`查询工单失败: ${woErr.message}`);
+  if (!wo) throw new Error("工单不存在");
+  if (wo.status !== "生产中") {
+    throw new Error(`工单未开工（当前状态：${wo.status}），不能开始报工`);
+  }
+
+  // 2) 校验：当前工单存在未关闭批次时禁止创建新批次
+  const { data: open, error: openErr } = await supa
+    .from("work_order_reports")
+    .select("id, batch_no, completion_seq")
+    .eq("work_order_id", input.work_order_id)
+    .eq("is_closed", 0);
+  if (openErr) throw new Error(`查询已开工报工失败: ${openErr.message}`);
+  if ((open ?? []).length > 0) {
+    const o = open![0];
+    throw new Error(`工单已有进行中的报工批次（${o.batch_no}，完工顺序号 ${o.completion_seq}），请先关闭后再次开始报工`);
+  }
+
+  // 3) 自动生成 completion_seq（max + 1）
+  const { data: seqRows, error: seqErr } = await supa
+    .from("work_order_reports")
+    .select("completion_seq")
+    .eq("work_order_id", input.work_order_id)
+    .order("completion_seq", { ascending: false })
+    .limit(1);
+  if (seqErr) throw new Error(`查询完工顺序号失败: ${seqErr.message}`);
+  const completion_seq = (seqRows && seqRows.length > 0) ? Number(seqRows[0].completion_seq) + 1 : 1;
+  const reportNo = `RPT-${input.work_order_id.slice(0, 6)}-${String(completion_seq).padStart(2, "0")}-${Date.now().toString().slice(-4)}`;
+
+  // 4) 插入
+  const row = {
+    report_no: reportNo,
+    work_order_id: input.work_order_id,
+    work_order_no: wo.order_no,
+    completion_seq,
+    batch_no: input.batch_no,
+    start_time: input.start_time,
+    skilled_worker_count: input.skilled_worker_count ?? 0,
+    regular_worker_count: input.regular_worker_count ?? 0,
+    contract_worker_count: input.contract_worker_count ?? 0,
+    other_worker_count: input.other_worker_count ?? 0,
+    input_quantity: 0,
+    pass_quantity: 0,
+    fail_quantity: 0,
+    is_closed: 0,
+  };
+  const { data, error } = await supa.from("work_order_reports").insert(row).select().maybeSingle();
+  if (error) throw new Error(`创建工单报工失败: ${error.message}`);
+  return toReportView(data!);
+}
+
+/** 关闭工单报工批次。
+ *  - 报工数量达到工单计划数量 → 自动关闭
+ *  - 未达到 → 手工关闭
+ *  - 关闭前一致性检查：input - sum(fail) = pass
+ */
+export async function closeReport(
+  reportId: string,
+  opts: { manual?: boolean; endTime?: string; confirmer?: string } = {}
+): Promise<WorkOrderReport> {
+  const supa = getSupabaseClient();
+  const detail = await getReportDetail(reportId);
+  if (!detail) throw new Error("报工批次不存在");
+  if (detail.is_closed) throw new Error("报工批次已关闭");
+
+  // 计算总投入/合格/不良（聚合所有工序报工）
+  const totalInput = detail.operations.reduce((s, o) => s + (o.input_quantity || 0), 0);
+  const totalPass = detail.operations.reduce((s, o) => s + (o.pass_quantity || 0), 0);
+  const totalFail = detail.operations.reduce((s, o) => s + (o.fail_quantity || 0), 0);
+
+  // 一致性检查：投入数 - 所有工序不良数 = 合格数
+  if (totalInput > 0 && totalInput - totalFail !== totalPass) {
+    throw new Error(
+      `一致性检查失败：投入数 ${totalInput} - 不良数 ${totalFail} ≠ 合格数 ${totalPass}，请修正后再关闭`
+    );
+  }
+
+  // 查询工单计划数量
+  const { data: wo, error: woErr } = await supa
+    .from("work_orders")
+    .select("planned_quantity, status")
+    .eq("id", detail.work_order_id)
+    .maybeSingle();
+  if (woErr) throw new Error(`查询工单失败: ${woErr.message}`);
+
+  const planned = Number(wo?.planned_quantity ?? 0);
+  const isAuto = totalInput >= planned && planned > 0;
+  const isManual = opts.manual === true || !isAuto;
+
+  // 更新批次（endTime 不能小于 start_time，否则用 start_time）
+  const fallbackEnd = new Date().toISOString();
+  const candidate = new Date(opts.endTime ?? fallbackEnd).getTime();
+  const lowerBound = new Date(detail.start_time).getTime();
+  const endTime = new Date(Math.max(candidate, lowerBound)).toISOString();
+  const { data, error } = await supa
+    .from("work_order_reports")
+    .update({
+      input_quantity: totalInput,
+      pass_quantity: totalPass,
+      fail_quantity: totalFail,
+      end_time: endTime,
+      is_closed: 1,
+      close_type: isManual ? "manual" : "auto",
+    })
+    .eq("id", reportId)
+    .select()
+    .maybeSingle();
+  if (error) throw new Error(`关闭报工失败: ${error.message}`);
+
+  // 自动关闭：工单完工
+  if (isAuto && wo) {
+    await supa
+      .from("work_orders")
+      .update({
+        status: "完工",
+        completed_quantity: totalPass,
+        scrap_quantity: totalFail,
+        actual_end_date: endTime,
+      })
+      .eq("id", detail.work_order_id);
+  }
+
+  return toReportView(data!);
+}
+
+/* ---------- 工序报工 ---------- */
+
+export interface CreateOpReportInput {
+  work_order_report_id: string;
+  operation_seq: number;
+  operation_name: string;
+  input_quantity: number;
+  pass_quantity: number;
+  fail_quantity: number;
+  incoming_defect_piece?: number;
+  incoming_defect_cover?: number;
+  process_defect_piece?: number;
+  process_defect_cover?: number;
+}
+
+export async function createOrUpdateOpReport(input: CreateOpReportInput): Promise<OperationReport> {
+  const supa = getSupabaseClient();
+  // 1) 校验批次存在且未关闭
+  const { data: r, error: rErr } = await supa
+    .from("work_order_reports")
+    .select("id, work_order_no, batch_no, is_closed")
+    .eq("id", input.work_order_report_id)
+    .maybeSingle();
+  if (rErr) throw new Error(`查询报工批次失败: ${rErr.message}`);
+  if (!r) throw new Error("报工批次不存在");
+  if (r.is_closed) throw new Error("报工批次已关闭，不能修改工序报工");
+
+  // 2) upsert
+  const payload = {
+    work_order_report_id: input.work_order_report_id,
+    work_order_no: r.work_order_no,
+    batch_no: r.batch_no,
+    operation_seq: input.operation_seq,
+    operation_name: input.operation_name,
+    input_quantity: input.input_quantity,
+    pass_quantity: input.pass_quantity,
+    fail_quantity: input.fail_quantity,
+    incoming_defect_piece: input.incoming_defect_piece ?? 0,
+    incoming_defect_cover: input.incoming_defect_cover ?? 0,
+    process_defect_piece: input.process_defect_piece ?? 0,
+    process_defect_cover: input.process_defect_cover ?? 0,
+  };
+  const { data, error } = await supa
+    .from("operation_reports")
+    .upsert(payload, { onConflict: "work_order_report_id,operation_seq" })
+    .select()
+    .maybeSingle();
+  if (error) throw new Error(`保存工序报工失败: ${error.message}`);
+  return toOpReportView(data!);
+}
+
+/* ---------- 工序不良 ---------- */
+
+export interface CreateOpDefectInput {
+  work_order_report_id: string;
+  defect_category: "制程不良" | "来料不良";
+  defect_name: string;
+  defect_quantity: number;
+  unit?: "小片" | "带盖" | null;
+}
+
+export async function addOpDefect(input: CreateOpDefectInput): Promise<OperationDefect> {
+  const supa = getSupabaseClient();
+  const { data: r, error: rErr } = await supa
+    .from("work_order_reports")
+    .select("id, work_order_no, batch_no, is_closed")
+    .eq("id", input.work_order_report_id)
+    .maybeSingle();
+  if (rErr) throw new Error(`查询报工批次失败: ${rErr.message}`);
+  if (!r) throw new Error("报工批次不存在");
+  if (r.is_closed) throw new Error("报工批次已关闭，不能新增不良");
+  const { data, error } = await supa
+    .from("operation_defects")
+    .insert({
+      work_order_report_id: input.work_order_report_id,
+      work_order_no: r.work_order_no,
+      batch_no: r.batch_no,
+      defect_category: input.defect_category,
+      defect_name: input.defect_name,
+      defect_quantity: input.defect_quantity,
+      unit: input.unit ?? null,
+    })
+    .select()
+    .maybeSingle();
+  if (error) throw new Error(`新增不良失败: ${error.message}`);
+  return toOpDefectView(data!);
+}
+
+export async function deleteOpDefect(id: string): Promise<void> {
+  const supa = getSupabaseClient();
+  const { error } = await supa.from("operation_defects").delete().eq("id", id);
+  if (error) throw new Error(`删除不良失败: ${error.message}`);
+}
+
+/* ---------- 异常工时 ---------- */
+
+export interface CreateDowntimeInput {
+  work_order_report_id: string;
+  anomaly_type: "设备故障" | "来料不良" | "其它原因";
+  equipment_code?: string;
+  downtime_type?: string;
+  problem_description?: string;
+  start_time: string;
+  end_time: string;
+  confirmer?: string;
+}
+
+export async function addDowntime(input: CreateDowntimeInput): Promise<EquipmentDowntime> {
+  const supa = getSupabaseClient();
+  const { data: r, error: rErr } = await supa
+    .from("work_order_reports")
+    .select("id, work_order_no, batch_no")
+    .eq("id", input.work_order_report_id)
+    .maybeSingle();
+  if (rErr) throw new Error(`查询报工批次失败: ${rErr.message}`);
+  if (!r) throw new Error("报工批次不存在");
+
+  const start = new Date(input.start_time).getTime();
+  const end = new Date(input.end_time).getTime();
+  if (!isFinite(start) || !isFinite(end) || end < start) {
+    throw new Error("生产恢复时间不能小于停线开始时间");
+  }
+  const durationMinutes = Math.round((end - start) / 60000);
+
+  const { data, error } = await supa
+    .from("equipment_downtime")
+    .insert({
+      work_order_report_id: input.work_order_report_id,
+      work_order_no: r.work_order_no,
+      batch_no: r.batch_no,
+      anomaly_type: input.anomaly_type,
+      equipment_code: input.equipment_code ?? null,
+      downtime_type: input.downtime_type ?? null,
+      problem_description: input.problem_description ?? null,
+      start_time: input.start_time,
+      end_time: input.end_time,
+      duration_minutes: durationMinutes,
+      confirmer: input.confirmer ?? "当前用户",
+    })
+    .select()
+    .maybeSingle();
+  if (error) throw new Error(`新增异常工时失败: ${error.message}`);
+  return toDowntimeView(data!);
+}
+
+export async function deleteDowntime(id: string): Promise<void> {
+  const supa = getSupabaseClient();
+  const { error } = await supa.from("equipment_downtime").delete().eq("id", id);
+  if (error) throw new Error(`删除异常工时失败: ${error.message}`);
+}
+
+/* ---------- 制程信息 ---------- */
+
+export interface CreateProcessInfoInput {
+  work_order_report_id: string;
+  operation_seq: number;
+  operation_name?: string;
+  material_batch_no?: string;
+  quantity?: number;
+  material_label_image?: string;
+  incoming_defect_image?: string;
+  process_defect_image?: string;
+}
+
+export async function addProcessInfo(input: CreateProcessInfoInput): Promise<ProcessInfo> {
+  const supa = getSupabaseClient();
+  const { data: r, error: rErr } = await supa
+    .from("work_order_reports")
+    .select("id, work_order_no, batch_no, completion_seq")
+    .eq("id", input.work_order_report_id)
+    .maybeSingle();
+  if (rErr) throw new Error(`查询报工批次失败: ${rErr.message}`);
+  if (!r) throw new Error("报工批次不存在");
+  const { data, error } = await supa
+    .from("process_infos")
+    .insert({
+      work_order_report_id: input.work_order_report_id,
+      work_order_no: r.work_order_no,
+      batch_no: r.batch_no,
+      completion_seq: r.completion_seq,
+      operation_seq: input.operation_seq,
+      operation_name: input.operation_name ?? null,
+      material_batch_no: input.material_batch_no ?? null,
+      quantity: input.quantity ?? 0,
+      material_label_image: input.material_label_image ?? null,
+      incoming_defect_image: input.incoming_defect_image ?? null,
+      process_defect_image: input.process_defect_image ?? null,
+    })
+    .select()
+    .maybeSingle();
+  if (error) throw new Error(`新增制程信息失败: ${error.message}`);
+  return toProcessInfoView(data!);
+}
