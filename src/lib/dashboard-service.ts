@@ -156,12 +156,16 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
   });
 
   // === 质量统计（取 quality_inspections 当日）===
-  const failInsp = inspections.filter((i) => i.result === "不合格");
-  const totalSample = inspections.reduce((s, i) => s + (i.sample_size ?? 0), 0);
-  const totalFail = inspections.reduce((s, i) => s + (i.fail_quantity ?? 0), 0);
-  const totalPass = totalSample - totalFail;
-  const firstPassRate = totalSample > 0 ? (totalPass / totalSample) * 100 : 100;
-  const defectRate = totalSample > 0 ? (totalFail / totalSample) * 100 : 0;
+  // 口径：按"检验次数"计算合格率（与质量检验页面一致）
+  //   一次不合格 = 1 次 fail（不是 sample_size 个 fail）
+  //   避免因 fail_quantity=0（种子数据/未填）导致合格率永远 100%
+  const failInsp = inspections.filter((i) => i.result === "fail");
+  const passInsp = inspections.filter((i) => i.result === "pass");
+  const inspectedCount = inspections.length;
+  const passCount = passInsp.length;
+  const failCount = failInsp.length;
+  const firstPassRate = inspectedCount > 0 ? (passCount / inspectedCount) * 100 : 100;
+  const defectRate = inspectedCount > 0 ? (failCount / inspectedCount) * 100 : 0;
 
   // === 7 日产量趋势 ===
   const trendMap = new Map<string, { planned: number; actual: number; scrap: number }>();
@@ -238,9 +242,9 @@ export async function getDashboardSummary(): Promise<DashboardSummary> {
     },
     quality: {
       firstPassRate,
-      inspectedCount: totalSample,
-      passCount: totalPass,
-      failCount: totalFail,
+      inspectedCount,
+      passCount,
+      failCount,
       defectRate,
     },
     outputTrend,
