@@ -24,8 +24,8 @@ import type {
 interface ReportSummary {
   workOrder: WorkOrder;
   reports: Array<{
-    workOrderReport: WorkOrderReport;
-    operationReports: OperationReport[];
+    workOrderReport: WorkOrderReport & Record<string, unknown>;
+    operationReports: Array<OperationReport & Record<string, unknown>>;
   }>;
   totalGood: number;
   totalDefect: number;
@@ -50,12 +50,45 @@ export function ReportsManagementView() {
     setError(null);
     try {
       const resp = await fetch('/api/reports', { cache: 'no-store' });
-      const json: ApiResp = await resp.json();
+      const json: { success: boolean; data?: unknown; error?: string } = await resp.json();
       if (!json.success) {
         setError(json.error ?? '查询失败');
         setSummaries([]);
       } else {
-        setSummaries(json.data ?? []);
+        const raw = (json.data ?? []) as Array<Record<string, unknown>>;
+        // V2 形态: { workOrder, batches[], operationReports[], totalQualified, totalDefect }
+        // 适配成旧 V1 形态: { workOrder, reports: [{ workOrderReport, operationReports[] }], totalGood, totalDefect }
+        const adapted = raw.map((s) => {
+          const batches = ((s as { batches?: unknown[] }).batches
+            ?? (s as { reports?: unknown[] }).reports
+            ?? []) as Array<Record<string, unknown>>;
+          const opReports = ((s as { operationReports?: unknown[] }).operationReports
+            ?? []) as Array<Record<string, unknown>>;
+          const reports = batches.map((b) => {
+            const batchNo = String(
+              (b as { batchNo?: string; batch_no?: string }).batchNo
+              ?? (b as { batch_no?: string }).batch_no
+              ?? ''
+            );
+            const related = opReports.filter(
+              (o) => String((o as { batchNo?: string; batch_no?: string }).batchNo
+                ?? (o as { batch_no?: string }).batch_no
+                ?? '') === batchNo
+            );
+            return { workOrderReport: b, operationReports: related };
+          });
+          return {
+            workOrder: s.workOrder as ReportSummary['workOrder'],
+            reports,
+            totalGood: Number(
+              (s as { totalGood?: number }).totalGood
+              ?? (s as { totalQualified?: number }).totalQualified
+              ?? 0
+            ),
+            totalDefect: Number((s as { totalDefect?: number }).totalDefect ?? 0),
+          };
+        });
+        setSummaries(adapted as ReportSummary[]);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : '网络错误');
@@ -69,7 +102,7 @@ export function ReportsManagementView() {
     fetchData();
   }, [fetchData]);
 
-  // 状态汇总
+  // 状态汇总（fetchData 已将 V2 拍平成 V1 reports 形态）
   const stats = useMemo(() => {
     let totalWorkOrders = summaries.length;
     let totalBatchCount = 0;
@@ -81,8 +114,19 @@ export function ReportsManagementView() {
       for (const r of s.reports) {
         totalOpReportCount += r.operationReports.length;
         for (const op of r.operationReports) {
-          totalGood += op.qualified_qty;
-          totalDefect += op.defect_qty;
+          const good = Number(
+            (op as { qualifiedQty?: number; qualified_qty?: number }).qualifiedQty
+            ?? (op as { qualified_qty?: number }).qualified_qty
+            ?? 0
+          );
+          const defect = Number(
+            (op as { defectQty?: number; defect_qty?: number }).defectQty
+            ?? (op as { defect_qty?: number }).defect_qty
+            ?? (Number((op as { incomingDefectTotal?: number }).incomingDefectTotal ?? 0)
+              + Number((op as { processDefectTotal?: number }).processDefectTotal ?? 0))
+          );
+          totalGood += good;
+          totalDefect += defect;
         }
       }
       totalGood += s.totalGood;
@@ -370,8 +414,23 @@ function BatchReportRow({
   batch: { workOrderReport: WorkOrderReport; operationReports: OperationReport[] };
 }) {
   const r = batch.workOrderReport;
-  const batchGood = batch.operationReports.reduce((s, op) => s + op.qualified_qty, 0);
-  const batchDefect = batch.operationReports.reduce((s, op) => s + op.defect_qty, 0);
+  const batchGood = batch.operationReports.reduce((s, op) => {
+    const opAny = op as unknown as { qualifiedQty?: number; qualified_qty?: number };
+    return s + Number(opAny.qualifiedQty ?? opAny.qualified_qty ?? 0);
+  }, 0);
+  const batchDefect = batch.operationReports.reduce((s, op) => {
+    const opAny = op as unknown as {
+      defectQty?: number;
+      defect_qty?: number;
+      incomingDefectTotal?: number;
+      processDefectTotal?: number;
+    };
+    return s + Number(
+      opAny.defectQty
+      ?? opAny.defect_qty
+      ?? (Number(opAny.incomingDefectTotal ?? 0) + Number(opAny.processDefectTotal ?? 0))
+    );
+  }, 0);
   const totalWorkers = r.skilled_workers + r.general_workers + r.labor_workers;
   return (
     <div className="px-4 py-2.5">
@@ -384,19 +443,10 @@ function BatchReportRow({
           <Clock className="h-3 w-3" />
           开始 {formatDateTime(r.start_at)}
         </span>
-        {r.change_line_at && (
-          <span className="text-xs text-fg-2">
-            换线 {formatDateTime(r.change_line_at)}
-          </span>
-        )}
         <span className="text-xs text-fg-2">
           技工/普工/劳务：<span className="font-mono text-fg-1">{r.skilled_workers}</span> /{' '}
           <span className="font-mono text-fg-1">{r.general_workers}</span> /{' '}
           <span className="font-mono text-fg-1">{r.labor_workers}</span>
-          <span className="ml-1 text-fg-3">（合计 {totalWorkers}）</span>
-        </span>
-        <span className="text-xs text-fg-2">
-          清场 <span className="font-mono text-fg-1">{r.cleanup_minutes}</span> 分钟
         </span>
         {r.notes && (
           <span className="text-xs text-fg-2">
@@ -431,27 +481,68 @@ function BatchReportRow({
               </tr>
             </thead>
             <tbody className="divide-y divide-border/40 font-mono tabular-nums">
-              {batch.operationReports.map((op) => (
+              {batch.operationReports.map((op) => {
+                const opAny = op as unknown as {
+                  sequence?: number;
+                  processName?: string;
+                  process_name?: string;
+                  materialCode?: string;
+                  material_code?: string;
+                  materialName?: string;
+                  material_name?: string;
+                  materialBatchNo?: string;
+                  material_batch_no?: string;
+                  quantity?: number | null;
+                  input_qty?: number;
+                  incomingDefectTotal?: number;
+                  incoming_defect_total?: number;
+                  processDefectTotal?: number;
+                  process_defect_total?: number;
+                  defectQty?: number;
+                  defect_qty?: number;
+                  qualifiedQty?: number;
+                  qualified_qty?: number;
+                  notes?: string;
+                };
+                const seq = opAny.sequence ?? 0;
+                const procName = opAny.processName ?? opAny.process_name ?? '—';
+                const matCode = opAny.materialCode ?? opAny.material_code ?? '';
+                const matName = opAny.materialName ?? opAny.material_name ?? '';
+                const matBatch = opAny.materialBatchNo ?? opAny.material_batch_no ?? '';
+                const input = opAny.input_qty ?? opAny.quantity ?? 0;
+                const defect = Number(
+                  opAny.defect_qty
+                  ?? opAny.defectQty
+                  ?? (Number(opAny.incoming_defect_total ?? opAny.incomingDefectTotal ?? 0)
+                    + Number(opAny.process_defect_total ?? opAny.processDefectTotal ?? 0))
+                );
+                const qualified = Number(
+                  opAny.qualified_qty
+                  ?? opAny.qualifiedQty
+                  ?? Math.max(0, Number(input ?? 0) - defect)
+                );
+                return (
                 <tr key={op.id} className="text-fg-0 hover:bg-bg-1">
-                  <td className="px-3 py-1.5 text-fg-2">{op.sequence}</td>
-                  <td className="px-3 py-1.5 text-fg-1">{op.process_name || '—'}</td>
+                  <td className="px-3 py-1.5 text-fg-2">{seq}</td>
+                  <td className="px-3 py-1.5 text-fg-1">{procName}</td>
                   <td className="px-3 py-1.5">
-                    {op.material_code || '—'}
-                    {op.material_name ? (
-                      <span className="ml-1 text-fg-2">/ {op.material_name}</span>
+                    {matCode || '—'}
+                    {matName ? (
+                      <span className="ml-1 text-fg-2">/ {matName}</span>
                     ) : null}
                   </td>
                   <td className="px-3 py-1.5 text-fg-1">
-                    {op.material_batch_no || '—'}
+                    {matBatch || '—'}
                   </td>
-                  <td className="px-3 py-1.5 text-right">{op.input_qty}</td>
-                  <td className="px-3 py-1.5 text-right text-rose-400">{op.defect_qty}</td>
+                  <td className="px-3 py-1.5 text-right">{input}</td>
+                  <td className="px-3 py-1.5 text-right text-rose-400">{defect}</td>
                   <td className="px-3 py-1.5 text-right text-emerald-400">
-                    {op.qualified_qty}
+                    {qualified}
                   </td>
-                  <td className="px-3 py-1.5 text-fg-2">{op.notes || ''}</td>
+                  <td className="px-3 py-1.5 text-fg-2">{opAny.notes || ''}</td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>
