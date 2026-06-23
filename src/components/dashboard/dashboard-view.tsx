@@ -112,7 +112,7 @@ export function DashboardView() {
         />
         <KpiCard
           title="今日不良"
-          value={data.quality.defectCount}
+          value={data.quality.failCount}
           unit="罐"
           icon={<AlertTriangle className="h-4 w-4" />}
           tone="rose"

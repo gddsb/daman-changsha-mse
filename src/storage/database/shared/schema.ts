@@ -10,6 +10,7 @@ import {
   timestamp,
   jsonb,
   uniqueIndex,
+  foreignKey,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
@@ -118,109 +119,6 @@ export const workOrderOperations = pgTable("work_order_operations", {
   endTime: timestamp("end_time", { withTimezone: true }),
 });
 
-/**
- * 工单报工主表 — 一个工单可多次报工（多次开工/换批）。
- * 唯一索引: (work_order_no, batch_no, finish_seq)
- */
-export const workOrderReports = pgTable("work_order_reports", {
-  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
-  workOrderNo: varchar("work_order_no", { length: 64 }).notNull(),
-  batchNo: text("batch_no").notNull(),
-  finishSeq: integer("finish_seq").notNull(),
-  startAt: timestamp("start_at", { withTimezone: true }).notNull(),
-  endAt: timestamp("end_at", { withTimezone: true }),
-  skilledWorkers: integer("skilled_workers").notNull().default(0),
-  generalWorkers: integer("general_workers").notNull().default(0),
-  laborWorkers: integer("labor_workers").notNull().default(0),
-  otherWorkers: integer("other_workers").notNull().default(0),
-  abnormalMinutes: integer("abnormal_minutes").notNull().default(0),
-  manHours: numeric("man_hours", { precision: 12, scale: 2 }).notNull().default("0"),
-  fillTime: timestamp("fill_time", { withTimezone: true }).defaultNow(),
-  status: text("status").notNull().default("活跃"),
-  closedAt: timestamp("closed_at", { withTimezone: true }),
-  notes: text("notes").notNull().default(""),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
-}, (t) => ({
-  uniqWoBatch: uniqueIndex("uniq_wo_batch_seq").on(t.workOrderNo, t.batchNo, t.finishSeq),
-}));
-
-/**
- * 工序报工主表 — 归属于某条工单报工批次。8 道工序各 1 行。
- * 唯一索引: (work_order_no, batch_no, finish_seq, process_code)
- * 业务规则:
- *   - 第一道工序 (PROC-01) 报工后,后续 7 道工序才可报工
- *   - 第一道工序:quantity=投入数量(手工);最后一道:quantity=成品数量(手工);中间 6 道:quantity 留空
- *   - 合格数 = quantity - 来料不良合计 - 制程不良合计 (自动)
- */
-export const operationReports = pgTable("operation_reports", {
-  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
-  workOrderNo: varchar("work_order_no", { length: 64 }).notNull(),
-  batchNo: text("batch_no").notNull(),
-  finishSeq: integer("finish_seq").notNull(),
-  processCode: varchar("process_code", { length: 32 }).notNull(),
-  processName: text("process_name").notNull(),
-  sequence: integer("sequence").notNull(),
-  quantity: integer("quantity"),
-  incomingDefectPiece: integer("incoming_defect_piece").notNull().default(0),
-  incomingDefectLid: integer("incoming_defect_lid").notNull().default(0),
-  processDefectPiece: integer("process_defect_piece").notNull().default(0),
-  processDefectLid: integer("process_defect_lid").notNull().default(0),
-  incomingDefectTotal: integer("incoming_defect_total").notNull().default(0),
-  processDefectTotal: integer("process_defect_total").notNull().default(0),
-  qualifiedQty: integer("qualified_qty").notNull().default(0),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
-}, (t) => ({
-  uniqOpBatch: uniqueIndex("uniq_op_batch_process").on(t.workOrderNo, t.batchNo, t.finishSeq, t.processCode),
-}));
-
-/**
- * 工序不良子表 — 归属某条工序报工记录(通过 work_order_no + batch_no + finish_seq + process_code)
- * 唯一索引: (work_order_no, batch_no, finish_seq, process_code, defect_category, defect_name, unit)
- */
-export const operationDefects = pgTable("operation_defects", {
-  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
-  workOrderNo: varchar("work_order_no", { length: 64 }).notNull(),
-  batchNo: text("batch_no").notNull(),
-  finishSeq: integer("finish_seq").notNull(),
-  processCode: varchar("process_code", { length: 32 }).notNull(),
-  defectCategory: text("defect_category").notNull(),
-  defectName: text("defect_name").notNull(),
-  defectQty: integer("defect_qty").notNull().default(0),
-  unit: text("unit").notNull(),
-  notes: text("notes").notNull().default(""),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
-}, (t) => ({
-  uniqDefect: uniqueIndex("uniq_op_defect").on(
-    t.workOrderNo, t.batchNo, t.finishSeq, t.processCode, t.defectCategory, t.defectName, t.unit
-  ),
-}));
-
-/**
- * 停机时间表 — 归属某条工单报工批次(通过 work_order_no + batch_no + finish_seq)
- * 唯一索引: (work_order_no, batch_no, finish_seq, equipment_code, downtime_start)
- */
-export const equipmentDowntime = pgTable("equipment_downtime", {
-  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
-  workOrderNo: varchar("work_order_no", { length: 64 }).notNull(),
-  batchNo: text("batch_no").notNull(),
-  finishSeq: integer("finish_seq").notNull(),
-  equipmentCode: text("equipment_code").notNull(),
-  downtimeStart: timestamp("downtime_start", { withTimezone: true }).notNull(),
-  downtimeType: text("downtime_type").notNull().default(""),
-  faultDesc: text("fault_desc").notNull().default(""),
-  fixAt: timestamp("fix_at", { withTimezone: true }),
-  durationMinutes: integer("duration_minutes").notNull().default(0),
-  confirmedBy: text("confirmed_by").notNull().default(""),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
-}, (t) => ({
-  uniqDowntime: uniqueIndex("uniq_eq_downtime").on(
-    t.workOrderNo, t.batchNo, t.finishSeq, t.equipmentCode, t.downtimeStart
-  ),
-}));
 
 /* ============================================================
  * 生产计划（七天滚动）

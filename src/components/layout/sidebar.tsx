@@ -6,7 +6,6 @@ import Link from 'next/link';
 import {
   LayoutDashboard,
   ClipboardList,
-  ClipboardEdit,
   CalendarRange,
   ShieldCheck,
   Package,
@@ -51,7 +50,6 @@ const NAV_GROUPS: NavGroup[] = [
     children: [
       { href: '/work-orders', label: '工单管理', icon: ClipboardList },
       { href: '/production-plan', label: '七天计划', icon: CalendarRange },
-      { href: '/reports', label: '报工管理', icon: ClipboardEdit },
     ],
   },
   {

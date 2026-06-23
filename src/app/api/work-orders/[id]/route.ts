@@ -200,7 +200,6 @@ export async function DELETE(
     }
     // 联动删除工序/报工/排产/检验
     await c.from("work_order_operations").delete().eq("work_order_id", id);
-    await c.from("work_order_reports").delete().eq("work_order_id", id);
     await c.from("production_plans").delete().eq("work_order_id", id);
     await c.from("quality_inspections").delete().eq("work_order_id", id);
     const { error: delErr } = await c.from("work_orders").delete().eq("id", id);

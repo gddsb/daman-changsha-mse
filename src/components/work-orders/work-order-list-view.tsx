@@ -114,7 +114,7 @@ export function WorkOrderListView() {
     return {
       total: orders.length,
       inProgress: orders.filter((o) => o.status === "生产中").length,
-      completed: orders.filter((o) => o.status === "完工" || o.status === "超期完工").length,
+      completed: orders.filter((o) => o.status === "完工").length,
       planned: orders.filter((o) => o.status === "开立" || o.status === "下发").length,
     };
   }, [orders]);
