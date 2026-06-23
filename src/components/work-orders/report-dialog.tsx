@@ -385,13 +385,13 @@ export function ReportDialog({ open, onOpenChange, workOrder, operations, editin
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto bg-bg-1 border-line">
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto bg-slate-900 border-slate-800">
         <DialogHeader>
-          <DialogTitle className="text-fg-0 font-mono">
+          <DialogTitle className="text-slate-100 font-mono">
             报工 — {workOrder.order_no}
           </DialogTitle>
           <DialogDescription>
-            <span className="text-fg-2">
+            <span className="text-slate-400">
               {workOrder.product_name} · 计划数量 {formatNumber(workOrder.quantity)} ·{" "}
               {isCreate ? "开始新批次" : `批次 #${editingReport?.completion_seq}（${editingReport?.batch_no}）`}
             </span>
@@ -401,9 +401,9 @@ export function ReportDialog({ open, onOpenChange, workOrder, operations, editin
         {/* 步骤指示器 */}
         <div className="flex items-center gap-2 mt-2 text-xs">
           <StepDot n={1} active={step === 1} done={!!report}>工单报工</StepDot>
-          <span className="text-fg-3">—</span>
+          <span className="text-slate-500">—</span>
           <StepDot n={2} active={step === 2} done={step > 2}>工序报工 / 不良 / 异常</StepDot>
-          <span className="text-fg-3">—</span>
+          <span className="text-slate-500">—</span>
           <StepDot n={3} active={step === 3} done={false}>工单结束</StepDot>
         </div>
 
@@ -446,10 +446,10 @@ export function ReportDialog({ open, onOpenChange, workOrder, operations, editin
         {step === 2 && (
           <div className="space-y-4 mt-2">
             <div>
-              <div className="text-sm text-fg-1 mb-2 font-mono">工序报工（{opDrafts.length} 道）</div>
-              <div className="overflow-x-auto rounded border border-line">
+              <div className="text-sm text-slate-300 mb-2 font-mono">工序报工（{opDrafts.length} 道）</div>
+              <div className="overflow-x-auto rounded border border-slate-800">
                 <table className="w-full text-xs">
-                  <thead className="bg-bg-2 text-fg-2">
+                  <thead className="bg-slate-800 text-slate-400">
                     <tr>
                       <th className="px-2 py-1.5 text-left">工序号</th>
                       <th className="px-2 py-1.5 text-left">工序名称</th>
@@ -465,9 +465,9 @@ export function ReportDialog({ open, onOpenChange, workOrder, operations, editin
                   </thead>
                   <tbody>
                     {opDrafts.map((op, i) => (
-                      <tr key={op.operation_seq} className="border-t border-line">
-                        <td className="px-2 py-1.5 font-mono text-fg-1">{op.operation_seq}</td>
-                        <td className="px-2 py-1.5 text-fg-0">{op.operation_name}</td>
+                      <tr key={op.operation_seq} className="border-t border-slate-800">
+                        <td className="px-2 py-1.5 font-mono text-slate-300">{op.operation_seq}</td>
+                        <td className="px-2 py-1.5 text-slate-100">{op.operation_name}</td>
                         <td className="px-1 py-1"><NumInput value={op.input_quantity} onChange={(v) => updateOp(i, "input_quantity", v)} /></td>
                         <td className="px-1 py-1"><NumInput value={op.pass_quantity} onChange={(v) => updateOp(i, "pass_quantity", v)} /></td>
                         <td className="px-1 py-1"><NumInput value={op.fail_quantity} onChange={(v) => updateOp(i, "fail_quantity", v)} /></td>
@@ -485,7 +485,7 @@ export function ReportDialog({ open, onOpenChange, workOrder, operations, editin
                   </tbody>
                 </table>
               </div>
-              <div className="mt-2 flex items-center gap-3 text-xs text-fg-2 font-mono">
+              <div className="mt-2 flex items-center gap-3 text-xs text-slate-400 font-mono">
                 <span>合计：投入 {formatNumber(totalInput)} / 合格 {formatNumber(totalPass)} / 不良 {formatNumber(totalFail)}</span>
                 <span className={consistencyOk ? "text-emerald-500" : "text-rose-500"}>
                   {consistencyOk ? "✓ 一致" : "✗ 投入 - 不良 ≠ 合格"}
@@ -494,12 +494,12 @@ export function ReportDialog({ open, onOpenChange, workOrder, operations, editin
             </div>
 
             <div>
-              <div className="text-sm text-fg-1 mb-2 font-mono">工序不良（{defects.length} 条 / 累计 {formatNumber(totalDefectFromDefects)}）</div>
+              <div className="text-sm text-slate-300 mb-2 font-mono">工序不良（{defects.length} 条 / 累计 {formatNumber(totalDefectFromDefects)}）</div>
               <div className="grid grid-cols-1 md:grid-cols-5 gap-2 mb-2 text-xs">
                 <select
                   value={defectDraft.defect_category}
                   onChange={(e) => setDefectDraft({ ...defectDraft, defect_category: e.target.value as DefectDraft["defect_category"] })}
-                  className="bg-bg-2 border border-line rounded px-2 py-1 text-fg-0"
+                  className="bg-slate-800 border border-slate-800 rounded px-2 py-1 text-slate-100"
                 >
                   <option value="制程不良">制程不良</option>
                   <option value="来料不良">来料不良</option>
@@ -509,7 +509,7 @@ export function ReportDialog({ open, onOpenChange, workOrder, operations, editin
                 <select
                   value={defectDraft.unit}
                   onChange={(e) => setDefectDraft({ ...defectDraft, unit: e.target.value as DefectDraft["unit"] })}
-                  className="bg-bg-2 border border-line rounded px-2 py-1 text-fg-0"
+                  className="bg-slate-800 border border-slate-800 rounded px-2 py-1 text-slate-100"
                 >
                   <option value="小片">小片</option>
                   <option value="带盖">带盖</option>
@@ -519,9 +519,9 @@ export function ReportDialog({ open, onOpenChange, workOrder, operations, editin
                 </Button>
               </div>
               {defects.length > 0 && (
-                <div className="rounded border border-line overflow-hidden">
+                <div className="rounded border border-slate-800 overflow-hidden">
                   <table className="w-full text-xs">
-                    <thead className="bg-bg-2 text-fg-2">
+                    <thead className="bg-slate-800 text-slate-400">
                       <tr>
                         <th className="px-2 py-1 text-left">分类</th>
                         <th className="px-2 py-1 text-left">名称</th>
@@ -532,7 +532,7 @@ export function ReportDialog({ open, onOpenChange, workOrder, operations, editin
                     </thead>
                     <tbody>
                       {defects.map((d, i) => (
-                        <tr key={d.id || i} className="border-t border-line">
+                        <tr key={d.id || i} className="border-t border-slate-800">
                           <td className="px-2 py-1">{d.defect_category}</td>
                           <td className="px-2 py-1">{d.defect_name}</td>
                           <td className="px-2 py-1 text-right font-mono">{d.defect_quantity}</td>
@@ -551,12 +551,12 @@ export function ReportDialog({ open, onOpenChange, workOrder, operations, editin
             </div>
 
             <div>
-              <div className="text-sm text-fg-1 mb-2 font-mono">异常工时（{downtimes.length} 条）</div>
+              <div className="text-sm text-slate-300 mb-2 font-mono">异常工时（{downtimes.length} 条）</div>
               <div className="grid grid-cols-1 md:grid-cols-6 gap-2 mb-2 text-xs">
                 <select
                   value={dtDraft.anomaly_type}
                   onChange={(e) => setDtDraft({ ...dtDraft, anomaly_type: e.target.value as DowntimeDraft["anomaly_type"] })}
-                  className="bg-bg-2 border border-line rounded px-2 py-1 text-fg-0"
+                  className="bg-slate-800 border border-slate-800 rounded px-2 py-1 text-slate-100"
                 >
                   <option value="设备故障">设备故障</option>
                   <option value="来料不良">来料不良</option>
@@ -571,9 +571,9 @@ export function ReportDialog({ open, onOpenChange, workOrder, operations, editin
                 </Button>
               </div>
               {downtimes.length > 0 && (
-                <div className="rounded border border-line overflow-hidden">
+                <div className="rounded border border-slate-800 overflow-hidden">
                   <table className="w-full text-xs">
-                    <thead className="bg-bg-2 text-fg-2">
+                    <thead className="bg-slate-800 text-slate-400">
                       <tr>
                         <th className="px-2 py-1 text-left">类型</th>
                         <th className="px-2 py-1 text-left">设备</th>
@@ -585,7 +585,7 @@ export function ReportDialog({ open, onOpenChange, workOrder, operations, editin
                     </thead>
                     <tbody>
                       {downtimes.map((d, i) => (
-                        <tr key={d.id || i} className="border-t border-line">
+                        <tr key={d.id || i} className="border-t border-slate-800">
                           <td className="px-2 py-1">{d.anomaly_type}</td>
                           <td className="px-2 py-1 font-mono">{d.equipment_code || "—"}</td>
                           <td className="px-2 py-1">{d.problem_description || "—"}</td>
@@ -609,7 +609,7 @@ export function ReportDialog({ open, onOpenChange, workOrder, operations, editin
         {/* Step 3: 工单结束 */}
         {step === 3 && report && (
           <div className="space-y-4 mt-2">
-            <div className="rounded border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-fg-1">
+            <div className="rounded border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-slate-300">
               <div className="mb-1 font-semibold text-amber-500">报工结束前检查</div>
               <ul className="list-disc list-inside space-y-0.5">
                 <li>投入数 {formatNumber(totalInput)}、合格数 {formatNumber(totalPass)}、不良数 {formatNumber(totalFail)}</li>
@@ -638,7 +638,7 @@ export function ReportDialog({ open, onOpenChange, workOrder, operations, editin
                 手工关闭
               </Button>
             </div>
-            <div className="text-xs text-fg-2">
+            <div className="text-xs text-slate-400">
               提示：关闭后报工批次不可再修改。如需多次报工，请先关闭当前批次再创建新批次。
             </div>
           </div>
@@ -692,8 +692,8 @@ function initOpDraft(op: WorkOrderOperation): OpDraft {
 
 function StepDot({ n, active, done, children }: { n: number; active: boolean; done: boolean; children: React.ReactNode }) {
   return (
-    <div className={"flex items-center gap-1.5 " + (active ? "text-orange-500" : done ? "text-emerald-500" : "text-fg-3")}>
-      <span className={"flex h-5 w-5 items-center justify-center rounded-full border text-[10px] font-mono " + (active ? "border-orange-500 bg-orange-500/10" : done ? "border-emerald-500 bg-emerald-500/10" : "border-line")}>
+    <div className={"flex items-center gap-1.5 " + (active ? "text-orange-500" : done ? "text-emerald-500" : "text-slate-500")}>
+      <span className={"flex h-5 w-5 items-center justify-center rounded-full border text-[10px] font-mono " + (active ? "border-orange-500 bg-orange-500/10" : done ? "border-emerald-500 bg-emerald-500/10" : "border-slate-800")}>
         {n}
       </span>
       <span>{children}</span>
@@ -720,7 +720,7 @@ function LabeledInput({
 }) {
   return (
     <div>
-      <label className="text-[11px] uppercase tracking-wider text-fg-2">{label}</label>
+      <label className="text-[11px] uppercase tracking-wider text-slate-400">{label}</label>
       <Input
         type={type}
         value={value}
@@ -728,7 +728,7 @@ function LabeledInput({
         placeholder={placeholder}
         disabled={disabled}
         step={step}
-        className="h-8 mt-1 bg-bg-2 border-line text-fg-0"
+        className="h-8 mt-1 bg-slate-800 border-slate-800 text-slate-100"
       />
     </div>
   );
@@ -740,7 +740,7 @@ function NumInput({ value, onChange }: { value: number; onChange: (v: number) =>
       type="number"
       value={String(value || "")}
       onChange={(e) => onChange(Number(e.target.value))}
-      className="h-6 text-right text-xs px-1 bg-bg-2 border-line"
+      className="h-6 text-right text-xs px-1 bg-slate-800 border-slate-800"
     />
   );
 }

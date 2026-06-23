@@ -48,11 +48,11 @@ export function QualityInspectionView() {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center justify-between border-b border-line bg-bg-1 px-6 py-3">
+      <div className="flex items-center justify-between border-b border-slate-800 bg-slate-900 px-6 py-3">
         <div className="flex items-center gap-3">
-          <ClipboardCheck className="h-4 w-4 text-fg-2" />
-          <h1 className="font-mono text-base font-semibold text-fg-0">质量检验</h1>
-          <span className="font-mono text-xs text-fg-2">
+          <ClipboardCheck className="h-4 w-4 text-slate-400" />
+          <h1 className="font-mono text-base font-semibold text-slate-100">质量检验</h1>
+          <span className="font-mono text-xs text-slate-400">
             {inspections.length} 条记录 · 合格率 {formatNumber(passRate * 100, { maximumFractionDigits: 2, minimumFractionDigits: 2 })}%
           </span>
         </div>
@@ -60,7 +60,7 @@ export function QualityInspectionView() {
           <select
             value={typeFilter}
             onChange={(e) => setTypeFilter(e.target.value)}
-            className="h-8 rounded-sm border border-line bg-bg-0 px-2 font-mono text-xs text-fg-1 outline-none focus:border-line-strong"
+            className="h-8 rounded-sm border border-slate-800 bg-slate-950 px-2 font-mono text-xs text-slate-300 outline-none focus:border-slate-700"
           >
             <option value="all">全部类型</option>
             <option value="first">首件</option>
@@ -71,7 +71,7 @@ export function QualityInspectionView() {
           <select
             value={resultFilter}
             onChange={(e) => setResultFilter(e.target.value)}
-            className="h-8 rounded-sm border border-line bg-bg-0 px-2 font-mono text-xs text-fg-1 outline-none focus:border-line-strong"
+            className="h-8 rounded-sm border border-slate-800 bg-slate-950 px-2 font-mono text-xs text-slate-300 outline-none focus:border-slate-700"
           >
             <option value="all">全部结果</option>
             <option value="pass">合格</option>
@@ -102,8 +102,8 @@ export function QualityInspectionView() {
             <CardHeader className="py-3">
               <CardTitle className="font-mono text-sm">新增检验记录</CardTitle>
             </CardHeader>
-            <CardContent className="text-sm text-fg-2">
-              <div className="rounded border border-line-strong bg-bg-2 p-3 font-mono text-xs">
+            <CardContent className="text-sm text-slate-400">
+              <div className="rounded border border-slate-700 bg-slate-800 p-3 font-mono text-xs">
                 提示：检验数据通常随工序报工自动生成。如需独立登记，请通过工单详情页的工序卡片提交。
               </div>
             </CardContent>
@@ -118,9 +118,9 @@ export function QualityInspectionView() {
             {loading ? (
               <div className="p-4"><Skeleton className="h-32" /></div>
             ) : inspections.length === 0 ? (
-              <div className="p-8 text-center font-mono text-sm text-fg-2">
+              <div className="p-8 text-center font-mono text-sm text-slate-400">
                 暂无检验记录
-                <div className="mt-1 text-xs text-fg-3">
+                <div className="mt-1 text-xs text-slate-500">
                   工序报工时会自动创建检验记录
                 </div>
               </div>
@@ -128,7 +128,7 @@ export function QualityInspectionView() {
               <div className="overflow-x-auto">
                 <table className="w-full font-mono text-xs">
                   <thead>
-                    <tr className="border-b border-line-strong bg-bg-2 text-fg-2">
+                    <tr className="border-b border-slate-700 bg-slate-800 text-slate-400">
                       <th className="px-3 py-2 text-left">检验单号</th>
                       <th className="px-3 py-2 text-left">工单</th>
                       <th className="px-3 py-2 text-left">产线/工序</th>
@@ -143,15 +143,15 @@ export function QualityInspectionView() {
                   </thead>
                   <tbody>
                     {inspections.map((i) => (
-                      <tr key={i.id} className="border-b border-line/60 hover:bg-bg-3/50">
-                        <td className="px-3 py-2 text-fg-0">{i.inspection_no}</td>
-                        <td className="px-3 py-2 text-fg-1">{i.work_order_no ?? "—"}</td>
-                        <td className="px-3 py-2 text-fg-1">
+                      <tr key={i.id} className="border-b border-slate-800/60 hover:bg-slate-700/50">
+                        <td className="px-3 py-2 text-slate-100">{i.inspection_no}</td>
+                        <td className="px-3 py-2 text-slate-300">{i.work_order_no ?? "—"}</td>
+                        <td className="px-3 py-2 text-slate-300">
                           {i.line_name ?? "—"} · {i.process_name ?? "—"}
                         </td>
-                        <td className="px-3 py-2 text-fg-1">{i.product_name}</td>
-                        <td className="px-3 py-2 text-right tabular-nums text-fg-0">{i.sample_size}</td>
-                        <td className="px-3 py-2 text-fg-2">
+                        <td className="px-3 py-2 text-slate-300">{i.product_name}</td>
+                        <td className="px-3 py-2 text-right tabular-nums text-slate-100">{i.sample_size}</td>
+                        <td className="px-3 py-2 text-slate-400">
                           {INSPECTION_TYPE_LABELS[i.inspection_type as keyof typeof INSPECTION_TYPE_LABELS] ?? i.inspection_type}
                         </td>
                         <td className="px-3 py-2">
@@ -167,9 +167,9 @@ export function QualityInspectionView() {
                             {INSPECTION_RESULT_LABELS[i.result as keyof typeof INSPECTION_RESULT_LABELS] ?? i.result}
                           </span>
                         </td>
-                        <td className="px-3 py-2 text-fg-2">{i.defect_name ?? "—"}</td>
-                        <td className="px-3 py-2 text-fg-1">{i.inspector_name}</td>
-                        <td className="px-3 py-2 text-fg-2">{formatDateTime(i.inspection_time)}</td>
+                        <td className="px-3 py-2 text-slate-400">{i.defect_name ?? "—"}</td>
+                        <td className="px-3 py-2 text-slate-300">{i.inspector_name}</td>
+                        <td className="px-3 py-2 text-slate-400">{formatDateTime(i.inspection_time)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -201,7 +201,7 @@ function StatCard({
   return (
     <Card>
       <CardContent className="p-4">
-        <div className="font-mono text-xs text-fg-2">{label}</div>
+        <div className="font-mono text-xs text-slate-400">{label}</div>
         <div className={`mt-1 font-mono text-2xl font-semibold tabular-nums ${toneClass}`}>{value}</div>
       </CardContent>
     </Card>
