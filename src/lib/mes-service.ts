@@ -317,7 +317,7 @@ export async function createWorkOrder(input: CreateWorkOrderInput) {
       product_name: productName,
       specification: productSpec,
       unit: (prod as { unit?: string | null }).unit ?? "罐",
-      quantity: input.planned_quantity,
+      planned_quantity: input.planned_quantity,
       completed_quantity: 0,
       scrap_quantity: 0,
       status: "开立",
