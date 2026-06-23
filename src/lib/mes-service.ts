@@ -34,7 +34,6 @@ const toWoView = (r: Record<string, unknown>): WorkOrder => ({
   completed_quantity: Number(r.completed_quantity ?? 0),
   scrap_quantity: Number(r.scrap_quantity ?? 0),
   status: toWoStatus(r.status as string | null),
-  priority: (Number(r.priority ?? 3) as WorkOrder["priority"]),
   line_code: cn(r.line_code),
   line_name: cn(r.line_name),
   workshop: cn(r.workshop_name),
@@ -84,7 +83,6 @@ const toPlanView = (r: Record<string, unknown>): ProductionPlan => ({
   product_code: cn(r.product_code),
   product_name: cn(r.product_name),
   planned_quantity: Number(r.planned_quantity ?? 0),
-  priority: Number(r.priority ?? 3),
   status: cn(r.status) || "已排",
   notes: cn(r.notes),
   created_at: cn(r.created_at),
@@ -187,9 +185,7 @@ export interface CreateWorkOrderInput {
   specification?: string;
   planned_quantity: number;
   line_code: string;
-  line_name?: string;
-  priority?: number;        // 1-5, 数字越小越高
-  order_type?: string;      // 默认 "制罐生产订单"
+  line_name?: string;  order_type?: string;      // 默认 "制罐生产订单"
   customer_name?: string;
   sales_order_no?: string;
   planned_start_date?: string;  // ISO
@@ -305,7 +301,6 @@ export async function createWorkOrder(input: CreateWorkOrderInput) {
     }
   }
   const orderNo = userOrderNo || (await nextOrderNo());
-  const priority = Math.max(1, Math.min(5, input.priority ?? 3));
   // 注意：lineName 可能为空字符串，需用 || 兜底，?? 不会因为空字符串触发
   const finalLineName = lineName || (line as { name: string }).name;
   const ws = line as { workshop_code: string; workshop_name: string };
@@ -322,11 +317,10 @@ export async function createWorkOrder(input: CreateWorkOrderInput) {
       product_name: productName,
       specification: productSpec,
       unit: (prod as { unit?: string | null }).unit ?? "罐",
-      planned_quantity: input.planned_quantity,
+      quantity: input.planned_quantity,
       completed_quantity: 0,
       scrap_quantity: 0,
       status: "开立",
-      priority,
       workshop_code: ws.workshop_code,
       workshop_name: ws.workshop_name,
       line_code: lineCode,
@@ -476,7 +470,7 @@ export async function listPlans(filter: PlanFilter = {}): Promise<ProductionPlan
 
 export async function updatePlan(
   id: string,
-  patch: { plan_date?: string; line_code?: string; priority?: number; status?: string; notes?: string; planned_quantity?: number }
+  patch: { plan_date?: string; line_code?: string; status?: string; notes?: string; planned_quantity?: number }
 ) {
   const c = getSupabaseClient();
   const update: Record<string, unknown> = { updated_at: new Date().toISOString() };
@@ -485,7 +479,6 @@ export async function updatePlan(
     update.line_code = patch.line_code;
     update.line_name = patch.line_code === "LINE-A" ? "A线" : "B线";
   }
-  if (patch.priority !== undefined) update.priority = patch.priority;
   if (patch.status !== undefined) update.status = patch.status;
   if (patch.notes !== undefined) update.notes = patch.notes;
   if (patch.planned_quantity !== undefined) update.planned_quantity = patch.planned_quantity;

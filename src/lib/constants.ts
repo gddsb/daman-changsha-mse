@@ -27,15 +27,6 @@ export const WORK_ORDER_STATUS_OPTIONS: SelectOption[] = [
   { value: "closed", label: "已关闭" },
 ];
 
-// 优先级
-export const WORK_ORDER_PRIORITY_OPTIONS: SelectOption<number>[] = [
-  { value: 1, label: "P1 紧急" },
-  { value: 2, label: "P2 高" },
-  { value: 3, label: "P3 中" },
-  { value: 4, label: "P4 低" },
-  { value: 5, label: "P5 最低" },
-];
-
 // 设备状态
 export const EQUIPMENT_STATUS: Record<string, string> = {
   running: "运行中",
@@ -234,15 +225,6 @@ export const INSPECTION_RESULT_TONE: Record<string, string> = {
   pass: "border-emerald-700/50 bg-emerald-900/30 text-emerald-400",
   fail: "border-rose-700/50 bg-rose-900/30 text-rose-400",
   conditional: "border-amber-700/50 bg-amber-900/30 text-amber-400",
-};
-
-// 优先级色调
-export const PRIORITY_TONE: Record<number, string> = {
-  1: "border-rose-700/50 bg-rose-900/30 text-rose-400",
-  2: "border-orange-700/50 bg-orange-900/30 text-orange-400",
-  3: "border-slate-700 bg-slate-900/40 text-slate-300",
-  4: "border-slate-800 bg-slate-900/40 text-slate-500",
-  5: "border-slate-800 bg-slate-900/40 text-slate-600",
 };
 
 // ====== 制罐行业专有常量（长沙大满） ======

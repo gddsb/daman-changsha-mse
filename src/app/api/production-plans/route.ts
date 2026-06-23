@@ -28,9 +28,7 @@ export async function PATCH(request: NextRequest) {
       id?: string;
       work_order_id?: string;
       plan_date?: string;
-      line_code?: string;
-      priority?: number;
-      planned_quantity?: number;
+      line_code?: string;      planned_quantity?: number;
     };
     let planId = body.id;
     let currentPlan: { work_order_id: string | null; plan_date: string | null } | null = null;
@@ -75,9 +73,7 @@ export async function PATCH(request: NextRequest) {
     }
     const updated = await updatePlan(planId, {
       plan_date: body.plan_date,
-      line_code: body.line_code,
-      priority: body.priority,
-      planned_quantity: body.planned_quantity,
+      line_code: body.line_code,      planned_quantity: body.planned_quantity,
     });
     return NextResponse.json({ success: true, data: updated });
   } catch (e) {
@@ -93,9 +89,7 @@ export async function POST(request: NextRequest) {
       plan_date?: string;
       line_code?: string;
       line_name?: string;
-      planned_quantity?: number;
-      priority?: number;
-    };
+      planned_quantity?: number;    };
     if (!body.work_order_id || !body.plan_date || !body.line_code) {
       return NextResponse.json(
         { success: false, error: '缺少工单 / 日期 / 产线' },
@@ -139,7 +133,6 @@ export async function POST(request: NextRequest) {
       product_code: wo.product_code,
       product_name: wo.product_name,
       planned_quantity: body.planned_quantity ?? wo.quantity ?? 0,
-      priority: body.priority ?? wo.priority ?? 3,
       status: 'planned',
     } as Omit<import('@/types/mes').ProductionPlan, 'id' | 'created_at' | 'updated_at'>);
     return NextResponse.json({ success: true, data: created });

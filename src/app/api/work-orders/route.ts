@@ -53,7 +53,6 @@ export async function POST(req: NextRequest) {
       planned_quantity: Number(body.planned_quantity),
       line_code: body.line_code ? String(body.line_code) : "",
       line_name: body.line_name ? String(body.line_name) : "",
-      priority: body.priority ? Number(body.priority) : 5,
       order_type: body.order_type ? String(body.order_type) : "制罐生产订单",
       customer_name: body.customer_name ? String(body.customer_name) : "",
       sales_order_no: body.sales_order_no ? String(body.sales_order_no) : "",

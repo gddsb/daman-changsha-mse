@@ -120,7 +120,6 @@ export interface Database {
           completed_quantity: number;
           scrap_quantity: number;
           status: string;
-          priority: number;
           workshop_code: string | null;
           workshop_name: string | null;
           line_code: string | null;
@@ -147,7 +146,6 @@ export interface Database {
           completed_quantity?: number;
           scrap_quantity?: number;
           status?: string;
-          priority?: number;
           workshop_code?: string | null;
           workshop_name?: string | null;
           line_code?: string | null;
@@ -213,7 +211,6 @@ export interface Database {
           product_code: string;
           product_name: string;
           planned_quantity: number;
-          priority: number;
           status: string;
           notes: string | null;
           created_at: string;
@@ -229,7 +226,6 @@ export interface Database {
           product_code: string;
           product_name: string;
           planned_quantity: number;
-          priority?: number;
           status?: string;
           notes?: string | null;
           created_at?: string;

@@ -264,7 +264,6 @@ export function mapWorkOrderRow(w: WoRow): WorkOrder {
     completed_quantity: w.completed_quantity ?? 0,
     scrap_quantity: w.scrap_quantity ?? 0,
     status: (WO_STATUS_MAP[w.status ?? ""] ?? w.status ?? "开立") as WorkOrderStatus,
-    priority: (w.priority ?? 3) as 1 | 2 | 3 | 4 | 5,
     workshop: w.workshop_name ?? "",
     workshop_code: w.workshop_code ?? "",
     customer_name: w.customer_name ?? "",

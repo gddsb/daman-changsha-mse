@@ -118,9 +118,7 @@ export function WorkOrderDetailView({ params }: { params: Promise<{ id: string }
             <Field label="产线" value={wo.line_name} />
             <Field label="计划数量" value={formatNumber(wo.quantity) + " " + wo.unit} mono />
             <Field label="已完工" value={formatNumber(wo.completed_quantity) + " " + wo.unit} mono />
-            <Field label="不良数" value={formatNumber(wo.scrap_quantity) + " " + wo.unit} mono />
-            <Field label="优先级" value={String(wo.priority)} mono />
-            <Field label="计划开始" value={wo.planned_start_date === "—" ? "—" : formatDate(wo.planned_start_date)} />
+            <Field label="不良数" value={formatNumber(wo.scrap_quantity) + " " + wo.unit} mono />            <Field label="计划开始" value={wo.planned_start_date === "—" ? "—" : formatDate(wo.planned_start_date)} />
             <Field label="计划结束" value={wo.planned_end_date === "—" ? "—" : formatDate(wo.planned_end_date)} />
             <Field label="实际开始" value={wo.actual_start_date === "—" ? "—" : formatDateTime(wo.actual_start_date)} />
             <Field label="实际结束" value={wo.actual_end_date === "—" ? "—" : formatDateTime(wo.actual_end_date)} />

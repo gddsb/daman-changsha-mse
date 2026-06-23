@@ -25,7 +25,6 @@ export interface WorkOrder {
   completed_quantity: number;
   scrap_quantity: number;
   status: WorkOrderStatus;
-  priority: number;
   line_code: string;
   line_name: string;
   workshop: string;
@@ -133,7 +132,6 @@ export interface ProductionPlan {
   product_code: string;
   product_name: string;
   planned_quantity: number;
-  priority: number;
   status: string;
   notes: string | null;
   created_at: string;
