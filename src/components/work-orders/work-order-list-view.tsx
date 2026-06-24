@@ -374,6 +374,7 @@ function WorkOrderRow({
   const st = wo.status;
   const canRelease = st === "开立";
   const canStart = (st === "下发" || st === "暂停") && hasPlan;
+  const canPause = st === "生产中";
   const canDelete = st === "开立" || st === "下发";
   return (
     <tr
@@ -422,6 +423,14 @@ function WorkOrderRow({
               className="border border-orange-500/50 px-1.5 py-0.5 font-mono text-[10px] text-orange-300 hover:bg-orange-500/15"
             >
               {st === "暂停" ? "重新开工" : "开工"}
+            </button>
+          )}
+          {canPause && (
+            <button
+              onClick={() => onAction("pause")}
+              className="border border-yellow-500/50 px-1.5 py-0.5 font-mono text-[10px] text-yellow-300 hover:bg-yellow-500/15"
+            >
+              暂停
             </button>
           )}
           {canDelete && (
