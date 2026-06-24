@@ -465,10 +465,6 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
   /** 新增制程信息 */
   const addPI = async () => {
     if (!detail) return;
-    if (newPI.material_batch_no.trim() === "") {
-      setPageError("请填写物料批号");
-      return;
-    }
     setSaving(true);
     setPageError(null);
     try {

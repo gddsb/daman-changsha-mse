@@ -1180,18 +1180,34 @@ export async function closeReport(
     .maybeSingle();
   if (error) throw new Error(`关闭报工失败: ${error.message}`);
 
+  // 更新工单的 completed_quantity（累加所有已关闭报工单的合格数）
+  const { data: closedReports } = await supa
+    .from("work_order_reports")
+    .select("pass_quantity")
+    .eq("work_order_id", detail.work_order_id)
+    .eq("is_closed", true);
+  const totalCompleted = (closedReports ?? []).reduce((s, r) => s + (Number(r.pass_quantity) || 0), 0);
+
+  // 更新工单：累计完成数量 + 废品数量
+  const { data: allClosed } = await supa
+    .from("work_order_reports")
+    .select("fail_quantity")
+    .eq("work_order_id", detail.work_order_id)
+    .eq("is_closed", true);
+  const totalScrap = (allClosed ?? []).reduce((s, r) => s + (Number(r.fail_quantity) || 0), 0);
+
   // 自动关闭：工单完工
-  if (isAuto && wo) {
-    await supa
-      .from("work_orders")
-      .update({
-        status: "完工",
-        completed_quantity: totalPass,
-        scrap_quantity: totalFail,
-        actual_end_date: endTime,
-      })
-      .eq("id", detail.work_order_id);
-  }
+  const newStatus = isAuto ? "完工" : wo?.status;
+
+  await supa
+    .from("work_orders")
+    .update({
+      status: newStatus,
+      completed_quantity: totalCompleted,
+      scrap_quantity: totalScrap,
+      actual_end_date: isAuto ? endTime : undefined,
+    })
+    .eq("id", detail.work_order_id);
 
   return toReportView(data!);
 }
