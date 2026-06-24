@@ -300,7 +300,7 @@ export interface WorkOrderReport {
   created_at: string;
 }
 
-/** 工序报工子表 */
+/** 工序报工子表（每批次的每道工序一条） */
 export interface OperationReport {
   id: string;
   work_order_report_id: string;
@@ -311,20 +311,18 @@ export interface OperationReport {
   input_quantity: number;
   pass_quantity: number;
   fail_quantity: number;
-  incoming_defect_piece: number;
-  incoming_defect_cover: number;
-  process_defect_piece: number;
-  process_defect_cover: number;
   report_time: string;
   created_at: string;
 }
 
-/** 工序不良子表 */
+/** 工序不良子表（隶属于某道工序报工，可多条） */
 export interface OperationDefect {
   id: string;
+  operation_report_id: string | null;
   work_order_report_id: string;
   work_order_no: string;
   batch_no: string;
+  operation_seq: number | null;
   defect_category: "制程不良" | "来料不良";
   defect_name: string;
   defect_quantity: number;

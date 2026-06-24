@@ -7,7 +7,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { ProgressBar } from "@/components/shared/progress-bar";
-import { ReportDialog } from "@/components/work-orders/report-dialog";
 import {
   ArrowLeft,
   Factory,
@@ -32,8 +31,35 @@ export function WorkOrderDetailView({ params }: { params: Promise<{ id: string }
   const [data, setData] = useState<DetailResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [reports, setReports] = useState<WorkOrderReport[]>([]);
-  const [showReportDialog, setShowReportDialog] = useState(false);
-  const [editingReport, setEditingReport] = useState<WorkOrderReport | null>(null);
+  const [creating, setCreating] = useState(false);
+
+  /** 创建新批次并跳转到工序报工详情页 */
+  const startNewReport = useCallback(async () => {
+    if (!data) return;
+    setCreating(true);
+    try {
+      const r = await fetch(`/api/reports`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ work_order_id: data.workOrder.id }),
+      });
+      const j = await r.json();
+      if (!j?.success) {
+        alert(j?.error ?? "创建批次失败");
+        return;
+      }
+      const created = j.data as WorkOrderReport;
+      router.push(`/reports/${created.id}`);
+    } finally {
+      setCreating(false);
+    }
+  }, [data, router]);
+
+  /** 跳转已存在未关闭批次的工序报工详情页 */
+  const gotoOpenReport = useCallback(() => {
+    const open = reports.find((r) => !r.is_closed);
+    if (open) router.push(`/reports/${open.id}`);
+  }, [reports, router]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -120,26 +146,18 @@ export function WorkOrderDetailView({ params }: { params: Promise<{ id: string }
         <div className="flex items-center gap-2">
           {canReport && !hasOpenReport && (
             <Button
-              onClick={() => {
-                setEditingReport(null);
-                setShowReportDialog(true);
-              }}
+              onClick={startNewReport}
+              disabled={creating}
               className="gap-1.5 bg-orange-500 hover:bg-orange-600 text-white"
             >
               <Play className="h-4 w-4" />
-              开始报工
+              {creating ? "创建中..." : "开始报工"}
             </Button>
           )}
           {canReport && hasOpenReport && (
             <Button
               variant="outline"
-              onClick={() => {
-                const open = reports.find((r) => !r.is_closed);
-                if (open) {
-                  setEditingReport(open);
-                  setShowReportDialog(true);
-                }
-              }}
+              onClick={gotoOpenReport}
               className="gap-1.5 border-amber-500/40 text-amber-500 hover:bg-amber-500/10"
             >
               <FileText className="h-4 w-4" />
@@ -255,10 +273,7 @@ export function WorkOrderDetailView({ params }: { params: Promise<{ id: string }
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => {
-                            setEditingReport(r);
-                            setShowReportDialog(true);
-                          }}
+                          onClick={() => router.push(`/reports/${r.id}`)}
                           className="h-6 text-xs border-amber-500/40 text-amber-500 hover:bg-amber-500/10"
                         >
                           录入工序 / 结束
@@ -330,27 +345,6 @@ export function WorkOrderDetailView({ params }: { params: Promise<{ id: string }
           </ul>
         </CardContent>
       </Card>
-
-      {/* 报工弹窗 */}
-      {showReportDialog && (
-        <ReportDialog
-          open={showReportDialog}
-          onOpenChange={(o) => {
-            setShowReportDialog(o);
-            if (!o) {
-              setEditingReport(null);
-              fetchReports();
-            }
-          }}
-          workOrder={wo}
-          operations={operations}
-          editingReport={editingReport}
-          onSuccess={() => {
-            fetchReports();
-            fetchData();
-          }}
-        />
-      )}
     </div>
   );
 }

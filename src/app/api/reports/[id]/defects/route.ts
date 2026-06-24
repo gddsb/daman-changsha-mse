@@ -8,6 +8,12 @@ export async function POST(
   try {
     const { id } = await params;
     const body = await request.json();
+    if (!body.operation_report_id) {
+      return NextResponse.json(
+        { success: false, error: "缺少必填参数 operation_report_id" },
+        { status: 400 }
+      );
+    }
     if (!body.defect_category || !body.defect_name) {
       return NextResponse.json(
         { success: false, error: "缺少必填参数 defect_category / defect_name" },
@@ -15,7 +21,7 @@ export async function POST(
       );
     }
     const data = await addOpDefect({
-      work_order_report_id: id,
+      operation_report_id: body.operation_report_id,
       defect_category: body.defect_category,
       defect_name: body.defect_name,
       defect_quantity: body.defect_quantity ?? 0,

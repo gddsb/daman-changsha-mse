@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
-  ClipboardCheck,
   CheckCircle2,
   Circle,
   Loader2,
@@ -16,6 +15,8 @@ import {
   AlertTriangle,
   PackageCheck,
   ClipboardList,
+  ListChecks,
+  ChevronDown,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -51,18 +52,15 @@ interface OpDraft {
   operation_name: string;
   input_quantity: number;
   pass_quantity: number;
+  /** 自动汇总自该工序的 operation_defects（不在此录入） */
   fail_quantity: number;
-  incoming_defect_piece: number;
-  incoming_defect_cover: number;
-  process_defect_piece: number;
-  process_defect_cover: number;
   /** 已保存的 id（用于 upsert 后保持引用） */
   savedId?: string;
-  /** 标记是否已脏 */
+  /** 标记是否已脏（仅 input_quantity / pass_quantity 可改） */
   dirty?: boolean;
 }
 
-/** 新增不良草稿 */
+/** 新增不良草稿（每次一条） */
 interface NewDefect {
   defect_category: "制程不良" | "来料不良";
   defect_name: string;
@@ -98,6 +96,8 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
   const [workOrder, setWorkOrder] = useState<WorkOrder | null>(null);
   const [processes, setProcesses] = useState<ProcessItem[]>([]);
   const [opDrafts, setOpDrafts] = useState<Record<number, OpDraft>>({});
+  /** 当前在不良 Tab 中选中的工序（operation_seq） */
+  const [defectOpSeq, setDefectOpSeq] = useState<number | "">("");
   const [newDefect, setNewDefect] = useState<NewDefect>({
     defect_category: "制程不良",
     defect_name: "",
@@ -145,12 +145,13 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
       const wj = (await w.json()) as ApiResp<WorkOrder>;
       if (wj.success) setWorkOrder(wj.data);
 
-      // 3) 工序字典（按 code 排序，code 形如 "OP-01"）
+      // 3) 工序字典（按 sequence 升序）
       const p = await fetch(`/api/process-dictionary`);
       const pj = (await p.json()) as ApiResp<ProcessItem[]>;
       if (pj.success) setProcesses(pj.data);
 
-      // 4) 初始化草稿：每道工序一行（已报工的从 detail.operations 填，未报工初始 0）
+      // 4) 初始化草稿：每道工序一行
+      //    fail_quantity 直接来自 operation_reports.fail_quantity（已被服务端汇总）
       const drafts: Record<number, OpDraft> = {};
       const ops = rj.data.operations ?? [];
       for (const proc of pj.success ? pj.data : []) {
@@ -164,10 +165,6 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
               input_quantity: existing.input_quantity,
               pass_quantity: existing.pass_quantity,
               fail_quantity: existing.fail_quantity,
-              incoming_defect_piece: existing.incoming_defect_piece,
-              incoming_defect_cover: existing.incoming_defect_cover,
-              process_defect_piece: existing.process_defect_piece,
-              process_defect_cover: existing.process_defect_cover,
               savedId: existing.id,
               dirty: false,
             }
@@ -177,10 +174,6 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
               input_quantity: 0,
               pass_quantity: 0,
               fail_quantity: 0,
-              incoming_defect_piece: 0,
-              incoming_defect_cover: 0,
-              process_defect_piece: 0,
-              process_defect_cover: 0,
               dirty: false,
             };
       }
@@ -197,30 +190,44 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reportId]);
 
-  /** 累计 */
+  /** 累计（input / pass / fail 总和） */
   const aggregate = useMemo(() => {
     const all = Object.values(opDrafts);
     return {
       input: all.reduce((s, o) => s + (Number(o.input_quantity) || 0), 0),
       pass: all.reduce((s, o) => s + (Number(o.pass_quantity) || 0), 0),
       fail: all.reduce((s, o) => s + (Number(o.fail_quantity) || 0), 0),
-      inc_piece: all.reduce((s, o) => s + (Number(o.incoming_defect_piece) || 0), 0),
-      inc_cover: all.reduce((s, o) => s + (Number(o.incoming_defect_cover) || 0), 0),
-      prc_piece: all.reduce((s, o) => s + (Number(o.process_defect_piece) || 0), 0),
-      prc_cover: all.reduce((s, o) => s + (Number(o.process_defect_cover) || 0), 0),
       saved: all.filter((o) => !!o.savedId).length,
       total: all.length,
     };
   }, [opDrafts]);
 
-  /** 整体一致性（按整批次聚合） */
+  /** 整体一致性（按整批次聚合）：input = pass + fail */
   const consistencyOk = useMemo(() => {
-    if (aggregate.input <= 0) return null; // 还没录入，无法判断
-    return aggregate.input - aggregate.fail === aggregate.pass;
+    if (aggregate.input <= 0) return null;
+    return aggregate.input === aggregate.pass + aggregate.fail;
   }, [aggregate]);
 
   /** 当前批次是否已关闭 */
   const isClosed = !!detail?.is_closed;
+
+  /** 已报工的工序（用于不良 Tab 中选择） */
+  const reportedOps = useMemo(
+    () => Object.values(opDrafts).filter((o) => !!o.savedId).sort((a, b) => a.operation_seq - b.operation_seq),
+    [opDrafts]
+  );
+
+  /** 当前 defectOpSeq 对应的 operation_report.id（用于 POST defects） */
+  const currentOpReport = useMemo(() => {
+    if (defectOpSeq === "") return null;
+    return opDrafts[defectOpSeq] ?? null;
+  }, [defectOpSeq, opDrafts]);
+
+  /** 该工序已有不良列表（来自 detail.defects，按 operation_report_id 过滤） */
+  const currentDefects = useMemo(() => {
+    if (!currentOpReport?.savedId) return [];
+    return (detail?.defects ?? []).filter((d) => d.operation_report_id === currentOpReport.savedId);
+  }, [currentOpReport, detail]);
 
   /** 提交单道工序报工（upsert） */
   const saveOpDraft = async (draft: OpDraft) => {
@@ -229,22 +236,8 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
       setPageError("报工批次已关闭，不能修改工序报工");
       return;
     }
-    if (draft.input_quantity === 0 && draft.pass_quantity === 0 && draft.fail_quantity === 0) {
-      setPageError(`工序 ${draft.operation_seq} 投入/合格/不良均为 0，未保存`);
-      return;
-    }
-    const failCalc =
-      draft.incoming_defect_piece + draft.incoming_defect_cover + draft.process_defect_piece + draft.process_defect_cover;
-    if (failCalc !== draft.fail_quantity) {
-      setPageError(
-        `工序 ${draft.operation_seq} 不良数不一致：合计 ${failCalc} ≠ 已填 ${draft.fail_quantity}`
-      );
-      return;
-    }
-    if (draft.pass_quantity + draft.fail_quantity !== draft.input_quantity) {
-      setPageError(
-        `工序 ${draft.operation_seq} 数量不一致：合格 ${draft.pass_quantity} + 不良 ${draft.fail_quantity} ≠ 投入 ${draft.input_quantity}`
-      );
+    if (draft.input_quantity === 0 && draft.pass_quantity === 0) {
+      setPageError(`工序 ${draft.operation_seq} 投入/合格均为 0，未保存`);
       return;
     }
     setSaving(true);
@@ -260,11 +253,6 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
           operation_name: draft.operation_name,
           input_quantity: draft.input_quantity,
           pass_quantity: draft.pass_quantity,
-          fail_quantity: draft.fail_quantity,
-          incoming_defect_piece: draft.incoming_defect_piece,
-          incoming_defect_cover: draft.incoming_defect_cover,
-          process_defect_piece: draft.process_defect_piece,
-          process_defect_cover: draft.process_defect_cover,
         }),
       });
       const j = (await r.json()) as ApiResp<OperationReport>;
@@ -313,11 +301,15 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
     }
   };
 
-  /** 新增不良 */
+  /** 新增不良（按 operation_report_id） */
   const addDefect = async () => {
     if (!detail) return;
     if (isClosed) {
       setPageError("报工批次已关闭，不能新增不良");
+      return;
+    }
+    if (!currentOpReport?.savedId) {
+      setPageError("请先在工序报工 Tab 中保存该工序的报工数据");
       return;
     }
     if (!newDefect.defect_name.trim() || newDefect.defect_quantity <= 0) {
@@ -331,7 +323,7 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          work_order_report_id: detail.id,
+          operation_report_id: currentOpReport.savedId,
           defect_category: newDefect.defect_category,
           defect_name: newDefect.defect_name,
           defect_quantity: newDefect.defect_quantity,
@@ -468,7 +460,6 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
     );
   }
 
-  const firstSeq = Math.min(...Object.keys(opDrafts).map((k) => Number(k)));
   const sortedSeq = Object.keys(opDrafts).map(Number).sort((a, b) => a - b);
 
   return (
@@ -525,11 +516,14 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
           <Field label="其它人工">{formatNumber(detail.other_worker_count)}</Field>
           <Field label="累计投入">{formatNumber(aggregate.input)}</Field>
           <Field label="累计合格">{formatNumber(aggregate.pass)}</Field>
-          <Field label="累计不良">{formatNumber(aggregate.fail)}</Field>
+          <Field label="累计不良">
+            <span className="text-amber-400">{formatNumber(aggregate.fail)}</span>
+            <span className="ml-1 text-[10px] text-slate-500">（自动汇总）</span>
+          </Field>
           <Field label="已录工序">
             {aggregate.saved} / {aggregate.total}
           </Field>
-          <Field label="一致性">
+          <Field label="一致性（投=合+不良）">
             {consistencyOk === null ? (
               <span className="text-slate-500">未录入</span>
             ) : consistencyOk ? (
@@ -538,7 +532,6 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
               <span className="text-rose-400">不合格</span>
             )}
           </Field>
-          <Field label="数据时间">{formatDateTime(detail.created_at)}</Field>
         </CardContent>
       </Card>
 
@@ -576,7 +569,7 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
               <div>
                 <CardTitle className="text-slate-100">工序报工明细</CardTitle>
                 <CardDescription className="text-slate-400">
-                  每道工序单独录入投入/合格/不良以及 4 类不良品数量
+                  录入投入/合格；不良由「工序不良」Tab 选择该工序后自动汇总
                 </CardDescription>
               </div>
               <Button
@@ -589,17 +582,14 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
               </Button>
             </CardHeader>
             <CardContent className="overflow-x-auto">
-              <table className="w-full min-w-[1200px] border-collapse text-sm">
+              <table className="w-full min-w-[900px] border-collapse text-sm">
                 <thead>
                   <tr className="border-b border-slate-700 bg-slate-800 text-xs uppercase text-slate-300">
                     <th className="px-2 py-2 text-left">工序</th>
                     <th className="px-2 py-2 text-right">投入</th>
                     <th className="px-2 py-2 text-right">合格</th>
-                    <th className="px-2 py-2 text-right">不良</th>
-                    <th className="px-2 py-2 text-right">来料·小片</th>
-                    <th className="px-2 py-2 text-right">来料·带盖</th>
-                    <th className="px-2 py-2 text-right">制程·小片</th>
-                    <th className="px-2 py-2 text-right">制程·带盖</th>
+                    <th className="px-2 py-2 text-right">不良（自动汇总）</th>
+                    <th className="px-2 py-2 text-center">一致性</th>
                     <th className="px-2 py-2 text-center">状态</th>
                     <th className="px-2 py-2 text-center">操作</th>
                   </tr>
@@ -607,10 +597,8 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
                 <tbody>
                   {sortedSeq.map((seq) => {
                     const d = opDrafts[seq];
-                    const failSum =
-                      d.incoming_defect_piece + d.incoming_defect_cover + d.process_defect_piece + d.process_defect_cover;
-                    const sumOk = d.pass_quantity + d.fail_quantity === d.input_quantity && d.input_quantity > 0;
-                    const failOk = failSum === d.fail_quantity || d.fail_quantity === 0;
+                    const sumOk =
+                      d.input_quantity === d.pass_quantity + d.fail_quantity && d.input_quantity > 0;
                     return (
                       <tr key={seq} className="border-b border-slate-800 text-slate-200">
                         <td className="px-2 py-2 align-top">
@@ -629,7 +617,7 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
                                 [seq]: { ...d, input_quantity: Number(e.target.value) || 0, dirty: true },
                               })
                             }
-                            className="h-7 w-20 border-slate-700 bg-slate-950 text-right text-slate-100"
+                            className="h-7 w-24 border-slate-700 bg-slate-950 text-right text-slate-100"
                           />
                         </td>
                         <td className="px-2 py-1 align-top text-right">
@@ -644,83 +632,26 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
                                 [seq]: { ...d, pass_quantity: Number(e.target.value) || 0, dirty: true },
                               })
                             }
-                            className="h-7 w-20 border-slate-700 bg-slate-950 text-right text-slate-100"
+                            className="h-7 w-24 border-slate-700 bg-slate-950 text-right text-slate-100"
                           />
                         </td>
                         <td className="px-2 py-1 align-top text-right">
-                          <Input
-                            type="number"
-                            min={0}
-                            value={d.fail_quantity || ""}
-                            disabled={isClosed}
-                            onChange={(e) =>
-                              setOpDrafts({
-                                ...opDrafts,
-                                [seq]: { ...d, fail_quantity: Number(e.target.value) || 0, dirty: true },
-                              })
-                            }
-                            className="h-7 w-20 border-slate-700 bg-slate-950 text-right text-slate-100"
-                          />
+                          <div className="flex h-7 w-24 items-center justify-end rounded border border-slate-800 bg-slate-900 px-2 text-right font-mono text-amber-400">
+                            {formatNumber(d.fail_quantity)}
+                          </div>
                         </td>
-                        <td className="px-2 py-1 align-top text-right">
-                          <Input
-                            type="number"
-                            min={0}
-                            value={d.incoming_defect_piece || ""}
-                            disabled={isClosed || seq !== firstSeq}
-                            onChange={(e) =>
-                              setOpDrafts({
-                                ...opDrafts,
-                                [seq]: { ...d, incoming_defect_piece: Number(e.target.value) || 0, dirty: true },
-                              })
-                            }
-                            className="h-7 w-20 border-slate-700 bg-slate-950 text-right text-slate-100"
-                          />
-                        </td>
-                        <td className="px-2 py-1 align-top text-right">
-                          <Input
-                            type="number"
-                            min={0}
-                            value={d.incoming_defect_cover || ""}
-                            disabled={isClosed || seq !== firstSeq}
-                            onChange={(e) =>
-                              setOpDrafts({
-                                ...opDrafts,
-                                [seq]: { ...d, incoming_defect_cover: Number(e.target.value) || 0, dirty: true },
-                              })
-                            }
-                            className="h-7 w-20 border-slate-700 bg-slate-950 text-right text-slate-100"
-                          />
-                        </td>
-                        <td className="px-2 py-1 align-top text-right">
-                          <Input
-                            type="number"
-                            min={0}
-                            value={d.process_defect_piece || ""}
-                            disabled={isClosed}
-                            onChange={(e) =>
-                              setOpDrafts({
-                                ...opDrafts,
-                                [seq]: { ...d, process_defect_piece: Number(e.target.value) || 0, dirty: true },
-                              })
-                            }
-                            className="h-7 w-20 border-slate-700 bg-slate-950 text-right text-slate-100"
-                          />
-                        </td>
-                        <td className="px-2 py-1 align-top text-right">
-                          <Input
-                            type="number"
-                            min={0}
-                            value={d.process_defect_cover || ""}
-                            disabled={isClosed}
-                            onChange={(e) =>
-                              setOpDrafts({
-                                ...opDrafts,
-                                [seq]: { ...d, process_defect_cover: Number(e.target.value) || 0, dirty: true },
-                              })
-                            }
-                            className="h-7 w-20 border-slate-700 bg-slate-950 text-right text-slate-100"
-                          />
+                        <td className="px-2 py-2 text-center align-top">
+                          {d.input_quantity === 0 ? (
+                            <span className="text-slate-500">未录入</span>
+                          ) : sumOk ? (
+                            <span className="inline-flex items-center gap-1 text-emerald-400">
+                              <CheckCircle2 className="h-3.5 w-3.5" /> 一致
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-rose-400">
+                              <AlertTriangle className="h-3.5 w-3.5" /> 不一致
+                            </span>
+                          )}
                         </td>
                         <td className="px-2 py-2 text-center align-top">
                           {d.savedId ? (
@@ -734,12 +665,6 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
                           ) : (
                             <span className="text-slate-500">未录入</span>
                           )}
-                          {d.input_quantity > 0 && !sumOk ? (
-                            <div className="mt-1 text-[10px] text-rose-400">合+不≠投</div>
-                          ) : null}
-                          {d.fail_quantity > 0 && !failOk ? (
-                            <div className="mt-1 text-[10px] text-rose-400">不良分项≠合计</div>
-                          ) : null}
                         </td>
                         <td className="px-2 py-2 text-center align-top">
                           <Button
@@ -761,20 +686,60 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
           </Card>
         </TabsContent>
 
-        {/* 工序不良 */}
+        {/* 工序不良 — 按工序选择录入 */}
         <TabsContent value="defects" className="mt-3">
           <Card className="border-slate-800 bg-slate-900">
             <CardHeader>
               <CardTitle className="text-slate-100">工序不良登记</CardTitle>
-              <CardDescription className="text-slate-400">制程不良/来料不良分类记录</CardDescription>
+              <CardDescription className="text-slate-400">
+                选择工序 → 录入该工序的多条不良；该工序的「不良（自动汇总）」= SUM(defect_quantity)
+              </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
+              {/* 工序选择 */}
+              <div className="flex flex-col gap-1.5 md:flex-row md:items-center md:gap-3">
+                <label className="text-xs uppercase tracking-wider text-slate-500 md:w-20">选择工序</label>
+                <div className="relative md:w-80">
+                  <select
+                    value={defectOpSeq === "" ? "" : defectOpSeq}
+                    disabled={isClosed}
+                    onChange={(e) => setDefectOpSeq(e.target.value ? Number(e.target.value) : "")}
+                    className="h-9 w-full appearance-none rounded border border-slate-700 bg-slate-950 px-2 pr-8 text-sm text-slate-100"
+                  >
+                    <option value="">-- 请选择已报工的工序 --</option>
+                    {reportedOps.map((o) => (
+                      <option key={o.operation_seq} value={o.operation_seq}>
+                        #{o.operation_seq} {o.operation_name}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                </div>
+                {defectOpSeq !== "" ? (
+                  <div className="flex items-center gap-2 text-xs text-slate-400">
+                    <span>已选：</span>
+                    <span className="font-mono text-amber-400">
+                      #{defectOpSeq} {opDrafts[defectOpSeq]?.operation_name}
+                    </span>
+                    <span>· 汇总不良：</span>
+                    <span className="font-mono text-amber-300">
+                      {formatNumber(currentOpReport?.fail_quantity ?? 0)}
+                    </span>
+                  </div>
+                ) : (
+                  <div className="text-xs text-slate-500">
+                    {reportedOps.length === 0 ? "暂无已报工工序，请先在「工序报工」Tab 保存工序数据" : "请选择一道工序"}
+                  </div>
+                )}
+              </div>
+
+              {/* 新增不良表单 */}
               <div className="grid grid-cols-1 gap-2 md:grid-cols-6">
                 <select
                   value={newDefect.defect_category}
-                  disabled={isClosed}
+                  disabled={isClosed || !currentOpReport?.savedId}
                   onChange={(e) => setNewDefect({ ...newDefect, defect_category: e.target.value as NewDefect["defect_category"] })}
-                  className="h-9 rounded border border-slate-700 bg-slate-950 px-2 text-sm text-slate-100"
+                  className="h-9 rounded border border-slate-700 bg-slate-950 px-2 text-sm text-slate-100 disabled:opacity-50"
                 >
                   <option value="制程不良">制程不良</option>
                   <option value="来料不良">来料不良</option>
@@ -782,38 +747,45 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
                 <Input
                   placeholder="不良名称"
                   value={newDefect.defect_name}
-                  disabled={isClosed}
+                  disabled={isClosed || !currentOpReport?.savedId}
                   onChange={(e) => setNewDefect({ ...newDefect, defect_name: e.target.value })}
-                  className="border-slate-700 bg-slate-950 text-slate-100 placeholder:text-slate-600"
+                  className="border-slate-700 bg-slate-950 text-slate-100 placeholder:text-slate-600 disabled:opacity-50"
                 />
                 <Input
                   type="number"
                   min={0}
                   placeholder="数量"
                   value={newDefect.defect_quantity || ""}
-                  disabled={isClosed}
+                  disabled={isClosed || !currentOpReport?.savedId}
                   onChange={(e) => setNewDefect({ ...newDefect, defect_quantity: Number(e.target.value) || 0 })}
-                  className="border-slate-700 bg-slate-950 text-right text-slate-100"
+                  className="border-slate-700 bg-slate-950 text-right text-slate-100 disabled:opacity-50"
                 />
                 <select
                   value={newDefect.unit}
-                  disabled={isClosed}
+                  disabled={isClosed || !currentOpReport?.savedId}
                   onChange={(e) => setNewDefect({ ...newDefect, unit: e.target.value as NewDefect["unit"] })}
-                  className="h-9 rounded border border-slate-700 bg-slate-950 px-2 text-sm text-slate-100"
+                  className="h-9 rounded border border-slate-700 bg-slate-950 px-2 text-sm text-slate-100 disabled:opacity-50"
                 >
                   <option value="小片">小片</option>
                   <option value="带盖">带盖</option>
                 </select>
                 <Button
                   size="sm"
-                  className="bg-orange-500 text-white hover:bg-orange-600 md:col-span-2"
+                  className="bg-orange-500 text-white hover:bg-orange-600 md:col-span-2 disabled:opacity-50"
                   onClick={addDefect}
-                  disabled={isClosed || saving}
+                  disabled={isClosed || saving || !currentOpReport?.savedId}
                 >
-                  <Save className="mr-1.5 h-4 w-4" /> 新增不良
+                  <ListChecks className="mr-1.5 h-4 w-4" /> 新增不良（按工序）
                 </Button>
               </div>
-              <DefectsTable defects={detail.defects ?? []} onRemove={removeDefect} isClosed={isClosed} />
+
+              {/* 该工序已有不良 */}
+              <div className="border-t border-slate-800 pt-3">
+                <div className="mb-2 text-xs uppercase tracking-wider text-slate-500">
+                  {defectOpSeq !== "" ? `#${defectOpSeq} 已有不良 (${currentDefects.length})` : "请先选择工序"}
+                </div>
+                <DefectsTable defects={currentDefects} onRemove={removeDefect} isClosed={isClosed} />
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -961,7 +933,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 function DefectsTable({ defects, onRemove, isClosed }: { defects: OperationDefect[]; onRemove: (id: string) => void; isClosed: boolean }) {
   if (defects.length === 0) {
-    return <div className="rounded border border-dashed border-slate-700 p-4 text-center text-sm text-slate-500">暂无不良记录</div>;
+    return <div className="rounded border border-dashed border-slate-700 p-4 text-center text-sm text-slate-500">该工序暂无不良记录</div>;
   }
   return (
     <table className="w-full border-collapse text-sm">

@@ -20,13 +20,13 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    if (!body.work_order_id || !body.batch_no || !body.start_time) {
+    if (!body.work_order_id) {
       return NextResponse.json(
-        { success: false, error: "缺少必填参数 work_order_id / batch_no / start_time" },
+        { success: false, error: "缺少必填参数 work_order_id" },
         { status: 400 }
       );
     }
-    if (!/^[A-Za-z0-9_-]+$/.test(body.batch_no)) {
+    if (body.batch_no !== undefined && !/^[A-Za-z0-9_-]+$/.test(body.batch_no)) {
       return NextResponse.json(
         { success: false, error: "生产批号不允许输入汉字、通配符、特殊字符" },
         { status: 400 }

@@ -505,10 +505,6 @@ operation_reports: {
     input_quantity: number | null;
     pass_quantity: number | null;
     fail_quantity: number | null;
-    incoming_defect_piece: number | null;
-    incoming_defect_cover: number | null;
-    process_defect_piece: number | null;
-    process_defect_cover: number | null;
     report_time: string | null;
     created_at: string | null;
   };
@@ -522,10 +518,6 @@ operation_reports: {
     input_quantity?: number | null;
     pass_quantity?: number | null;
     fail_quantity?: number | null;
-    incoming_defect_piece?: number | null;
-    incoming_defect_cover?: number | null;
-    process_defect_piece?: number | null;
-    process_defect_cover?: number | null;
     report_time?: string | null;
     created_at?: string | null;
   };
@@ -535,9 +527,11 @@ operation_reports: {
 operation_defects: {
   Row: {
     id: string;
+    operation_report_id: string | null;
     work_order_report_id: string;
     work_order_no: string;
     batch_no: string;
+    operation_seq: number | null;
     defect_category: string;
     defect_name: string;
     defect_quantity: number | null;
@@ -546,9 +540,11 @@ operation_defects: {
   };
   Insert: {
     id?: string;
+    operation_report_id?: string | null;
     work_order_report_id: string;
     work_order_no: string;
     batch_no: string;
+    operation_seq?: number | null;
     defect_category: string;
     defect_name: string;
     defect_quantity?: number | null;

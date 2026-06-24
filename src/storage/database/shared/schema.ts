@@ -312,10 +312,6 @@ export const operationReports = pgTable("operation_reports", {
   inputQuantity: integer("input_quantity").default(0),
   passQuantity: integer("pass_quantity").default(0),
   failQuantity: integer("fail_quantity").default(0),
-  incomingDefectPiece: integer("incoming_defect_piece").default(0),
-  incomingDefectCover: integer("incoming_defect_cover").default(0),
-  processDefectPiece: integer("process_defect_piece").default(0),
-  processDefectCover: integer("process_defect_cover").default(0),
   reportTime: timestamp("report_time", { withTimezone: true }).defaultNow(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
 }, (t) => ({
@@ -324,9 +320,11 @@ export const operationReports = pgTable("operation_reports", {
 
 export const operationDefects = pgTable("operation_defects", {
   id: varchar("id", { length: 64 }).primaryKey().default(sql`gen_random_uuid()::text`),
+  operationReportId: varchar("operation_report_id", { length: 64 }).references(() => operationReports.id, { onDelete: "cascade" }),
   workOrderReportId: varchar("work_order_report_id", { length: 64 }).notNull().references(() => workOrderReports.id, { onDelete: "cascade" }),
   workOrderNo: varchar("work_order_no", { length: 32 }).notNull(),
   batchNo: varchar("batch_no", { length: 32 }).notNull(),
+  operationSeq: integer("operation_seq"),
   defectCategory: varchar("defect_category", { length: 32 }).notNull(),
   defectName: varchar("defect_name", { length: 64 }).notNull(),
   defectQuantity: integer("defect_quantity").default(0),

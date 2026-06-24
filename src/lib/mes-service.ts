@@ -794,19 +794,17 @@ const toOpReportView = (r: Record<string, unknown>): OperationReport => ({
   input_quantity: Number(r.input_quantity ?? 0),
   pass_quantity: Number(r.pass_quantity ?? 0),
   fail_quantity: Number(r.fail_quantity ?? 0),
-  incoming_defect_piece: Number(r.incoming_defect_piece ?? 0),
-  incoming_defect_cover: Number(r.incoming_defect_cover ?? 0),
-  process_defect_piece: Number(r.process_defect_piece ?? 0),
-  process_defect_cover: Number(r.process_defect_cover ?? 0),
   report_time: String(r.report_time ?? ""),
   created_at: String(r.created_at ?? ""),
 });
 
 const toOpDefectView = (r: Record<string, unknown>): OperationDefect => ({
   id: String(r.id),
-  work_order_report_id: String(r.work_order_report_id),
+  operation_report_id: r.operation_report_id ? String(r.operation_report_id) : null,
+  work_order_report_id: String(r.work_order_report_id ?? ""),
   work_order_no: String(r.work_order_no ?? ""),
   batch_no: String(r.batch_no ?? ""),
+  operation_seq: r.operation_seq == null ? null : Number(r.operation_seq),
   defect_category: (r.defect_category as OperationDefect["defect_category"]) ?? "制程不良",
   defect_name: String(r.defect_name ?? ""),
   defect_quantity: Number(r.defect_quantity ?? 0),
@@ -885,8 +883,10 @@ export async function getReportDetail(id: string): Promise<WorkOrderReportDetail
 
 export interface CreateReportInput {
   work_order_id: string;
-  batch_no: string;
-  start_time: string;
+  /** 批号；不传时按日期+完工顺序号自动生成 */
+  batch_no?: string;
+  /** 开工时间；不传时使用 now() */
+  start_time?: string;
   skilled_worker_count?: number;
   regular_worker_count?: number;
   contract_worker_count?: number;
@@ -937,14 +937,22 @@ export async function createReport(input: CreateReportInput): Promise<WorkOrderR
   const completion_seq = (seqRows && seqRows.length > 0) ? Number(seqRows[0].completion_seq) + 1 : 1;
   const reportNo = `RPT-${input.work_order_id.slice(0, 6)}-${String(completion_seq).padStart(2, "0")}-${Date.now().toString().slice(-4)}`;
 
+  // 自动生成批号（如果未传）：日期+顺序号
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const autoBatchNo =
+    input.batch_no ||
+    `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}${String(completion_seq).padStart(2, "0")}`;
+  const autoStartTime = input.start_time || now.toISOString();
+
   // 4) 插入
   const row = {
     report_no: reportNo,
     work_order_id: input.work_order_id,
     work_order_no: wo.order_no,
     completion_seq,
-    batch_no: input.batch_no,
-    start_time: input.start_time,
+    batch_no: autoBatchNo,
+    start_time: autoStartTime,
     skilled_worker_count: input.skilled_worker_count ?? 0,
     regular_worker_count: input.regular_worker_count ?? 0,
     contract_worker_count: input.contract_worker_count ?? 0,
@@ -1041,11 +1049,23 @@ export interface CreateOpReportInput {
   operation_name: string;
   input_quantity: number;
   pass_quantity: number;
-  fail_quantity: number;
-  incoming_defect_piece?: number;
-  incoming_defect_cover?: number;
-  process_defect_piece?: number;
-  process_defect_cover?: number;
+}
+
+/** 重新汇总某道工序的 fail_quantity（来自 operation_defects.defect_quantity） */
+async function recomputeOpReportFail(opReportId: string): Promise<number> {
+  const supa = getSupabaseClient();
+  const { data, error } = await supa
+    .from("operation_defects")
+    .select("defect_quantity")
+    .eq("operation_report_id", opReportId);
+  if (error) throw new Error(`汇总工序不良失败: ${error.message}`);
+  const sum = (data ?? []).reduce((s, r) => s + (Number(r.defect_quantity) || 0), 0);
+  const { error: upErr } = await supa
+    .from("operation_reports")
+    .update({ fail_quantity: sum })
+    .eq("id", opReportId);
+  if (upErr) throw new Error(`回写工序 fail_quantity 失败: ${upErr.message}`);
+  return sum;
 }
 
 export async function createOrUpdateOpReport(input: CreateOpReportInput): Promise<OperationReport> {
@@ -1075,7 +1095,7 @@ export async function createOrUpdateOpReport(input: CreateOpReportInput): Promis
     }
   }
 
-  // 3) upsert
+  // 3) upsert（fail_quantity 由 operation_defects 自动汇总，先写 0）
   const payload = {
     work_order_report_id: input.work_order_report_id,
     work_order_no: r.work_order_no,
@@ -1084,11 +1104,7 @@ export async function createOrUpdateOpReport(input: CreateOpReportInput): Promis
     operation_name: input.operation_name,
     input_quantity: input.input_quantity,
     pass_quantity: input.pass_quantity,
-    fail_quantity: input.fail_quantity,
-    incoming_defect_piece: input.incoming_defect_piece ?? 0,
-    incoming_defect_cover: input.incoming_defect_cover ?? 0,
-    process_defect_piece: input.process_defect_piece ?? 0,
-    process_defect_cover: input.process_defect_cover ?? 0,
+    fail_quantity: 0,
   };
   const { data, error } = await supa
     .from("operation_reports")
@@ -1096,13 +1112,16 @@ export async function createOrUpdateOpReport(input: CreateOpReportInput): Promis
     .select()
     .maybeSingle();
   if (error) throw new Error(`保存工序报工失败: ${error.message}`);
-  return toOpReportView(data!);
+
+  // 4) 重新汇总 fail_quantity（即使本次没新增不良，也确保与子表保持一致）
+  const fail = await recomputeOpReportFail(data!.id);
+  return { ...toOpReportView(data!), fail_quantity: fail };
 }
 
 /* ---------- 工序不良 ---------- */
 
 export interface CreateOpDefectInput {
-  work_order_report_id: string;
+  operation_report_id: string;
   defect_category: "制程不良" | "来料不良";
   defect_name: string;
   defect_quantity: number;
@@ -1111,20 +1130,34 @@ export interface CreateOpDefectInput {
 
 export async function addOpDefect(input: CreateOpDefectInput): Promise<OperationDefect> {
   const supa = getSupabaseClient();
-  const { data: r, error: rErr } = await supa
-    .from("work_order_reports")
-    .select("id, work_order_no, batch_no, is_closed")
-    .eq("id", input.work_order_report_id)
+  // 1) 通过 operation_report_id 反查工序报工 + 所属批次
+  const { data: op, error: opErr } = await supa
+    .from("operation_reports")
+    .select("id, work_order_report_id, operation_seq, work_order_no, batch_no")
+    .eq("id", input.operation_report_id)
     .maybeSingle();
-  if (rErr) throw new Error(`查询报工批次失败: ${rErr.message}`);
-  if (!r) throw new Error("报工批次不存在");
-  if (r.is_closed) throw new Error("报工批次已关闭，不能新增不良");
+  if (opErr) throw new Error(`查询工序报工失败: ${opErr.message}`);
+  if (!op) throw new Error("工序报工不存在，请先完成工序报工");
+
+  // 2) 校验所属批次未关闭
+  const { data: rep, error: repErr } = await supa
+    .from("work_order_reports")
+    .select("id, is_closed")
+    .eq("id", op.work_order_report_id)
+    .maybeSingle();
+  if (repErr) throw new Error(`查询报工批次失败: ${repErr.message}`);
+  if (!rep) throw new Error("报工批次不存在");
+  if (rep.is_closed) throw new Error("报工批次已关闭，不能新增不良");
+
+  // 3) 插入不良行（冗余回填 work_order_report_id/work_order_no/batch_no/operation_seq 便于查询）
   const { data, error } = await supa
     .from("operation_defects")
     .insert({
-      work_order_report_id: input.work_order_report_id,
-      work_order_no: r.work_order_no,
-      batch_no: r.batch_no,
+      operation_report_id: op.id,
+      work_order_report_id: op.work_order_report_id,
+      work_order_no: op.work_order_no,
+      batch_no: op.batch_no,
+      operation_seq: op.operation_seq,
       defect_category: input.defect_category,
       defect_name: input.defect_name,
       defect_quantity: input.defect_quantity,
@@ -1133,13 +1166,28 @@ export async function addOpDefect(input: CreateOpDefectInput): Promise<Operation
     .select()
     .maybeSingle();
   if (error) throw new Error(`新增不良失败: ${error.message}`);
+
+  // 4) 自动汇总更新 operation_reports.fail_quantity
+  await recomputeOpReportFail(op.id);
   return toOpDefectView(data!);
 }
 
 export async function deleteOpDefect(id: string): Promise<void> {
   const supa = getSupabaseClient();
+  // 1) 先查出这条 defect 属于哪个 op_report（删除后重新汇总其 fail_quantity）
+  const { data: def, error: qErr } = await supa
+    .from("operation_defects")
+    .select("operation_report_id")
+    .eq("id", id)
+    .maybeSingle();
+  if (qErr) throw new Error(`查询不良失败: ${qErr.message}`);
+  // 2) 删除
   const { error } = await supa.from("operation_defects").delete().eq("id", id);
   if (error) throw new Error(`删除不良失败: ${error.message}`);
+  // 3) 重新汇总所属工序的 fail_quantity
+  if (def?.operation_report_id) {
+    await recomputeOpReportFail(def.operation_report_id);
+  }
 }
 
 /* ---------- 异常工时 ---------- */
