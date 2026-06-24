@@ -308,9 +308,18 @@ export interface OperationReport {
   batch_no: string;
   operation_seq: number;
   operation_name: string;
+  /** 投入数（自动计算：首道=制程汇总，后续=上一道pass） */
   input_quantity: number;
   pass_quantity: number;
   fail_quantity: number;
+  /** 来料不良-小片 */
+  incoming_piece: number;
+  /** 来料不良-带盖 */
+  incoming_cover: number;
+  /** 制程不良-小片 */
+  process_piece: number;
+  /** 制程不良-带盖 */
+  process_cover: number;
   report_time: string;
   created_at: string;
 }

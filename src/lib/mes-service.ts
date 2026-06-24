@@ -784,16 +784,24 @@ const toReportView = (r: Record<string, unknown>): WorkOrderReport => ({
   created_at: String(r.created_at ?? ""),
 });
 
-const toOpReportView = (r: Record<string, unknown>): OperationReport => ({
+const toOpReportView = (
+  r: Record<string, unknown>,
+  inputQty: number,
+  defectsByCategory?: { incoming_piece: number; incoming_cover: number; process_piece: number; process_cover: number }
+): OperationReport => ({
   id: String(r.id),
   work_order_report_id: String(r.work_order_report_id),
   work_order_no: String(r.work_order_no ?? ""),
   batch_no: String(r.batch_no ?? ""),
   operation_seq: Number(r.operation_seq ?? 0),
   operation_name: String(r.operation_name ?? ""),
-  input_quantity: Number(r.input_quantity ?? 0),
+  input_quantity: inputQty,
   pass_quantity: Number(r.pass_quantity ?? 0),
   fail_quantity: Number(r.fail_quantity ?? 0),
+  incoming_piece: defectsByCategory?.incoming_piece ?? 0,
+  incoming_cover: defectsByCategory?.incoming_cover ?? 0,
+  process_piece: defectsByCategory?.process_piece ?? 0,
+  process_cover: defectsByCategory?.process_cover ?? 0,
   report_time: String(r.report_time ?? ""),
   created_at: String(r.created_at ?? ""),
 });
@@ -870,12 +878,64 @@ export async function getReportDetail(id: string): Promise<WorkOrderReportDetail
     supa.from("process_infos").select("*").eq("work_order_report_id", id).order("operation_seq"),
   ]);
 
+  const opRows = ops.data ?? [];
+  const defRows = defs.data ?? [];
+  const piRows = pis.data ?? [];
+
+  // 计算各工序的汇总数据
+  const processInfoBySeq: Record<number, number> = {};
+  for (const p of piRows) {
+    const seq = Number(p.operation_seq ?? 0);
+    processInfoBySeq[seq] = (processInfoBySeq[seq] || 0) + Number(p.quantity ?? 0);
+  }
+
+  // 计算各工序的4类不良汇总
+  const defectSummary: Record<number, { incoming_piece: number; incoming_cover: number; process_piece: number; process_cover: number }> = {};
+  for (const d of defRows) {
+    const seq = Number(d.operation_seq ?? 0);
+    if (!defectSummary[seq]) defectSummary[seq] = { incoming_piece: 0, incoming_cover: 0, process_piece: 0, process_cover: 0 };
+    const qty = Number(d.defect_quantity ?? 0);
+    const category = String(d.defect_category ?? "");
+    const unit = String(d.unit ?? "");
+    if (category === "来料不良") {
+      if (unit === "小片") defectSummary[seq].incoming_piece += qty;
+      else if (unit === "带盖") defectSummary[seq].incoming_cover += qty;
+    } else if (category === "制程不良") {
+      if (unit === "小片") defectSummary[seq].process_piece += qty;
+      else if (unit === "带盖") defectSummary[seq].process_cover += qty;
+    }
+  }
+
+  // 计算投入数：首道=制程汇总，后续=上一道pass
+  const opViewsWithSummary: OperationReport[] = [];
+  let prevPass = 0;
+  let prevFail = 0;
+  for (let i = 0; i < opRows.length; i++) {
+    const op = opRows[i];
+    const seq = Number(op.operation_seq ?? 0);
+    const sum = defectSummary[seq] || { incoming_piece: 0, incoming_cover: 0, process_piece: 0, process_cover: 0 };
+    
+    // 投入数：首道从制程信息汇总，后续从上一道合格数
+    const inputQty = i === 0 ? (processInfoBySeq[seq] || 0) : prevPass;
+    
+    // 不良数从汇总
+    const failQty = sum.incoming_piece + sum.incoming_cover + sum.process_piece + sum.process_cover;
+    
+    // 合格数：如果已录入则用录入值，否则 = 投入 - 不良
+    const passQty = Number(op.pass_quantity ?? 0) || (inputQty - failQty);
+    
+    opViewsWithSummary.push(toOpReportView(op, inputQty, sum));
+    
+    prevPass = passQty;
+    prevFail = failQty;
+  }
+
   return {
     ...report,
-    operations: (ops.data ?? []).map(toOpReportView),
-    defects: (defs.data ?? []).map(toOpDefectView),
-    downtimes: (dts.data ?? []).map(toDowntimeView),
-    process_infos: (pis.data ?? []).map(toProcessInfoView),
+    operations: opViewsWithSummary,
+    defects: defRows.map(toOpDefectView),
+    downtimes: dts.data?.map(toDowntimeView) ?? [],
+    process_infos: piRows.map(toProcessInfoView),
   };
 }
 
@@ -1047,7 +1107,6 @@ export interface CreateOpReportInput {
   work_order_report_id: string;
   operation_seq: number;
   operation_name: string;
-  input_quantity: number;
   pass_quantity: number;
 }
 
@@ -1082,14 +1141,13 @@ export async function createOrUpdateOpReport(input: CreateOpReportInput): Promis
 
   // 2) 工序报工开始后，所有工序均可报工（无首道工序限制）
 
-  // 3) upsert（fail_quantity 由 operation_defects 自动汇总，先写 0）
+  // 3) upsert（投入数由制程信息/上一道工序自动计算，fail_quantity 由 operation_defects 自动汇总）
   const payload = {
     work_order_report_id: input.work_order_report_id,
     work_order_no: r.work_order_no,
     batch_no: r.batch_no,
     operation_seq: input.operation_seq,
     operation_name: input.operation_name,
-    input_quantity: input.input_quantity,
     pass_quantity: input.pass_quantity,
     fail_quantity: 0,
   };
@@ -1101,8 +1159,25 @@ export async function createOrUpdateOpReport(input: CreateOpReportInput): Promis
   if (error) throw new Error(`保存工序报工失败: ${error.message}`);
 
   // 4) 重新汇总 fail_quantity（即使本次没新增不良，也确保与子表保持一致）
-  const fail = await recomputeOpReportFail(data!.id);
-  return { ...toOpReportView(data!), fail_quantity: fail };
+  await recomputeOpReportFail(data!.id);
+  // 返回基本字段（投入数和不良分类在 getReportDetail 中动态计算）
+  return {
+    id: String(data!.id),
+    work_order_report_id: String(data!.work_order_report_id),
+    work_order_no: String(data!.work_order_no ?? ""),
+    batch_no: String(data!.batch_no ?? ""),
+    operation_seq: Number(data!.operation_seq ?? 0),
+    operation_name: String(data!.operation_name ?? ""),
+    input_quantity: 0,
+    pass_quantity: Number(data!.pass_quantity ?? 0),
+    fail_quantity: Number(data!.fail_quantity ?? 0),
+    incoming_piece: 0,
+    incoming_cover: 0,
+    process_piece: 0,
+    process_cover: 0,
+    report_time: String(data!.report_time ?? ""),
+    created_at: String(data!.created_at ?? ""),
+  };
 }
 
 /* ---------- 工序不良 ---------- */

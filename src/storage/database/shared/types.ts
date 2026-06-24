@@ -502,7 +502,6 @@ operation_reports: {
     batch_no: string;
     operation_seq: number;
     operation_name: string;
-    input_quantity: number | null;
     pass_quantity: number | null;
     fail_quantity: number | null;
     report_time: string | null;
@@ -515,7 +514,6 @@ operation_reports: {
     batch_no: string;
     operation_seq: number;
     operation_name: string;
-    input_quantity?: number | null;
     pass_quantity?: number | null;
     fail_quantity?: number | null;
     report_time?: string | null;
@@ -532,6 +530,7 @@ operation_defects: {
     work_order_no: string;
     batch_no: string;
     operation_seq: number | null;
+    defect_type: string | null;
     defect_category: string;
     defect_name: string;
     defect_quantity: number | null;
@@ -545,6 +544,7 @@ operation_defects: {
     work_order_no: string;
     batch_no: string;
     operation_seq?: number | null;
+    defect_type?: string | null;
     defect_category: string;
     defect_name: string;
     defect_quantity?: number | null;

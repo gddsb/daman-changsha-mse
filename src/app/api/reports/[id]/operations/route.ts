@@ -14,12 +14,11 @@ export async function POST(
         { status: 400 }
       );
     }
-    // fail_quantity 不再由前端传入，改为由 operation_defects 自动汇总
+    // 工序报工不再需要投入数（自动计算），只需录入合格数；不良数从operation_defects汇总
     const data = await createOrUpdateOpReport({
       work_order_report_id: id,
       operation_seq: body.operation_seq,
       operation_name: body.operation_name,
-      input_quantity: body.input_quantity ?? 0,
       pass_quantity: body.pass_quantity ?? 0,
     });
     return NextResponse.json({ success: true, data });
