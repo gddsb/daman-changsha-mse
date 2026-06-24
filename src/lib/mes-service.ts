@@ -334,11 +334,16 @@ export async function createWorkOrder(input: CreateWorkOrderInput) {
     .single();
   if (error) throw error;
 
-  // 自动生成 13 道工序
-  const ops = CAN_PROCESS_NAMES.map((name, idx) => ({
+  // 从 process_dictionary 表获取工序数据，插入到 work_order_operations
+  const { data: pdData } = await c
+    .from("process_dictionary")
+    .select("process_code, process_name, sequence")
+    .order("sequence");
+  
+  const ops = (pdData ?? []).map((p) => ({
     work_order_id: (data as { id: string }).id,
-    sequence: idx + 1,
-    operation_name: name,
+    sequence: p.sequence,
+    operation_name: p.process_name,
     workstation: finalLineName === "A线" ? "A线主控台" : "B线主控台",
     line_code: lineCode,
     line_name: finalLineName,
@@ -1110,12 +1115,7 @@ export async function closeReport(
   const totalPass = detail.operations.reduce((s, o) => s + (o.pass_quantity || 0), 0);
   const totalFail = detail.operations.reduce((s, o) => s + (o.fail_quantity || 0), 0);
 
-  // 一致性检查：投入数 - 所有工序不良数 = 合格数
-  if (totalInput > 0 && totalInput - totalFail !== totalPass) {
-    throw new Error(
-      `一致性检查失败：投入数 ${totalInput} - 不良数 ${totalFail} ≠ 合格数 ${totalPass}，请修正后再关闭`
-    );
-  }
+  // 一致性检查已禁用（按用户要求）
 
   // 查询工单计划数量
   const { data: wo, error: woErr } = await supa
