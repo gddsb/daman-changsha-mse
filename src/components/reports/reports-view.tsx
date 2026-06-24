@@ -44,7 +44,9 @@ export function ReportsView() {
     return (
       r.work_order_no.toLowerCase().includes(k) ||
       r.batch_no.toLowerCase().includes(k) ||
-      r.report_no.toLowerCase().includes(k)
+      r.report_no.toLowerCase().includes(k) ||
+      r.product_code.toLowerCase().includes(k) ||
+      r.product_name.toLowerCase().includes(k)
     );
   });
 
@@ -102,7 +104,7 @@ export function ReportsView() {
       <div className="flex items-center gap-3 px-6 py-3 border-b border-slate-800">
         <input
           type="text"
-          placeholder="搜索 工单号 / 生产批号 / 报工编号"
+          placeholder="搜索 工单号 / 生产批号 / 报工编号 / 产品编号 / 产品名称"
           value={keyword}
           onChange={(e) => setKeyword(e.target.value)}
           className="flex-1 bg-slate-900 border border-slate-800 rounded px-3 py-1.5 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-orange-500/50"
@@ -127,9 +129,13 @@ export function ReportsView() {
           </div>
         ) : (
           <div className="bg-slate-900 border border-slate-800 rounded overflow-hidden">
-            <div className="grid grid-cols-[100px_140px_120px_120px_160px_140px_120px_80px_100px_180px] gap-0 bg-slate-800 border-b border-slate-800 text-xs text-slate-300 font-medium">
+            {/* 表头：调整列宽以适应新格式编号 BG-YYYYMMDD-NN */}
+            <div className="grid grid-cols-[140px_120px_100px_120px_100px_60px_140px_160px_140px_100px_80px_100px_180px] gap-0 bg-slate-800 border-b border-slate-800 text-xs text-slate-300 font-medium">
               <div className="px-3 py-2.5">报工编号</div>
               <div className="px-3 py-2.5">工单号</div>
+              <div className="px-3 py-2.5">产品编号</div>
+              <div className="px-3 py-2.5">产品名称</div>
+              <div className="px-3 py-2.5">产品规格</div>
               <div className="px-3 py-2.5">完工顺序</div>
               <div className="px-3 py-2.5">生产批号</div>
               <div className="px-3 py-2.5">开工时间</div>
@@ -144,7 +150,7 @@ export function ReportsView() {
               return (
                 <div
                   key={r.id}
-                  className={`grid grid-cols-[100px_140px_120px_120px_160px_140px_120px_80px_100px_180px] gap-0 border-b border-slate-800/60 text-sm items-center ${
+                  className={`grid grid-cols-[140px_120px_100px_120px_100px_60px_140px_160px_140px_100px_80px_100px_180px] gap-0 border-b border-slate-800/60 text-sm items-center ${
                     openable
                       ? "hover:bg-slate-700/60 cursor-pointer"
                       : "hover:bg-slate-800/40"
@@ -157,8 +163,11 @@ export function ReportsView() {
                     {r.report_no}
                   </div>
                   <div className="px-3 py-2.5 font-mono text-slate-100 truncate">{r.work_order_no}</div>
+                  <div className="px-3 py-2.5 font-mono text-slate-100 truncate">{r.product_code}</div>
+                  <div className="px-3 py-2.5 text-slate-100 truncate">{r.product_name}</div>
+                  <div className="px-3 py-2.5 text-slate-300 truncate text-xs">{r.specification}</div>
                   <div className="px-3 py-2.5 font-mono text-slate-100">#{r.completion_seq}</div>
-                  <div className="px-3 py-2.5 font-mono text-slate-100">{r.batch_no}</div>
+                  <div className="px-3 py-2.5 font-mono text-slate-100 truncate">{r.batch_no}</div>
                   <div className="px-3 py-2.5 font-mono text-xs text-slate-300">
                     {r.start_time ? formatDateTime(r.start_time) : "—"}
                   </div>

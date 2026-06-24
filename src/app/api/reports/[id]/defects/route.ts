@@ -8,9 +8,13 @@ export async function POST(
   try {
     const { id } = await params;
     const body = await request.json();
-    if (!body.operation_report_id) {
+
+    // 支持两种方式：
+    // 1. 通过 operation_report_id 直接关联
+    // 2. 通过 work_order_report_id + operation_seq 查找或自动创建
+    if (!body.operation_report_id && !(body.work_order_report_id && body.operation_seq)) {
       return NextResponse.json(
-        { success: false, error: "缺少必填参数 operation_report_id" },
+        { success: false, error: "缺少必要参数：需要 operation_report_id 或 (work_order_report_id + operation_seq)" },
         { status: 400 }
       );
     }
@@ -20,8 +24,12 @@ export async function POST(
         { status: 400 }
       );
     }
+
     const data = await addOpDefect({
       operation_report_id: body.operation_report_id,
+      work_order_report_id: body.work_order_report_id ?? id, // 默认使用当前报工批次ID
+      operation_seq: body.operation_seq,
+      operation_name: body.operation_name,
       defect_category: body.defect_category,
       defect_name: body.defect_name,
       defect_quantity: body.defect_quantity ?? 0,

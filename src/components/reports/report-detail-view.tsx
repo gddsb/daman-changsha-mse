@@ -304,23 +304,29 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
   /** 当前批次是否已关闭 */
   const isClosed = !!detail?.is_closed;
 
-  /** 已报工的工序（用于不良 Tab 中选择） */
+  /** 工单的所有工序（用于不良 Tab 中选择工序） */
   const reportedOps = useMemo(
-    () => detail?.operations?.sort((a, b) => a.operation_seq - b.operation_seq) ?? [],
+    () => detail?.work_order_operations?.sort((a, b) => a.sequence - b.sequence) ?? [],
     [detail]
   );
 
-  /** 当前 defectOpSeq 对应的 operation_report（用于 POST defects） */
+  /** 当前 defectOpSeq 对应的 operation_report（可能不存在，需要自动创建） */
   const currentOpReport = useMemo(() => {
     if (defectOpSeq === "" || !detail) return null;
     return detail.operations.find((o) => o.operation_seq === defectOpSeq) ?? null;
   }, [defectOpSeq, detail]);
 
-  /** 该工序已有不良列表（来自 detail.defects，按 operation_report_id 过滤） */
+  /** 当前选择的工序信息（从工单工序列表获取） */
+  const currentWoOp = useMemo(() => {
+    if (defectOpSeq === "" || !detail) return null;
+    return detail.work_order_operations?.find((o) => o.sequence === defectOpSeq) ?? null;
+  }, [defectOpSeq, detail]);
+
+  /** 该工序已有不良列表（来自 detail.defects，按 operation_seq 过滤） */
   const currentDefects = useMemo(() => {
-    if (!currentOpReport?.id) return [];
-    return (detail?.defects ?? []).filter((d) => d.operation_report_id === currentOpReport.id);
-  }, [currentOpReport, detail]);
+    if (defectOpSeq === "" || !detail) return [];
+    return (detail?.defects ?? []).filter((d) => d.operation_seq === defectOpSeq);
+  }, [defectOpSeq, detail]);
 
   /** 工序汇总数据（投入/合格/不良，自动计算） */
   const opSummary = useMemo<Record<number, OpSummary>>(() => {
@@ -353,15 +359,15 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
     }
   };
 
-  /** 新增不良（按 operation_report_id） */
+  /** 新增不良（支持自动创建工序报工记录） */
   const addDefect = async () => {
     if (!detail) return;
     if (isClosed) {
       setPageError("报工批次已关闭，不能新增不良");
       return;
     }
-    if (!currentOpReport?.id) {
-      setPageError("请先在工序报工 Tab 中保存该工序的报工数据");
+    if (defectOpSeq === "") {
+      setPageError("请先选择工序");
       return;
     }
     if (!newDefect.defect_name.trim() || newDefect.defect_quantity <= 0) {
@@ -375,7 +381,11 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          operation_report_id: currentOpReport.id,
+          // 如果已有 operation_report 则直接使用，否则传 operation_seq 让 API 自动创建
+          operation_report_id: currentOpReport?.id ?? undefined,
+          work_order_report_id: detail.id,
+          operation_seq: defectOpSeq,
+          operation_name: currentWoOp?.operation_name ?? `工序${defectOpSeq}`,
           defect_category: newDefect.defect_category,
           defect_name: newDefect.defect_name,
           defect_quantity: newDefect.defect_quantity,
@@ -693,10 +703,10 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
                     onChange={(e) => setDefectOpSeq(e.target.value ? Number(e.target.value) : "")}
                     className="h-9 w-full appearance-none rounded border border-slate-700 bg-slate-950 px-2 pr-8 text-sm text-slate-100"
                   >
-                    <option value="">-- 请选择已报工的工序 --</option>
+                    <option value="">-- 请选择工序 --</option>
                     {reportedOps.map((o) => (
-                      <option key={o.operation_seq} value={o.operation_seq}>
-                        #{o.operation_seq} {o.operation_name}
+                      <option key={o.sequence} value={o.sequence}>
+                        #{o.sequence} {o.operation_name}
                       </option>
                     ))}
                   </select>
@@ -706,16 +716,16 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
                   <div className="flex items-center gap-2 text-xs text-slate-400">
                     <span>已选：</span>
                     <span className="font-mono text-amber-400">
-                      #{defectOpSeq} {opSummary[defectOpSeq]?.operation_name}
+                      #{defectOpSeq} {currentWoOp?.operation_name ?? ""}
                     </span>
-                    <span>· 汇总不良：</span>
+                    <span>· 已登记不良：</span>
                     <span className="font-mono text-amber-300">
-                      {formatNumber(currentOpReport?.fail_quantity ?? 0)}
+                      {formatNumber(currentDefects.reduce((s, d) => s + (d.defect_quantity ?? 0), 0))}
                     </span>
                   </div>
                 ) : (
                   <div className="text-xs text-slate-500">
-                    {reportedOps.length === 0 ? "暂无已报工工序，请先在「工序报工」Tab 保存工序数据" : "请选择一道工序"}
+                    {reportedOps.length === 0 ? "该工单暂无工序信息" : "请选择一道工序"}
                   </div>
                 )}
               </div>
@@ -724,7 +734,7 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
               <div className="grid grid-cols-1 gap-2 md:grid-cols-6">
                 <select
                   value={newDefect.defect_category}
-                  disabled={isClosed || !currentOpReport?.id}
+                  disabled={isClosed || defectOpSeq === ""}
                   onChange={(e) => setNewDefect({ ...newDefect, defect_category: e.target.value as NewDefect["defect_category"] })}
                   className="h-9 rounded border border-slate-700 bg-slate-950 px-2 text-sm text-slate-100 disabled:opacity-50"
                 >
@@ -734,7 +744,7 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
                 <Input
                   placeholder="不良名称"
                   value={newDefect.defect_name}
-                  disabled={isClosed || !currentOpReport?.id}
+                  disabled={isClosed || defectOpSeq === ""}
                   onChange={(e) => setNewDefect({ ...newDefect, defect_name: e.target.value })}
                   className="border-slate-700 bg-slate-950 text-slate-100 placeholder:text-slate-600 disabled:opacity-50"
                 />
@@ -743,13 +753,13 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
                   min={0}
                   placeholder="数量"
                   value={newDefect.defect_quantity || ""}
-                  disabled={isClosed || !currentOpReport?.id}
+                  disabled={isClosed || defectOpSeq === ""}
                   onChange={(e) => setNewDefect({ ...newDefect, defect_quantity: Number(e.target.value) || 0 })}
                   className="border-slate-700 bg-slate-950 text-right text-slate-100 disabled:opacity-50"
                 />
                 <select
                   value={newDefect.unit}
-                  disabled={isClosed || !currentOpReport?.id}
+                  disabled={isClosed || defectOpSeq === ""}
                   onChange={(e) => setNewDefect({ ...newDefect, unit: e.target.value as NewDefect["unit"] })}
                   className="h-9 rounded border border-slate-700 bg-slate-950 px-2 text-sm text-slate-100 disabled:opacity-50"
                 >
@@ -760,7 +770,7 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
                   size="sm"
                   className="bg-orange-500 text-white hover:bg-orange-600 md:col-span-2 disabled:opacity-50"
                   onClick={addDefect}
-                  disabled={isClosed || saving || !currentOpReport?.id}
+                  disabled={isClosed || saving || defectOpSeq === ""}
                 >
                   <ListChecks className="mr-1.5 h-4 w-4" /> 新增不良（按工序）
                 </Button>

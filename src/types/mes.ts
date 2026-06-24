@@ -284,6 +284,12 @@ export interface WorkOrderReport {
   report_no: string;
   work_order_id: string;
   work_order_no: string;
+  /** 产品编号（来自工单） */
+  product_code: string;
+  /** 产品名称（来自工单） */
+  product_name: string;
+  /** 产品规格（来自工单） */
+  specification: string;
   completion_seq: number;
   batch_no: string;
   start_time: string;
@@ -373,10 +379,12 @@ export interface ProcessInfo {
   created_at: string;
 }
 
-/** 报工完整快照（主表 + 子表汇总，给详情页用） */
+/** 报工完整快照（主表 + 子表汇总 + 工单工序列表，给详情页用） */
 export interface WorkOrderReportDetail extends WorkOrderReport {
   operations: OperationReport[];
   defects: OperationDefect[];
   downtimes: EquipmentDowntime[];
   process_infos: ProcessInfo[];
+  /** 工单的所有工序（来自 work_order_operations） */
+  work_order_operations: WorkOrderOperation[];
 }
