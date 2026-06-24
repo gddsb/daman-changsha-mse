@@ -768,7 +768,11 @@ import type {
   WorkOrderReportDetail,
 } from "@/types/mes";
 
-const toReportView = (r: Record<string, unknown>, wo?: { product_code?: string; product_name?: string; specification?: string }): WorkOrderReport => ({
+const toReportView = (
+  r: Record<string, unknown>,
+  wo?: { product_code?: string; product_name?: string; specification?: string },
+  computed?: { input_quantity?: number; fail_quantity?: number }
+): WorkOrderReport => ({
   id: String(r.id),
   report_no: cn(r.report_no),
   work_order_id: String(r.work_order_id),
@@ -784,9 +788,10 @@ const toReportView = (r: Record<string, unknown>, wo?: { product_code?: string; 
   regular_worker_count: Number(r.regular_worker_count ?? 0),
   contract_worker_count: Number(r.contract_worker_count ?? 0),
   other_worker_count: Number(r.other_worker_count ?? 0),
-  input_quantity: Number(r.input_quantity ?? 0),
-  pass_quantity: Number(r.pass_quantity ?? 0),
-  fail_quantity: Number(r.fail_quantity ?? 0),
+  // 投入=第一道工序制程汇总，不良=所有工序不良总和，合格=投入-不良
+  input_quantity: computed?.input_quantity ?? Number(r.input_quantity ?? 0),
+  fail_quantity: computed?.fail_quantity ?? Number(r.fail_quantity ?? 0),
+  pass_quantity: (computed?.input_quantity ?? Number(r.input_quantity ?? 0)) - (computed?.fail_quantity ?? Number(r.fail_quantity ?? 0)),
   is_closed: Boolean(r.is_closed),
   close_type: (r.close_type as WorkOrderReport["close_type"]) ?? null,
   created_at: String(r.created_at ?? ""),
@@ -881,10 +886,12 @@ export async function listReports(filter: { workOrderId?: string; workOrderNo?: 
   if (filter.workOrderId) q = q.eq("work_order_id", filter.workOrderId);
   if (filter.workOrderNo) q = q.eq("work_order_no", filter.workOrderNo);
   const { data, error } = await q;
-  if (error) throw new Error(`查询报工列表失败: ${error.message}`);
+  if (error) throw new Error("查询报工列表失败: " + error.message);
+
+  const reportIds = (data ?? []).map(r => r.id).filter(Boolean);
+  const woIds = (data ?? []).map(r => r.work_order_id).filter(Boolean);
 
   // 批量查询工单获取产品信息
-  const woIds = (data ?? []).map(r => r.work_order_id).filter(Boolean);
   const woMap: Record<string, { product_code: string; product_name: string; specification: string }> = {};
   if (woIds.length > 0) {
     const { data: woData } = await supa.from("work_orders").select("id, product_code, product_name, specification").in("id", woIds);
@@ -893,18 +900,37 @@ export async function listReports(filter: { workOrderId?: string; workOrderNo?: 
     }
   }
 
-  return (data ?? []).map(r => toReportView(r, woMap[r.work_order_id]));
+  // 批量查询制程信息（第一道工序）计算投入数
+  const inputMap: Record<string, number> = {};
+  if (reportIds.length > 0) {
+    const { data: piData } = await supa.from("process_infos").select("work_order_report_id, operation_seq, quantity").in("work_order_report_id", reportIds);
+    for (const pi of (piData ?? [])) {
+      if (pi.operation_seq === 1) {
+        inputMap[pi.work_order_report_id] = (inputMap[pi.work_order_report_id] ?? 0) + Number(pi.quantity ?? 0);
+      }
+    }
+  }
+
+  // 批量查询不良数据计算不良总数
+  const failMap: Record<string, number> = {};
+  if (reportIds.length > 0) {
+    const { data: defData } = await supa.from("operation_defects").select("work_order_report_id, defect_quantity").in("work_order_report_id", reportIds);
+    for (const def of (defData ?? [])) {
+      failMap[def.work_order_report_id] = (failMap[def.work_order_report_id] ?? 0) + Number(def.defect_quantity ?? 0);
+    }
+  }
+
+  return (data ?? []).map(r => toReportView(r, woMap[r.work_order_id], { input_quantity: inputMap[r.id], fail_quantity: failMap[r.id] }));
 }
 
 export async function getReportDetail(id: string): Promise<WorkOrderReportDetail | null> {
   const supa = getSupabaseClient();
   const { data: r, error } = await supa.from("work_order_reports").select("*").eq("id", id).maybeSingle();
-  if (error) throw new Error(`查询报工详情失败: ${error.message}`);
+  if (error) throw new Error("查询报工详情失败: " + error.message);
   if (!r) return null;
 
   // 查询工单获取产品信息
   const { data: wo } = await supa.from("work_orders").select("id, product_code, product_name, specification").eq("id", r.work_order_id).maybeSingle();
-  const report = toReportView(r, wo ?? undefined);
 
   const [ops, defs, dts, pis, pd, legacyWoOps] = await Promise.all([
     supa.from("operation_reports").select("*").eq("work_order_report_id", id).order("operation_seq"),
@@ -919,11 +945,16 @@ export async function getReportDetail(id: string): Promise<WorkOrderReportDetail
   const defRows = defs.data ?? [];
   const piRows = pis.data ?? [];
 
+  // 动态计算投入（第一道工序制程汇总）和不良（所有工序不良总和）
+  const inputQty = piRows.filter(pi => pi.operation_seq === 1).reduce((s, pi) => s + Number(pi.quantity ?? 0), 0);
+  const failQty = defRows.reduce((s, d) => s + Number(d.defect_quantity ?? 0), 0);
+  const report = toReportView(r, wo ?? undefined, { input_quantity: inputQty, fail_quantity: failQty });
+
   // 工序列表：优先 process_dictionary，其次 work_order_operations（与工单详情 API 一致）
   let woOpList: WorkOrderOperation[];
   if (pd.data && pd.data.length > 0) {
     woOpList = pd.data.map((p) => ({
-      id: `pd-${p.process_code}`,
+      id: "pd-" + p.process_code,
       work_order_id: r.work_order_id,
       sequence: Number(p.sequence),
       operation_code: String(p.process_code),
