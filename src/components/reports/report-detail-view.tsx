@@ -145,8 +145,14 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
   const [detail, setDetail] = useState<WorkOrderReportDetail | null>(null);
   const [workOrder, setWorkOrder] = useState<WorkOrder | null>(null);
   const [processes, setProcesses] = useState<ProcessItem[]>([]);
-  /** 当前在不良 Tab 中选中的工序（operation_seq） */
+  /** 新增不良时选择的工序 */
   const [defectOpSeq, setDefectOpSeq] = useState<number | "">("");
+  /** 筛选不良记录的工序 */
+  const [defectOpSeqFilter, setDefectOpSeqFilter] = useState<number | "">("");
+  /** 筛选异常工时的类型 */
+  const [downtimeTypeFilter, setDowntimeTypeFilter] = useState<string>("");
+  /** 筛选制程信息的工序 */
+  const [processOpSeqFilter, setProcessOpSeqFilter] = useState<number | "">("");
   const [newDefect, setNewDefect] = useState<NewDefect>({
     defect_category: "制程不良",
     defect_name: "",
@@ -176,6 +182,27 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
   const [saving, setSaving] = useState(false);
   const [pageError, setPageError] = useState<string | null>(null);
   const [pageHint, setPageHint] = useState<string | null>(null);
+
+  /** 筛选后的不良记录 */
+  const filteredDefects = useMemo(() => {
+    if (!detail?.defects) return [];
+    if (defectOpSeqFilter === "") return detail.defects;
+    return detail.defects.filter(d => d.operation_seq === defectOpSeqFilter);
+  }, [detail?.defects, defectOpSeqFilter]);
+
+  /** 筛选后的异常工时记录 */
+  const filteredDowntimes = useMemo(() => {
+    if (!detail?.downtimes) return [];
+    if (downtimeTypeFilter === "") return detail.downtimes;
+    return detail.downtimes.filter(d => d.anomaly_type === downtimeTypeFilter);
+  }, [detail?.downtimes, downtimeTypeFilter]);
+
+  /** 筛选后的制程信息记录 */
+  const filteredProcessInfos = useMemo(() => {
+    if (!detail?.process_infos) return [];
+    if (processOpSeqFilter === "") return detail.process_infos;
+    return detail.process_infos.filter(p => p.operation_seq === processOpSeqFilter);
+  }, [detail?.process_infos, processOpSeqFilter]);
 
   /** 加载批次详情 + 工单 + 工序字典 */
   const loadAll = async () => {
@@ -773,12 +800,24 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
                 </Button>
               </div>
 
-              {/* 所有不良记录 */}
+              {/* 不良记录筛选 */}
               <div className="border-t border-slate-800 pt-3">
-                <div className="mb-2 text-xs uppercase tracking-wider text-slate-500">
-                  不良记录 ({(detail?.defects ?? []).length})
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="text-xs uppercase tracking-wider text-slate-500">
+                    不良记录 ({filteredDefects.length}/{(detail?.defects ?? []).length})
+                  </span>
+                  <select
+                    value={defectOpSeqFilter}
+                    onChange={(e) => setDefectOpSeqFilter(e.target.value === "" ? "" : Number(e.target.value))}
+                    className="h-7 rounded border border-slate-700 bg-slate-950 px-2 text-xs text-slate-100"
+                  >
+                    <option value="">全部工序</option>
+                    {(detail?.work_order_operations ?? []).sort((a, b) => a.sequence - b.sequence).map(op => (
+                      <option key={op.id} value={op.sequence}>#{op.sequence} {op.operation_name}</option>
+                    ))}
+                  </select>
                 </div>
-                <DefectsTable defects={detail?.defects ?? []} onRemove={removeDefect} isClosed={isClosed} />
+                <DefectsTable defects={filteredDefects} onRemove={removeDefect} isClosed={isClosed} />
               </div>
             </CardContent>
           </Card>
@@ -842,7 +881,25 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
                   <Save className="mr-1.5 h-4 w-4" /> 记录
                 </Button>
               </div>
-              <DowntimesTable rows={detail.downtimes ?? []} onRemove={removeDowntime} isClosed={isClosed} />
+              {/* 异常工时筛选 */}
+              <div className="border-t border-slate-800 pt-3">
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="text-xs uppercase tracking-wider text-slate-500">
+                    异常工时记录 ({filteredDowntimes.length}/{(detail?.downtimes ?? []).length})
+                  </span>
+                  <select
+                    value={downtimeTypeFilter}
+                    onChange={(e) => setDowntimeTypeFilter(e.target.value)}
+                    className="h-7 rounded border border-slate-700 bg-slate-950 px-2 text-xs text-slate-100"
+                  >
+                    <option value="">全部类型</option>
+                    <option value="设备故障">设备故障</option>
+                    <option value="来料不良">来料不良</option>
+                    <option value="其它原因">其它原因</option>
+                  </select>
+                </div>
+                <DowntimesTable rows={filteredDowntimes} onRemove={removeDowntime} isClosed={isClosed} />
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -907,7 +964,27 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
                   className="border-slate-700 bg-slate-950 text-slate-100 placeholder:text-slate-600"
                 />
               </div>
-              <ProcessInfoTable rows={detail.process_infos ?? []} onRemove={removePI} isClosed={isClosed} />
+              {/* 制程信息筛选 */}
+              <div className="border-t border-slate-800 pt-3">
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="text-xs uppercase tracking-wider text-slate-500">
+                    制程信息记录 ({filteredProcessInfos.length}/{(detail?.process_infos ?? []).length})
+                  </span>
+                  <select
+                    value={processOpSeqFilter}
+                    onChange={(e) => setProcessOpSeqFilter(Number(e.target.value) || "")}
+                    className="h-7 rounded border border-slate-700 bg-slate-950 px-2 text-xs text-slate-100"
+                  >
+                    <option value="">全部工序</option>
+                    {processes.map((p) => (
+                      <option key={p.id} value={Number(p.sequence)}>
+                        #{p.sequence} {p.process_name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <ProcessInfoTable rows={filteredProcessInfos} onRemove={removePI} isClosed={isClosed} />
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
