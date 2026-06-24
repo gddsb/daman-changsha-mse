@@ -112,7 +112,7 @@ function computeOpSummary(
 
 /** 新增不良草稿（每次一条） */
 interface NewDefect {
-  defect_category: "制程不良" | "来料不良";
+  defect_category: "制程不良" | "来料不良" | "检验报废";
   defect_name: string;
   defect_quantity: number;
   unit: "小片" | "带盖" | "";
@@ -740,6 +740,7 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
                 >
                   <option value="制程不良">制程不良</option>
                   <option value="来料不良">来料不良</option>
+                  <option value="检验报废">检验报废</option>
                 </select>
                 <Input
                   placeholder="不良名称"

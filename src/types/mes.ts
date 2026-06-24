@@ -338,7 +338,7 @@ export interface OperationDefect {
   work_order_no: string;
   batch_no: string;
   operation_seq: number | null;
-  defect_category: "制程不良" | "来料不良";
+  defect_category: "制程不良" | "来料不良" | "检验报废";
   defect_name: string;
   defect_quantity: number;
   unit: "小片" | "带盖" | null;

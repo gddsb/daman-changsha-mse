@@ -1286,7 +1286,7 @@ export interface CreateOpDefectInput {
   operation_seq?: number;
   /** 工序名称 */
   operation_name?: string;
-  defect_category: "制程不良" | "来料不良";
+  defect_category: "制程不良" | "来料不良" | "检验报废";
   defect_name: string;
   defect_quantity: number;
   unit?: "小片" | "带盖" | null;
