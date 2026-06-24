@@ -150,7 +150,7 @@ export function ReportsView() {
               return (
                 <div
                   key={r.id}
-                  className={`grid grid-cols-[130px_160px_110px_minmax(150px,1fr)_80px_50px_110px_100px_100px_200px_60px_100px_120px] gap-0 border-b border-slate-800/60 text-sm items-center ${
+                  className={`grid grid-cols-[130px_160px_110px_minmax(150px,1fr)_80px_50px_110px_100px_100px_200px_60px_100px_120px] gap-0 border-b border-slate-800/60 text-xs items-center ${
                     openable
                       ? "hover:bg-slate-700/60 cursor-pointer"
                       : "hover:bg-slate-800/40"
