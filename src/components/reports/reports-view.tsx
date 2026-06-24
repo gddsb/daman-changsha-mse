@@ -129,8 +129,8 @@ export function ReportsView() {
           </div>
         ) : (
           <div className="bg-slate-900 border border-slate-800 rounded overflow-hidden">
-            {/* 表头：调整列宽以适应新格式编号 BG-YYYYMMDD-NN */}
-            <div className="grid grid-cols-[140px_120px_100px_120px_100px_60px_140px_160px_140px_100px_80px_100px_180px] gap-0 bg-slate-800 border-b border-slate-800 text-xs text-slate-300 font-medium">
+            {/* 表头：固定列宽，产品名称自适应换行 */}
+            <div className="grid grid-cols-[130px_140px_110px_minmax(0,1fr)_80px_50px_110px_100px_100px_100px_60px_80px_100px] gap-0 bg-slate-800 border-b border-slate-800 text-xs text-slate-300 font-medium">
               <div className="px-3 py-2.5">报工编号</div>
               <div className="px-3 py-2.5">工单号</div>
               <div className="px-3 py-2.5">产品编号</div>
@@ -150,7 +150,7 @@ export function ReportsView() {
               return (
                 <div
                   key={r.id}
-                  className={`grid grid-cols-[140px_120px_100px_120px_100px_60px_140px_160px_140px_100px_80px_100px_180px] gap-0 border-b border-slate-800/60 text-sm items-center ${
+                  className={`grid grid-cols-[130px_140px_110px_minmax(0,1fr)_80px_50px_110px_100px_100px_100px_60px_80px_100px] gap-0 border-b border-slate-800/60 text-sm items-center ${
                     openable
                       ? "hover:bg-slate-700/60 cursor-pointer"
                       : "hover:bg-slate-800/40"
@@ -164,7 +164,7 @@ export function ReportsView() {
                   </div>
                   <div className="px-3 py-2.5 font-mono text-slate-100 truncate">{r.work_order_no}</div>
                   <div className="px-3 py-2.5 font-mono text-slate-100 truncate">{r.product_code}</div>
-                  <div className="px-3 py-2.5 text-slate-100 truncate">{r.product_name}</div>
+                  <div className="px-3 py-2.5 text-slate-100 break-words">{r.product_name}</div>
                   <div className="px-3 py-2.5 text-slate-300 truncate text-xs">{r.specification}</div>
                   <div className="px-3 py-2.5 font-mono text-slate-100">#{r.completion_seq}</div>
                   <div className="px-3 py-2.5 font-mono text-slate-100 truncate">{r.batch_no}</div>
