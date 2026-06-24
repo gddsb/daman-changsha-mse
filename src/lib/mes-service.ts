@@ -1141,10 +1141,18 @@ export async function closeReport(
   if (!detail) throw new Error("报工批次不存在");
   if (detail.is_closed) throw new Error("报工批次已关闭");
 
-  // 计算总投入/合格/不良（聚合所有工序报工）
-  const totalInput = detail.operations.reduce((s, o) => s + (o.input_quantity || 0), 0);
-  const totalPass = detail.operations.reduce((s, o) => s + (o.pass_quantity || 0), 0);
-  const totalFail = detail.operations.reduce((s, o) => s + (o.fail_quantity || 0), 0);
+  // 动态计算投入/合格/不良
+  // 投入 = 首道工序制程信息汇总
+  const firstOpSeq = detail.work_order_operations[0]?.sequence ?? 1;
+  const totalInput = detail.process_infos
+    .filter(p => p.operation_seq === firstOpSeq)
+    .reduce((s, p) => s + (p.quantity || 0), 0);
+  
+  // 不良 = 所有工序不良总和
+  const totalFail = detail.defects.reduce((s, d) => s + (d.defect_quantity || 0), 0);
+  
+  // 合格 = 投入 - 不良
+  const totalPass = Math.max(0, totalInput - totalFail);
 
   // 一致性检查已禁用（按用户要求）
 
