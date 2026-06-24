@@ -12,7 +12,7 @@ import {
   Clock,
   ClipboardList,
 } from "lucide-react";
-import { formatDateTime } from "@/lib/format";
+import { formatDate } from "@/lib/format";
 import type { WorkOrderReport } from "@/types/mes";
 
 export function ReportsView() {
@@ -169,12 +169,12 @@ export function ReportsView() {
                   <div className="px-3 py-2.5 font-mono text-slate-100">#{r.completion_seq}</div>
                   <div className="px-3 py-2.5 font-mono text-slate-100 truncate">{r.batch_no}</div>
                   <div className="px-3 py-2.5 font-mono text-xs text-slate-300">
-                    {r.start_time ? formatDateTime(r.start_time) : "—"}
+                    {r.start_time ? formatDate(r.start_time) : "—"}
                   </div>
                   <div className="px-3 py-2.5 font-mono text-xs text-slate-300">
-                    {r.end_time ? formatDateTime(r.end_time) : "—"}
+                    {r.end_time ? formatDate(r.end_time) : "—"}
                   </div>
-                  <div className="px-3 py-2.5 font-mono tabular-nums text-slate-100 text-right text-xs">
+                  <div className="px-3 py-2.5 font-mono tabular-nums text-slate-100 text-right text-xs whitespace-nowrap">
                     {r.input_quantity} / {r.pass_quantity} / {r.fail_quantity}
                   </div>
                   <div className="px-3 py-2.5 font-mono text-xs text-slate-300 text-center">
