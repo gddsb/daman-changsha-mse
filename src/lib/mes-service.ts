@@ -1060,7 +1060,22 @@ export async function createOrUpdateOpReport(input: CreateOpReportInput): Promis
   if (!r) throw new Error("报工批次不存在");
   if (r.is_closed) throw new Error("报工批次已关闭，不能修改工序报工");
 
-  // 2) upsert
+  // 2) 规则：第一道工序报工完成后所有工序均可报工
+  //    非首道（operation_seq > 1）报工前，必须存在首道工序报工记录
+  if (input.operation_seq > 1) {
+    const { data: firstOp, error: firstErr } = await supa
+      .from("operation_reports")
+      .select("id")
+      .eq("work_order_report_id", input.work_order_report_id)
+      .eq("operation_seq", 1)
+      .maybeSingle();
+    if (firstErr) throw new Error(`查询首道工序报工失败: ${firstErr.message}`);
+    if (!firstOp) {
+      throw new Error("请先完成第一道工序报工，再进行其他工序报工");
+    }
+  }
+
+  // 3) upsert
   const payload = {
     work_order_report_id: input.work_order_report_id,
     work_order_no: r.work_order_no,
