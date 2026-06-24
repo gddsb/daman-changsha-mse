@@ -15,6 +15,7 @@ import {
   AlertCircle,
   FileText,
   Play,
+  Pause,
 } from "lucide-react";
 import { formatDate, formatDateTime, formatNumber } from "@/lib/format";
 import { WO_STATUS_LABELS } from "@/lib/constants";
@@ -32,6 +33,71 @@ export function WorkOrderDetailView({ params }: { params: Promise<{ id: string }
   const [loading, setLoading] = useState(true);
   const [reports, setReports] = useState<WorkOrderReport[]>([]);
   const [creating, setCreating] = useState(false);
+  const [operating, setOperating] = useState(false);
+
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const r = await fetch(`/api/work-orders/${id}`, { cache: "no-store" });
+      const j = await r.json();
+      if (j?.success) setData(j.data as DetailResponse);
+      else setData(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [id]);
+
+  const fetchReports = useCallback(async () => {
+    try {
+      const r = await fetch(`/api/reports?work_order_id=${id}`, { cache: "no-store" });
+      const j = await r.json();
+      if (j?.success) setReports(j.data);
+    } catch (e) {
+      console.error("fetch reports error", e);
+    }
+  }, [id]);
+
+  /** 工单开工 */
+  const startWorkOrder = useCallback(async () => {
+    if (!data) return;
+    setOperating(true);
+    try {
+      const r = await fetch(`/api/work-orders/${data.workOrder.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "start" }),
+      });
+      const j = await r.json();
+      if (!j?.success) {
+        alert(j?.error ?? "开工失败");
+        return;
+      }
+      fetchData();
+    } finally {
+      setOperating(false);
+    }
+  }, [data, fetchData]);
+
+  /** 工单暂停 */
+  const pauseWorkOrder = useCallback(async () => {
+    if (!data) return;
+    setOperating(true);
+    try {
+      const r = await fetch(`/api/work-orders/${data.workOrder.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "pause" }),
+      });
+      const j = await r.json();
+      if (!j?.success) {
+        alert(j?.error ?? "暂停失败");
+        return;
+      }
+      fetchData();
+    } finally {
+      setOperating(false);
+    }
+  }, [data, fetchData]);
 
   /** 创建新批次并跳转到工序报工详情页 */
   const startNewReport = useCallback(async () => {
@@ -60,28 +126,6 @@ export function WorkOrderDetailView({ params }: { params: Promise<{ id: string }
     const open = reports.find((r) => !r.is_closed);
     if (open) router.push(`/reports/${open.id}`);
   }, [reports, router]);
-
-  const fetchData = useCallback(async () => {
-    setLoading(true);
-    try {
-      const r = await fetch(`/api/work-orders/${id}`, { cache: "no-store" });
-      const j = await r.json();
-      if (j?.success) setData(j.data as DetailResponse);
-      else setData(null);
-    } finally {
-      setLoading(false);
-    }
-  }, [id]);
-
-  const fetchReports = useCallback(async () => {
-    try {
-      const r = await fetch(`/api/reports?work_order_id=${id}`, { cache: "no-store" });
-      const j = await r.json();
-      if (j?.success) setReports(j.data);
-    } catch (e) {
-      console.error("fetch reports error", e);
-    }
-  }, [id]);
 
   useEffect(() => {
     fetchData();
@@ -144,6 +188,27 @@ export function WorkOrderDetailView({ params }: { params: Promise<{ id: string }
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {wo.status === "下发" && (
+            <Button
+              onClick={startWorkOrder}
+              disabled={operating}
+              className="gap-1.5 bg-orange-500 hover:bg-orange-600 text-white"
+            >
+              <Play className="h-4 w-4" />
+              {operating ? "开工中..." : "开工"}
+            </Button>
+          )}
+          {wo.status === "生产中" && (
+            <Button
+              variant="outline"
+              onClick={pauseWorkOrder}
+              disabled={operating}
+              className="gap-1.5 border-orange-500/40 text-orange-500 hover:bg-orange-500/10"
+            >
+              <Pause className="h-4 w-4" />
+              {operating ? "暂停中..." : "暂停"}
+            </Button>
+          )}
           {canReport && !hasOpenReport && (
             <Button
               onClick={startNewReport}
