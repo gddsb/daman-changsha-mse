@@ -188,7 +188,7 @@ export function WorkOrderDetailView({ params }: { params: Promise<{ id: string }
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {wo.status === "下发" && (
+          {(wo.status === "下发" || wo.status === "已暂停") && (
             <Button
               onClick={startWorkOrder}
               disabled={operating}
