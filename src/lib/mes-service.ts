@@ -1241,3 +1241,10 @@ export async function addProcessInfo(input: CreateProcessInfoInput): Promise<Pro
   if (error) throw new Error(`新增制程信息失败: ${error.message}`);
   return toProcessInfoView(data!);
 }
+
+/** 删除制程信息 */
+export async function deleteProcessInfo(id: string): Promise<void> {
+  const supa = getSupabaseClient();
+  const { error } = await supa.from("process_infos").delete().eq("id", id);
+  if (error) throw new Error(`删除制程信息失败: ${error.message}`);
+}

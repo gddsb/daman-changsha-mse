@@ -10,6 +10,7 @@ import {
   ChevronRight,
   CheckCircle2,
   Clock,
+  ClipboardList,
 } from "lucide-react";
 import { formatDateTime } from "@/lib/format";
 import type { WorkOrderReport } from "@/types/mes";
@@ -126,7 +127,7 @@ export function ReportsView() {
           </div>
         ) : (
           <div className="bg-slate-900 border border-slate-800 rounded overflow-hidden">
-            <div className="grid grid-cols-[100px_140px_120px_120px_160px_140px_120px_80px_100px_40px] gap-0 bg-slate-800 border-b border-slate-800 text-xs text-slate-300 font-medium">
+            <div className="grid grid-cols-[100px_140px_120px_120px_160px_140px_120px_80px_100px_180px] gap-0 bg-slate-800 border-b border-slate-800 text-xs text-slate-300 font-medium">
               <div className="px-3 py-2.5">报工编号</div>
               <div className="px-3 py-2.5">工单号</div>
               <div className="px-3 py-2.5">完工顺序</div>
@@ -136,56 +137,85 @@ export function ReportsView() {
               <div className="px-3 py-2.5 text-right">投入/合格/不良</div>
               <div className="px-3 py-2.5">人员</div>
               <div className="px-3 py-2.5 text-center">状态</div>
-              <div className="px-3 py-2.5"></div>
+              <div className="px-3 py-2.5 text-right">操作</div>
             </div>
-            {filtered.map((r) => (
-              <div
-                key={r.id}
-                className="grid grid-cols-[100px_140px_120px_120px_160px_140px_120px_80px_100px_40px] gap-0 border-b border-slate-800/60 hover:bg-slate-700 text-sm items-center"
-              >
-                <div className="px-3 py-2.5 font-mono text-xs text-slate-300 truncate" title={r.report_no}>
-                  {r.report_no}
+            {filtered.map((r) => {
+              const openable = !r.is_closed;
+              return (
+                <div
+                  key={r.id}
+                  className={`grid grid-cols-[100px_140px_120px_120px_160px_140px_120px_80px_100px_180px] gap-0 border-b border-slate-800/60 text-sm items-center ${
+                    openable
+                      ? "hover:bg-slate-700/60 cursor-pointer"
+                      : "hover:bg-slate-800/40"
+                  }`}
+                  onClick={() => {
+                    if (openable) router.push(`/reports/${r.id}`);
+                  }}
+                >
+                  <div className="px-3 py-2.5 font-mono text-xs text-slate-300 truncate" title={r.report_no}>
+                    {r.report_no}
+                  </div>
+                  <div className="px-3 py-2.5 font-mono text-slate-100 truncate">{r.work_order_no}</div>
+                  <div className="px-3 py-2.5 font-mono text-slate-100">#{r.completion_seq}</div>
+                  <div className="px-3 py-2.5 font-mono text-slate-100">{r.batch_no}</div>
+                  <div className="px-3 py-2.5 font-mono text-xs text-slate-300">
+                    {r.start_time ? formatDateTime(r.start_time) : "—"}
+                  </div>
+                  <div className="px-3 py-2.5 font-mono text-xs text-slate-300">
+                    {r.end_time ? formatDateTime(r.end_time) : "—"}
+                  </div>
+                  <div className="px-3 py-2.5 font-mono tabular-nums text-slate-100 text-right text-xs">
+                    {r.input_quantity} / {r.pass_quantity} / {r.fail_quantity}
+                  </div>
+                  <div className="px-3 py-2.5 font-mono text-xs text-slate-300 text-center">
+                    {r.skilled_worker_count + r.regular_worker_count + r.contract_worker_count + r.other_worker_count}
+                  </div>
+                  <div className="px-3 py-2.5 text-center">
+                    {r.is_closed ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-sm border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 text-xs">
+                        <CheckCircle2 className="w-3 h-3" />
+                        已关闭
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-sm border border-amber-500/30 bg-amber-500/10 text-amber-400 text-xs">
+                        <Clock className="w-3 h-3" />
+                        进行中
+                      </span>
+                    )}
+                  </div>
+                  <div className="px-3 py-2.5 flex items-center justify-end gap-1.5">
+                    {openable ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 border-orange-500/40 bg-orange-500/10 text-orange-300 hover:bg-orange-500/20 hover:text-orange-200"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          router.push(`/reports/${r.id}`);
+                        }}
+                      >
+                        <ClipboardList className="mr-1 h-3.5 w-3.5" />
+                        工序报工
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 text-slate-400 hover:text-slate-200"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          router.push(`/reports/${r.id}`);
+                        }}
+                        title="查看详情"
+                      >
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
                 </div>
-                <div className="px-3 py-2.5 font-mono text-slate-100 truncate">{r.work_order_no}</div>
-                <div className="px-3 py-2.5 font-mono text-slate-100">#{r.completion_seq}</div>
-                <div className="px-3 py-2.5 font-mono text-slate-100">{r.batch_no}</div>
-                <div className="px-3 py-2.5 font-mono text-xs text-slate-300">
-                  {r.start_time ? formatDateTime(r.start_time) : "—"}
-                </div>
-                <div className="px-3 py-2.5 font-mono text-xs text-slate-300">
-                  {r.end_time ? formatDateTime(r.end_time) : "—"}
-                </div>
-                <div className="px-3 py-2.5 font-mono tabular-nums text-slate-100 text-right text-xs">
-                  {r.input_quantity} / {r.pass_quantity} / {r.fail_quantity}
-                </div>
-                <div className="px-3 py-2.5 font-mono text-xs text-slate-300 text-center">
-                  {r.skilled_worker_count + r.regular_worker_count + r.contract_worker_count + r.other_worker_count}
-                </div>
-                <div className="px-3 py-2.5 text-center">
-                  {r.is_closed ? (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-sm border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 text-xs">
-                      <CheckCircle2 className="w-3 h-3" />
-                      已关闭
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-sm border border-amber-500/30 bg-amber-500/10 text-amber-400 text-xs">
-                      <Clock className="w-3 h-3" />
-                      进行中
-                    </span>
-                  )}
-                </div>
-                <div className="px-3 py-2.5 flex justify-end">
-                  <button
-                    type="button"
-                    onClick={() => router.push(`/work-orders/${r.work_order_id}`)}
-                    className="text-slate-400 hover:text-orange-500 transition-colors"
-                    title="查看工单"
-                  >
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
