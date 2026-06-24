@@ -901,17 +901,37 @@ export async function getReportDetail(id: string): Promise<WorkOrderReportDetail
   const { data: wo } = await supa.from("work_orders").select("id, product_code, product_name, specification").eq("id", r.work_order_id).maybeSingle();
   const report = toReportView(r, wo ?? undefined);
 
-  const [ops, defs, dts, pis, woOps] = await Promise.all([
+  const [ops, defs, dts, pis, pd, legacyWoOps] = await Promise.all([
     supa.from("operation_reports").select("*").eq("work_order_report_id", id).order("operation_seq"),
     supa.from("operation_defects").select("*").eq("work_order_report_id", id).order("created_at"),
     supa.from("equipment_downtime").select("*").eq("work_order_report_id", id).order("start_time"),
     supa.from("process_infos").select("*").eq("work_order_report_id", id).order("operation_seq"),
+    supa.from("process_dictionary").select("id, process_code, process_name, sequence").order("sequence"),
     supa.from("work_order_operations").select("*").eq("work_order_id", r.work_order_id).order("sequence"),
   ]);
 
   const opRows = ops.data ?? [];
   const defRows = defs.data ?? [];
   const piRows = pis.data ?? [];
+
+  // 工序列表：优先 process_dictionary，其次 work_order_operations（与工单详情 API 一致）
+  let woOpList: WorkOrderOperation[];
+  if (pd.data && pd.data.length > 0) {
+    woOpList = pd.data.map((p) => ({
+      id: `pd-${p.process_code}`,
+      work_order_id: r.work_order_id,
+      sequence: Number(p.sequence),
+      operation_code: String(p.process_code),
+      operation_name: String(p.process_name),
+      planned_duration_minutes: 0,
+      status: "待开工",
+      started_at: null,
+      finished_at: null,
+      notes: "",
+    }));
+  } else {
+    woOpList = (legacyWoOps.data ?? []).map(toWoOpView);
+  }
 
   // 计算各工序的汇总数据
   const processInfoBySeq: Record<number, number> = {};
@@ -967,7 +987,7 @@ export async function getReportDetail(id: string): Promise<WorkOrderReportDetail
     defects: defRows.map(toOpDefectView),
     downtimes: dts.data?.map(toDowntimeView) ?? [],
     process_infos: piRows.map(toProcessInfoView),
-    work_order_operations: (woOps.data ?? []).map(toWoOpView),
+    work_order_operations: woOpList,
   };
 }
 
