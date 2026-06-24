@@ -773,12 +773,12 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
                 </Button>
               </div>
 
-              {/* 该工序已有不良 */}
+              {/* 所有不良记录 */}
               <div className="border-t border-slate-800 pt-3">
                 <div className="mb-2 text-xs uppercase tracking-wider text-slate-500">
-                  {defectOpSeq !== "" ? `#${defectOpSeq} 已有不良 (${currentDefects.length})` : "请先选择工序"}
+                  不良记录 ({(detail?.defects ?? []).length})
                 </div>
-                <DefectsTable defects={currentDefects} onRemove={removeDefect} isClosed={isClosed} />
+                <DefectsTable defects={detail?.defects ?? []} onRemove={removeDefect} isClosed={isClosed} />
               </div>
             </CardContent>
           </Card>
