@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -20,6 +20,13 @@ export function ReportsView() {
   const [loading, setLoading] = useState(true);
   const [reports, setReports] = useState<WorkOrderReport[]>([]);
   const [keyword, setKeyword] = useState("");
+  
+  // 筛选条件
+  const [filterWorkOrderNo, setFilterWorkOrderNo] = useState("");
+  const [filterProductCode, setFilterProductCode] = useState("");
+  const [filterSpecification, setFilterSpecification] = useState("");
+  const [filterBatchNo, setFilterBatchNo] = useState("");
+  const [filterStatus, setFilterStatus] = useState("");
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -38,22 +45,62 @@ export function ReportsView() {
     fetchData();
   }, [fetchData]);
 
-  const filtered = reports.filter((r) => {
-    if (!keyword.trim()) return true;
-    const k = keyword.toLowerCase();
-    return (
-      r.work_order_no.toLowerCase().includes(k) ||
-      r.batch_no.toLowerCase().includes(k) ||
-      r.report_no.toLowerCase().includes(k) ||
-      r.product_code.toLowerCase().includes(k) ||
-      r.product_name.toLowerCase().includes(k)
-    );
-  });
+  // 提取各列的唯一值用于筛选下拉框
+  const uniqueWorkOrderNos = useMemo(() => 
+    [...new Set(reports.map(r => r.work_order_no))].sort(),
+    [reports]
+  );
+  const uniqueProductCodes = useMemo(() => 
+    [...new Set(reports.map(r => r.product_code))].sort(),
+    [reports]
+  );
+  const uniqueSpecifications = useMemo(() => 
+    [...new Set(reports.map(r => r.specification).filter(Boolean))].sort(),
+    [reports]
+  );
+  const uniqueBatchNos = useMemo(() => 
+    [...new Set(reports.map(r => r.batch_no))].sort(),
+    [reports]
+  );
+
+  const filtered = useMemo(() => reports.filter((r) => {
+    // 关键词搜索
+    if (keyword.trim()) {
+      const k = keyword.toLowerCase();
+      if (!(
+        r.work_order_no.toLowerCase().includes(k) ||
+        r.batch_no.toLowerCase().includes(k) ||
+        r.report_no.toLowerCase().includes(k) ||
+        r.product_code.toLowerCase().includes(k) ||
+        r.product_name.toLowerCase().includes(k)
+      )) return false;
+    }
+    
+    // 列筛选
+    if (filterWorkOrderNo && r.work_order_no !== filterWorkOrderNo) return false;
+    if (filterProductCode && r.product_code !== filterProductCode) return false;
+    if (filterSpecification && r.specification !== filterSpecification) return false;
+    if (filterBatchNo && r.batch_no !== filterBatchNo) return false;
+    if (filterStatus === "进行中" && r.is_closed) return false;
+    if (filterStatus === "已关闭" && !r.is_closed) return false;
+    
+    return true;
+  }), [reports, keyword, filterWorkOrderNo, filterProductCode, filterSpecification, filterBatchNo, filterStatus]);
 
   const stats = {
     total: reports.length,
     running: reports.filter((r) => !r.is_closed).length,
     closed: reports.filter((r) => r.is_closed).length,
+  };
+
+  // 清除所有筛选
+  const clearFilters = () => {
+    setKeyword("");
+    setFilterWorkOrderNo("");
+    setFilterProductCode("");
+    setFilterSpecification("");
+    setFilterBatchNo("");
+    setFilterStatus("");
   };
 
   return (
@@ -100,15 +147,104 @@ export function ReportsView() {
         </div>
       </div>
 
-      {/* 搜索 */}
-      <div className="flex items-center gap-3 px-6 py-3 border-b border-slate-800">
-        <input
-          type="text"
-          placeholder="搜索 工单号 / 生产批号 / 报工编号 / 产品编号 / 产品名称"
-          value={keyword}
-          onChange={(e) => setKeyword(e.target.value)}
-          className="flex-1 bg-slate-900 border border-slate-800 rounded px-3 py-1.5 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-orange-500/50"
-        />
+      {/* 搜索和筛选 */}
+      <div className="flex flex-col gap-3 px-6 py-3 border-b border-slate-800">
+        {/* 关键词搜索 */}
+        <div className="flex items-center gap-3">
+          <input
+            type="text"
+            placeholder="搜索 工单号 / 生产批号 / 报工编号 / 产品编号 / 产品名称"
+            value={keyword}
+            onChange={(e) => setKeyword(e.target.value)}
+            className="flex-1 bg-slate-900 border border-slate-800 rounded px-3 py-1.5 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-orange-500/50"
+          />
+          {(keyword || filterWorkOrderNo || filterProductCode || filterSpecification || filterBatchNo || filterStatus) && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={clearFilters}
+              className="text-slate-400 hover:text-slate-200"
+            >
+              清除筛选
+            </Button>
+          )}
+        </div>
+        
+        {/* 列筛选下拉框 */}
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-slate-500">工单号:</span>
+            <select
+              value={filterWorkOrderNo}
+              onChange={(e) => setFilterWorkOrderNo(e.target.value)}
+              className="bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-slate-100 focus:outline-none focus:border-orange-500/50 min-w-[120px]"
+            >
+              <option value="">全部</option>
+              {uniqueWorkOrderNos.map(no => (
+                <option key={no} value={no}>{no}</option>
+              ))}
+            </select>
+          </div>
+          
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-slate-500">产品编号:</span>
+            <select
+              value={filterProductCode}
+              onChange={(e) => setFilterProductCode(e.target.value)}
+              className="bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-slate-100 focus:outline-none focus:border-orange-500/50 min-w-[100px]"
+            >
+              <option value="">全部</option>
+              {uniqueProductCodes.map(code => (
+                <option key={code} value={code}>{code}</option>
+              ))}
+            </select>
+          </div>
+          
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-slate-500">产品规格:</span>
+            <select
+              value={filterSpecification}
+              onChange={(e) => setFilterSpecification(e.target.value)}
+              className="bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-slate-100 focus:outline-none focus:border-orange-500/50 min-w-[80px]"
+            >
+              <option value="">全部</option>
+              {uniqueSpecifications.map(spec => (
+                <option key={spec} value={spec}>{spec}</option>
+              ))}
+            </select>
+          </div>
+          
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-slate-500">生产批号:</span>
+            <select
+              value={filterBatchNo}
+              onChange={(e) => setFilterBatchNo(e.target.value)}
+              className="bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-slate-100 focus:outline-none focus:border-orange-500/50 min-w-[100px]"
+            >
+              <option value="">全部</option>
+              {uniqueBatchNos.map(no => (
+                <option key={no} value={no}>{no}</option>
+              ))}
+            </select>
+          </div>
+          
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-slate-500">状态:</span>
+            <select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+              className="bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-slate-100 focus:outline-none focus:border-orange-500/50 min-w-[80px]"
+            >
+              <option value="">全部</option>
+              <option value="进行中">进行中</option>
+              <option value="已关闭">已关闭</option>
+            </select>
+          </div>
+          
+          <span className="text-xs text-slate-500 ml-2">
+            筛选结果: {filtered.length} 条
+          </span>
+        </div>
       </div>
 
       {/* 列表 */}

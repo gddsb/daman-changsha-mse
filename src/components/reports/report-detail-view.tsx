@@ -33,7 +33,7 @@ import type {
   ProcessInfo,
   WorkOrder,
 } from "@/types/mes";
-import { formatDateTime, formatNumber } from "@/lib/format";
+import { formatDateTime, formatNumber, formatPercent } from "@/lib/format";
 
 interface ProcessItem {
   id: string;
@@ -64,6 +64,12 @@ interface OpSummary {
   process_piece: number;
   /** 制程不良-带盖 */
   process_cover: number;
+  /** 不良合计占比 = 不良合计数 / 第一道工序投入数 */
+  fail_ratio: number;
+  /** 来料不良占比 = (来料不良小片+来料不良带盖) / 第一道工序投入数 */
+  incoming_ratio: number;
+  /** 制程不良占比 = (制程不良小片+制程不良带盖) / 第一道工序投入数 */
+  process_ratio: number;
 }
 
 /** 计算工序汇总数据：投入数和不良分类 */
@@ -75,13 +81,14 @@ function computeOpSummary(
   const result: Record<number, OpSummary> = {};
   const sortedOps = [...ops].sort((a, b) => a.operation_seq - b.operation_seq);
   
+  // 计算第一道工序投入数（作为占比计算的基准）
+  const firstInput = processInfos.filter(p => p.operation_seq === 1).reduce((s, p) => s + (p.quantity || 0), 0);
+  
   let prevPass = 0;
   for (const op of sortedOps) {
     const seq = op.operation_seq;
     // 投入数：首道 = 制程信息汇总，后续 = 上一道合格数
-    const input = seq === 1
-      ? processInfos.filter(p => p.operation_seq === 1).reduce((s, p) => s + (p.quantity || 0), 0)
-      : prevPass;
+    const input = seq === 1 ? firstInput : prevPass;
     
     // 不良分类汇总
     const opDefects = defects.filter(d => d.operation_seq === seq);
@@ -95,6 +102,11 @@ function computeOpSummary(
     const pass = input - fail;
     prevPass = pass;
     
+    // 占比计算（基于第一道工序投入数）
+    const fail_ratio = firstInput > 0 ? fail / firstInput : 0;
+    const incoming_ratio = firstInput > 0 ? (incoming_piece + incoming_cover) / firstInput : 0;
+    const process_ratio = firstInput > 0 ? (process_piece + process_cover) / firstInput : 0;
+    
     result[seq] = {
       operation_seq: seq,
       operation_name: op.operation_name,
@@ -105,6 +117,9 @@ function computeOpSummary(
       incoming_cover,
       process_piece,
       process_cover,
+      fail_ratio,
+      incoming_ratio,
+      process_ratio,
     };
   }
   return result;
@@ -153,6 +168,16 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
   const [downtimeTypeFilter, setDowntimeTypeFilter] = useState<string>("");
   /** 筛选制程信息的工序 */
   const [processOpSeqFilter, setProcessOpSeqFilter] = useState<number | "">("");
+  /** 筛选不良记录的不良分类 */
+  const [defectCategoryFilter, setDefectCategoryFilter] = useState<string>("");
+  /** 筛选不良记录的不良名称 */
+  const [defectNameFilter, setDefectNameFilter] = useState<string>("");
+  /** 筛选异常工时的设备 */
+  const [equipmentFilter, setEquipmentFilter] = useState<string>("");
+  /** 筛选异常工时的停机类型 */
+  const [downtimeTypeFilter2, setDowntimeTypeFilter2] = useState<string>("");
+  /** 筛选制程信息的批号 */
+  const [batchNoFilter, setBatchNoFilter] = useState<string>("");
   const [newDefect, setNewDefect] = useState<NewDefect>({
     defect_category: "制程不良",
     defect_name: "",
@@ -186,23 +211,31 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
   /** 筛选后的不良记录 */
   const filteredDefects = useMemo(() => {
     if (!detail?.defects) return [];
-    if (defectOpSeqFilter === "") return detail.defects;
-    return detail.defects.filter(d => d.operation_seq === defectOpSeqFilter);
-  }, [detail?.defects, defectOpSeqFilter]);
+    let result = detail.defects;
+    if (defectOpSeqFilter !== "") result = result.filter(d => d.operation_seq === defectOpSeqFilter);
+    if (defectCategoryFilter) result = result.filter(d => d.defect_category === defectCategoryFilter);
+    if (defectNameFilter) result = result.filter(d => d.defect_name?.includes(defectNameFilter));
+    return result;
+  }, [detail?.defects, defectOpSeqFilter, defectCategoryFilter, defectNameFilter]);
 
   /** 筛选后的异常工时记录 */
   const filteredDowntimes = useMemo(() => {
     if (!detail?.downtimes) return [];
-    if (downtimeTypeFilter === "") return detail.downtimes;
-    return detail.downtimes.filter(d => d.anomaly_type === downtimeTypeFilter);
-  }, [detail?.downtimes, downtimeTypeFilter]);
+    let result = detail.downtimes;
+    if (downtimeTypeFilter) result = result.filter(d => d.anomaly_type === downtimeTypeFilter);
+    if (equipmentFilter) result = result.filter(d => d.equipment_code?.includes(equipmentFilter));
+    if (downtimeTypeFilter2) result = result.filter(d => d.downtime_type === downtimeTypeFilter2);
+    return result;
+  }, [detail?.downtimes, downtimeTypeFilter, equipmentFilter, downtimeTypeFilter2]);
 
   /** 筛选后的制程信息记录 */
   const filteredProcessInfos = useMemo(() => {
     if (!detail?.process_infos) return [];
-    if (processOpSeqFilter === "") return detail.process_infos;
-    return detail.process_infos.filter(p => p.operation_seq === processOpSeqFilter);
-  }, [detail?.process_infos, processOpSeqFilter]);
+    let result = detail.process_infos;
+    if (processOpSeqFilter !== "") result = result.filter(p => p.operation_seq === processOpSeqFilter);
+    if (batchNoFilter) result = result.filter(p => p.material_batch_no?.includes(batchNoFilter));
+    return result;
+  }, [detail?.process_infos, processOpSeqFilter, batchNoFilter]);
 
   /** 加载批次详情 + 工单 + 工序字典 */
   const loadAll = async () => {
@@ -277,6 +310,11 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
         .filter((d) => d.defect_category === "制程不良" && d.unit === "带盖")
         .reduce((s, d) => s + (Number(d.defect_quantity) || 0), 0);
       
+      // 占比计算
+      const fail_ratio = firstInput > 0 ? fail / firstInput : 0;
+      const incoming_ratio = firstInput > 0 ? (incomingPiece + incomingCover) / firstInput : 0;
+      const process_ratio = firstInput > 0 ? (processPiece + processCover) / firstInput : 0;
+      
       results.push({
         operation_seq: op.operation_seq,
         operation_name: op.operation_name,
@@ -287,6 +325,9 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
         incoming_cover: incomingCover,
         process_piece: processPiece,
         process_cover: processCover,
+        fail_ratio,
+        incoming_ratio,
+        process_ratio,
       });
     }
     
@@ -304,6 +345,9 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
           incoming_cover: 0,
           process_piece: 0,
           process_cover: 0,
+          fail_ratio: 0,
+          incoming_ratio: 0,
+          process_ratio: 0,
         });
         prevPass = input; // 未报工工序假设 pass = input
       }
@@ -675,6 +719,9 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
                     <th className="px-2 py-2 text-right">来料不良-带盖</th>
                     <th className="px-2 py-2 text-right">制程不良-小片</th>
                     <th className="px-2 py-2 text-right">制程不良-带盖</th>
+                    <th className="px-2 py-2 text-right">不良合计占比</th>
+                    <th className="px-2 py-2 text-right">来料不良占比</th>
+                    <th className="px-2 py-2 text-right">制程不良占比</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -706,6 +753,15 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
                         </td>
                         <td className="px-2 py-2 align-top text-right font-mono text-slate-300">
                           {formatNumber(s.process_cover)}
+                        </td>
+                        <td className="px-2 py-2 align-top text-right font-mono text-amber-400">
+                          {s.fail_ratio !== null ? formatPercent(s.fail_ratio) : '-'}
+                        </td>
+                        <td className="px-2 py-2 align-top text-right font-mono text-slate-300">
+                          {s.incoming_ratio !== null ? formatPercent(s.incoming_ratio) : '-'}
+                        </td>
+                        <td className="px-2 py-2 align-top text-right font-mono text-slate-300">
+                          {s.process_ratio !== null ? formatPercent(s.process_ratio) : '-'}
                         </td>
                       </tr>
                     );
@@ -817,16 +873,38 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
                   <span className="text-xs uppercase tracking-wider text-slate-500">
                     不良记录 ({filteredDefects.length}/{(detail?.defects ?? []).length})
                   </span>
-                  <select
-                    value={defectOpSeqFilter}
-                    onChange={(e) => setDefectOpSeqFilter(e.target.value === "" ? "" : Number(e.target.value))}
-                    className="h-7 rounded border border-slate-700 bg-slate-950 px-2 text-xs text-slate-100"
-                  >
-                    <option value="">全部工序</option>
-                    {(detail?.work_order_operations ?? []).sort((a, b) => a.sequence - b.sequence).map(op => (
-                      <option key={op.id} value={op.sequence}>#{op.sequence} {op.operation_name}</option>
-                    ))}
-                  </select>
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={defectOpSeqFilter}
+                      onChange={(e) => setDefectOpSeqFilter(e.target.value === "" ? "" : Number(e.target.value))}
+                      className="h-7 rounded border border-slate-700 bg-slate-950 px-2 text-xs text-slate-100"
+                    >
+                      <option value="">全部工序</option>
+                      {(detail?.work_order_operations ?? []).sort((a, b) => a.sequence - b.sequence).map(op => (
+                        <option key={op.id} value={op.sequence}>#{op.sequence} {op.operation_name}</option>
+                      ))}
+                    </select>
+                    <select
+                      value={defectCategoryFilter}
+                      onChange={(e) => setDefectCategoryFilter(e.target.value)}
+                      className="h-7 rounded border border-slate-700 bg-slate-950 px-2 text-xs text-slate-100"
+                    >
+                      <option value="">全部分类</option>
+                      <option value="制程不良">制程不良</option>
+                      <option value="来料不良">来料不良</option>
+                      <option value="检验报废">检验报废</option>
+                    </select>
+                    <select
+                      value={defectNameFilter}
+                      onChange={(e) => setDefectNameFilter(e.target.value)}
+                      className="h-7 rounded border border-slate-700 bg-slate-950 px-2 text-xs text-slate-100"
+                    >
+                      <option value="">全部名称</option>
+                      {Array.from(new Set((detail?.defects ?? []).map(d => d.defect_name))).sort().map(name => (
+                        <option key={name} value={name}>{name}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
                 <DefectsTable defects={filteredDefects} onRemove={removeDefect} isClosed={isClosed} />
               </div>
@@ -901,16 +979,28 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
                   <span className="text-xs uppercase tracking-wider text-slate-500">
                     异常工时记录 ({filteredDowntimes.length}/{(detail?.downtimes ?? []).length})
                   </span>
-                  <select
-                    value={downtimeTypeFilter}
-                    onChange={(e) => setDowntimeTypeFilter(e.target.value)}
-                    className="h-7 rounded border border-slate-700 bg-slate-950 px-2 text-xs text-slate-100"
-                  >
-                    <option value="">全部类型</option>
-                    <option value="设备故障">设备故障</option>
-                    <option value="来料不良">来料不良</option>
-                    <option value="其它原因">其它原因</option>
-                  </select>
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={downtimeTypeFilter}
+                      onChange={(e) => setDowntimeTypeFilter(e.target.value)}
+                      className="h-7 rounded border border-slate-700 bg-slate-950 px-2 text-xs text-slate-100"
+                    >
+                      <option value="">全部类型</option>
+                      <option value="设备故障">设备故障</option>
+                      <option value="来料不良">来料不良</option>
+                      <option value="其它原因">其它原因</option>
+                    </select>
+                    <select
+                      value={equipmentFilter}
+                      onChange={(e) => setEquipmentFilter(e.target.value)}
+                      className="h-7 rounded border border-slate-700 bg-slate-950 px-2 text-xs text-slate-100"
+                    >
+                      <option value="">全部设备</option>
+                      {Array.from(new Set((detail?.downtimes ?? []).map(d => d.equipment_code))).sort().filter(Boolean).map(code => (
+                        <option key={code} value={code}>{code}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
                 <DowntimesTable rows={filteredDowntimes} onRemove={removeDowntime} isClosed={isClosed} />
               </div>
@@ -933,14 +1023,14 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
                   value={newPI.operation_seq}
                   onChange={(e) => {
                     const seq = Number(e.target.value);
-                    const proc = processes.find((p) => Number(p.sequence) === seq);
-                    setNewPI({ ...newPI, operation_seq: seq, operation_name: proc?.process_name ?? "" });
+                    const op = reportedOps.find((o) => o.sequence === seq);
+                    setNewPI({ ...newPI, operation_seq: seq, operation_name: op?.operation_name ?? "" });
                   }}
                   className="h-9 rounded border border-slate-700 bg-slate-950 px-2 text-sm text-slate-100"
                 >
-                  {processes.map((p) => (
-                    <option key={p.id} value={Number(p.sequence)}>
-                      #{p.sequence} {p.process_name}
+                  {reportedOps.map((p) => (
+                    <option key={p.id ?? p.sequence} value={p.sequence}>
+                      #{p.sequence} {p.operation_name}
                     </option>
                   ))}
                 </select>
@@ -987,18 +1077,30 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
                   <span className="text-xs uppercase tracking-wider text-slate-500">
                     制程信息记录 ({filteredProcessInfos.length}/{(detail?.process_infos ?? []).length})
                   </span>
-                  <select
-                    value={processOpSeqFilter}
-                    onChange={(e) => setProcessOpSeqFilter(Number(e.target.value) || "")}
-                    className="h-7 rounded border border-slate-700 bg-slate-950 px-2 text-xs text-slate-100"
-                  >
-                    <option value="">全部工序</option>
-                    {processes.map((p) => (
-                      <option key={p.id} value={Number(p.sequence)}>
-                        #{p.sequence} {p.process_name}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="flex gap-2">
+                    <select
+                      value={processOpSeqFilter}
+                      onChange={(e) => setProcessOpSeqFilter(Number(e.target.value) || "")}
+                      className="h-7 rounded border border-slate-700 bg-slate-950 px-2 text-xs text-slate-100"
+                    >
+                      <option value="">全部工序</option>
+                      {processes.map((p) => (
+                        <option key={p.id} value={Number(p.sequence)}>
+                          #{p.sequence} {p.process_name}
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      value={batchNoFilter}
+                      onChange={(e) => setBatchNoFilter(e.target.value)}
+                      className="h-7 rounded border border-slate-700 bg-slate-950 px-2 text-xs text-slate-100"
+                    >
+                      <option value="">全部批号</option>
+                      {Array.from(new Set((detail?.process_infos ?? []).map(pi => pi.material_batch_no).filter(Boolean))).map(bn => (
+                        <option key={bn} value={bn}>{bn}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
                 <ProcessInfoTable rows={filteredProcessInfos} onRemove={removePI} isClosed={isClosed} />
               </div>
