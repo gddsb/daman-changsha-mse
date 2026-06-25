@@ -599,9 +599,9 @@ process_infos: {
     operation_name: string | null;
     material_batch_no: string | null;
     quantity: number | null;
-    material_label_image: string | null;
-    incoming_defect_image: string | null;
-    process_defect_image: string | null;
+    material_label_image: string[] | null;
+    incoming_defect_image: string[] | null;
+    process_defect_image: string[] | null;
     created_at: string | null;
   };
   Insert: {
@@ -614,9 +614,9 @@ process_infos: {
     operation_name?: string | null;
     material_batch_no?: string | null;
     quantity?: number | null;
-    material_label_image?: string | null;
-    incoming_defect_image?: string | null;
-    process_defect_image?: string | null;
+    material_label_image?: string[] | null;
+    incoming_defect_image?: string[] | null;
+    process_defect_image?: string[] | null;
     created_at?: string | null;
   };
   Update: Partial<Database["public"]["Tables"]["process_infos"]["Insert"]>;

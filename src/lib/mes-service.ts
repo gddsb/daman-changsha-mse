@@ -859,9 +859,9 @@ const toProcessInfoView = (r: Record<string, unknown>): ProcessInfo => ({
   operation_name: String(r.operation_name ?? ""),
   material_batch_no: String(r.material_batch_no ?? ""),
   quantity: Number(r.quantity ?? 0),
-  material_label_image: String(r.material_label_image ?? ""),
-  incoming_defect_image: String(r.incoming_defect_image ?? ""),
-  process_defect_image: String(r.process_defect_image ?? ""),
+  material_label_image: Array.isArray(r.material_label_image) ? r.material_label_image : [],
+  incoming_defect_image: Array.isArray(r.incoming_defect_image) ? r.incoming_defect_image : [],
+  process_defect_image: Array.isArray(r.process_defect_image) ? r.process_defect_image : [],
   created_at: String(r.created_at ?? ""),
 });
 

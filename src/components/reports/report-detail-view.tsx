@@ -135,9 +135,9 @@ interface NewProcessInfo {
   operation_name: string;
   material_batch_no: string;
   quantity: number;
-  material_label_image: string;
-  incoming_defect_image: string;
-  process_defect_image: string;
+  material_label_image: string[];  // 多图数组
+  incoming_defect_image: string[];  // 多图数组
+  process_defect_image: string[];  // 多图数组
 }
 
 export function ReportDetailView({ reportId }: { reportId: string }) {
@@ -173,9 +173,9 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
     operation_name: "",
     material_batch_no: "",
     quantity: 0,
-    material_label_image: "",
-    incoming_defect_image: "",
-    process_defect_image: "",
+    material_label_image: [],
+    incoming_defect_image: [],
+    process_defect_image: [],
   });
 
   const [loading, setLoading] = useState(true);
@@ -452,6 +452,16 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
       setPageError("请填写停线开始/生产恢复时间");
       return;
     }
+    // 开始时间不能早于本次开工时间
+    if (detail.start_time && new Date(newDowntime.start_time).getTime() < new Date(detail.start_time).getTime()) {
+      setPageError("开始时间不能早于本次开工时间");
+      return;
+    }
+    // 结束时间不能晚于当前时间
+    if (new Date(newDowntime.end_time).getTime() > new Date().getTime()) {
+      setPageError("结束时间不能晚于当前时间");
+      return;
+    }
     if (new Date(newDowntime.end_time).getTime() < new Date(newDowntime.start_time).getTime()) {
       setPageError("生产恢复时间不能小于停线开始时间");
       return;
@@ -503,7 +513,7 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
       const j = (await r.json()) as ApiResp<ProcessInfo>;
       if (!j.success) throw new Error(j.error);
       setPageHint("制程信息已记录");
-      setNewPI({ ...newPI, material_batch_no: "", quantity: 0 });
+      setNewPI({ ...newPI, material_batch_no: "", quantity: 0, material_label_image: [], incoming_defect_image: [], process_defect_image: [] });
       await loadAll();
     } catch (e) {
       setPageError(e instanceof Error ? e.message : "保存失败");
@@ -722,7 +732,6 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
                 <div className="relative md:w-80">
                   <select
                     value={defectOpSeq === "" ? "" : defectOpSeq}
-                    disabled={isClosed}
                     onChange={(e) => setDefectOpSeq(e.target.value ? Number(e.target.value) : "")}
                     className="h-9 w-full appearance-none rounded border border-slate-700 bg-slate-950 px-2 pr-8 text-sm text-slate-100"
                   >
@@ -754,10 +763,11 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
               </div>
 
               {/* 新增不良表单 */}
+              {!isClosed && (
               <div className="grid grid-cols-1 gap-2 md:grid-cols-6">
                 <select
                   value={newDefect.defect_category}
-                  disabled={isClosed || defectOpSeq === ""}
+                  disabled={defectOpSeq === ""}
                   onChange={(e) => setNewDefect({ ...newDefect, defect_category: e.target.value as NewDefect["defect_category"] })}
                   className="h-9 rounded border border-slate-700 bg-slate-950 px-2 text-sm text-slate-100 disabled:opacity-50"
                 >
@@ -768,7 +778,7 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
                 <Input
                   placeholder="不良名称"
                   value={newDefect.defect_name}
-                  disabled={isClosed || defectOpSeq === ""}
+                  disabled={defectOpSeq === ""}
                   onChange={(e) => setNewDefect({ ...newDefect, defect_name: e.target.value })}
                   className="border-slate-700 bg-slate-950 text-slate-100 placeholder:text-slate-600 disabled:opacity-50"
                 />
@@ -777,13 +787,13 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
                   min={0}
                   placeholder="数量"
                   value={newDefect.defect_quantity || ""}
-                  disabled={isClosed || defectOpSeq === ""}
+                  disabled={defectOpSeq === ""}
                   onChange={(e) => setNewDefect({ ...newDefect, defect_quantity: Number(e.target.value) || 0 })}
                   className="border-slate-700 bg-slate-950 text-right text-slate-100 disabled:opacity-50"
                 />
                 <select
                   value={newDefect.unit}
-                  disabled={isClosed || defectOpSeq === ""}
+                  disabled={defectOpSeq === ""}
                   onChange={(e) => setNewDefect({ ...newDefect, unit: e.target.value as NewDefect["unit"] })}
                   className="h-9 rounded border border-slate-700 bg-slate-950 px-2 text-sm text-slate-100 disabled:opacity-50"
                 >
@@ -794,11 +804,12 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
                   size="sm"
                   className="bg-orange-500 text-white hover:bg-orange-600 md:col-span-2 disabled:opacity-50"
                   onClick={addDefect}
-                  disabled={isClosed || saving || defectOpSeq === ""}
+                  disabled={saving || defectOpSeq === ""}
                 >
                   <ListChecks className="mr-1.5 h-4 w-4" /> 新增不良（按工序）
                 </Button>
               </div>
+              )}
 
               {/* 不良记录筛选 */}
               <div className="border-t border-slate-800 pt-3">
@@ -831,6 +842,8 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
               <CardDescription className="text-slate-400">设备故障/来料不良/其它原因停线记录</CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
+              {/* 新增异常工时表单 */}
+              {!isClosed && (
               <div className="grid grid-cols-1 gap-2 md:grid-cols-4">
                 <select
                   value={newDowntime.anomaly_type}
@@ -881,6 +894,7 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
                   <Save className="mr-1.5 h-4 w-4" /> 记录
                 </Button>
               </div>
+              )}
               {/* 异常工时筛选 */}
               <div className="border-t border-slate-800 pt-3">
                 <div className="mb-2 flex items-center justify-between">
@@ -912,6 +926,8 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
               <CardDescription className="text-slate-400">物料批号/数量/图片留痕</CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
+              {/* 新增制程信息表单 */}
+              {!isClosed && (
               <div className="grid grid-cols-1 gap-2 md:grid-cols-4">
                 <select
                   value={newPI.operation_seq}
@@ -945,25 +961,26 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
                 <Button size="sm" className="bg-orange-500 text-white hover:bg-orange-600" onClick={addPI} disabled={saving}>
                   <Save className="mr-1.5 h-4 w-4" /> 记录
                 </Button>
-                <Input
-                  placeholder="物料标签图片 URL"
-                  value={newPI.material_label_image}
-                  onChange={(e) => setNewPI({ ...newPI, material_label_image: e.target.value })}
-                  className="md:col-span-2 border-slate-700 bg-slate-950 text-slate-100 placeholder:text-slate-600"
+                <textarea
+                  placeholder="物料标签图片 URL（每行一个）"
+                  value={(newPI.material_label_image ?? []).join("\n")}
+                  onChange={(e) => setNewPI({ ...newPI, material_label_image: e.target.value.split("\n").filter(Boolean) })}
+                  className="md:col-span-2 h-16 rounded border border-slate-700 bg-slate-950 p-2 text-xs text-slate-100 placeholder:text-slate-600"
                 />
-                <Input
-                  placeholder="来料不良图片 URL"
-                  value={newPI.incoming_defect_image}
-                  onChange={(e) => setNewPI({ ...newPI, incoming_defect_image: e.target.value })}
-                  className="border-slate-700 bg-slate-950 text-slate-100 placeholder:text-slate-600"
+                <textarea
+                  placeholder="来料不良图片 URL（每行一个）"
+                  value={(newPI.incoming_defect_image ?? []).join("\n")}
+                  onChange={(e) => setNewPI({ ...newPI, incoming_defect_image: e.target.value.split("\n").filter(Boolean) })}
+                  className="h-16 rounded border border-slate-700 bg-slate-950 p-2 text-xs text-slate-100 placeholder:text-slate-600"
                 />
-                <Input
-                  placeholder="制程不良图片 URL"
-                  value={newPI.process_defect_image}
-                  onChange={(e) => setNewPI({ ...newPI, process_defect_image: e.target.value })}
-                  className="border-slate-700 bg-slate-950 text-slate-100 placeholder:text-slate-600"
+                <textarea
+                  placeholder="制程不良图片 URL（每行一个）"
+                  value={(newPI.process_defect_image ?? []).join("\n")}
+                  onChange={(e) => setNewPI({ ...newPI, process_defect_image: e.target.value.split("\n").filter(Boolean) })}
+                  className="h-16 rounded border border-slate-700 bg-slate-950 p-2 text-xs text-slate-100 placeholder:text-slate-600"
                 />
               </div>
+              )}
               {/* 制程信息筛选 */}
               <div className="border-t border-slate-800 pt-3">
                 <div className="mb-2 flex items-center justify-between">
@@ -1015,7 +1032,7 @@ function DefectsTable({ defects, onRemove, isClosed }: { defects: OperationDefec
           <th className="px-2 py-2 text-right">数量</th>
           <th className="px-2 py-2 text-left">单位</th>
           <th className="px-2 py-2 text-left">登记时间</th>
-          <th className="px-2 py-2 text-center">操作</th>
+          {!isClosed && <th className="px-2 py-2 text-center">操作</th>}
         </tr>
       </thead>
       <tbody>
@@ -1026,11 +1043,13 @@ function DefectsTable({ defects, onRemove, isClosed }: { defects: OperationDefec
             <td className="px-2 py-1.5 text-right font-mono">{formatNumber(d.defect_quantity)}</td>
             <td className="px-2 py-1.5">{d.unit ?? "—"}</td>
             <td className="px-2 py-1.5 text-slate-400">{formatDateTime(d.created_at)}</td>
-            <td className="px-2 py-1.5 text-center">
-              <Button size="sm" variant="ghost" className="h-6 text-rose-400" disabled={isClosed} onClick={() => onRemove(d.id)}>
-                删除
-              </Button>
-            </td>
+            {!isClosed && (
+              <td className="px-2 py-1.5 text-center">
+                <Button size="sm" variant="ghost" className="h-6 text-rose-400" onClick={() => onRemove(d.id)}>
+                  删除
+                </Button>
+              </td>
+            )}
           </tr>
         ))}
       </tbody>
@@ -1054,7 +1073,7 @@ function DowntimesTable({ rows, onRemove, isClosed }: { rows: EquipmentDowntime[
           <th className="px-2 py-2 text-right">时长(min)</th>
           <th className="px-2 py-2 text-left">确认人</th>
           <th className="px-2 py-2 text-left">描述</th>
-          <th className="px-2 py-2 text-center">操作</th>
+          {!isClosed && <th className="px-2 py-2 text-center">操作</th>}
         </tr>
       </thead>
       <tbody>
@@ -1068,11 +1087,13 @@ function DowntimesTable({ rows, onRemove, isClosed }: { rows: EquipmentDowntime[
             <td className="px-2 py-1.5 text-right font-mono">{formatNumber(d.duration_minutes)}</td>
             <td className="px-2 py-1.5">{d.confirmer || "—"}</td>
             <td className="px-2 py-1.5 text-slate-400">{d.problem_description || "—"}</td>
-            <td className="px-2 py-1.5 text-center">
-              <Button size="sm" variant="ghost" className="h-6 text-rose-400" disabled={isClosed} onClick={() => onRemove(d.id)}>
-                删除
-              </Button>
-            </td>
+            {!isClosed && (
+              <td className="px-2 py-1.5 text-center">
+                <Button size="sm" variant="ghost" className="h-6 text-rose-400" onClick={() => onRemove(d.id)}>
+                  删除
+                </Button>
+              </td>
+            )}
           </tr>
         ))}
       </tbody>
@@ -1081,6 +1102,14 @@ function DowntimesTable({ rows, onRemove, isClosed }: { rows: EquipmentDowntime[
 }
 
 function ProcessInfoTable({ rows, onRemove, isClosed }: { rows: ProcessInfo[]; onRemove: (id: string) => void; isClosed: boolean }) {
+  const renderImages = (urls: string[] | null | undefined) => {
+    if (!urls || urls.length === 0) return "—";
+    return urls.map((url, i) => (
+      <div key={i} className="truncate max-w-[100px]">
+        {url}
+      </div>
+    ));
+  };
   if (rows.length === 0) {
     return <div className="rounded border border-dashed border-slate-700 p-4 text-center text-sm text-slate-500">暂无制程信息</div>;
   }
@@ -1094,7 +1123,7 @@ function ProcessInfoTable({ rows, onRemove, isClosed }: { rows: ProcessInfo[]; o
           <th className="px-2 py-2 text-left">标签图</th>
           <th className="px-2 py-2 text-left">来料图</th>
           <th className="px-2 py-2 text-left">制程图</th>
-          <th className="px-2 py-2 text-center">操作</th>
+          {!isClosed && <th className="px-2 py-2 text-center">操作</th>}
         </tr>
       </thead>
       <tbody>
@@ -1106,14 +1135,16 @@ function ProcessInfoTable({ rows, onRemove, isClosed }: { rows: ProcessInfo[]; o
             </td>
             <td className="px-2 py-1.5 font-mono">{r.material_batch_no || "—"}</td>
             <td className="px-2 py-1.5 text-right font-mono">{formatNumber(r.quantity)}</td>
-            <td className="px-2 py-1.5 text-xs text-slate-400">{r.material_label_image || "—"}</td>
-            <td className="px-2 py-1.5 text-xs text-slate-400">{r.incoming_defect_image || "—"}</td>
-            <td className="px-2 py-1.5 text-xs text-slate-400">{r.process_defect_image || "—"}</td>
-            <td className="px-2 py-1.5 text-center">
-              <Button size="sm" variant="ghost" className="h-6 text-rose-400" disabled={isClosed} onClick={() => onRemove(r.id)}>
-                删除
-              </Button>
-            </td>
+            <td className="px-2 py-1.5 text-xs text-slate-400">{renderImages(r.material_label_image)}</td>
+            <td className="px-2 py-1.5 text-xs text-slate-400">{renderImages(r.incoming_defect_image)}</td>
+            <td className="px-2 py-1.5 text-xs text-slate-400">{renderImages(r.process_defect_image)}</td>
+            {!isClosed && (
+              <td className="px-2 py-1.5 text-center">
+                <Button size="sm" variant="ghost" className="h-6 text-rose-400" onClick={() => onRemove(r.id)}>
+                  删除
+                </Button>
+              </td>
+            )}
           </tr>
         ))}
       </tbody>
