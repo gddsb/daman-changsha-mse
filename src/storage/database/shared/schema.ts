@@ -359,8 +359,5 @@ export const processInfos = pgTable("process_infos", {
   materialBatchNo: varchar("material_batch_no", { length: 64 }),
   materialType: varchar("material_type", { length: 64 }),
   quantity: integer("quantity").default(0),
-  materialLabelImage: jsonb("material_label_image").$type<string[]>(),
-  incomingDefectImage: jsonb("incoming_defect_image").$type<string[]>(),
-  processDefectImage: jsonb("process_defect_image").$type<string[]>(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
 });

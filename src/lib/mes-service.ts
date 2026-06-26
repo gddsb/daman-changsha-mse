@@ -880,9 +880,6 @@ const toProcessInfoView = (r: Record<string, unknown>): ProcessInfo => ({
   material_batch_no: String(r.material_batch_no ?? ""),
   material_type: String(r.material_type ?? ""),
   quantity: Number(r.quantity ?? 0),
-  material_label_image: Array.isArray(r.material_label_image) ? r.material_label_image : [],
-  incoming_defect_image: Array.isArray(r.incoming_defect_image) ? r.incoming_defect_image : [],
-  process_defect_image: Array.isArray(r.process_defect_image) ? r.process_defect_image : [],
   created_at: String(r.created_at ?? ""),
 });
 
@@ -1515,9 +1512,6 @@ export interface CreateProcessInfoInput {
   material_batch_no?: string;
   material_type?: string;
   quantity?: number;
-  material_label_image?: string;
-  incoming_defect_image?: string;
-  process_defect_image?: string;
 }
 
 export async function addProcessInfo(input: CreateProcessInfoInput): Promise<ProcessInfo> {
@@ -1541,9 +1535,6 @@ export async function addProcessInfo(input: CreateProcessInfoInput): Promise<Pro
       material_batch_no: input.material_batch_no ?? null,
       material_type: input.material_type ?? null,
       quantity: input.quantity ?? 0,
-      material_label_image: input.material_label_image ?? null,
-      incoming_defect_image: input.incoming_defect_image ?? null,
-      process_defect_image: input.process_defect_image ?? null,
     })
     .select()
     .maybeSingle();

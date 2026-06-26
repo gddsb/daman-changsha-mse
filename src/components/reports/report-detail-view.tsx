@@ -148,7 +148,7 @@ interface NewDefect {
   defect_category: "制程不良" | "来料不良" | "检验报废";
   defect_name: string;
   defect_quantity: number;
-  unit: "小片" | "带盖" | "";
+  unit: "小片" | "罐" | "";
 }
 
 /** 新增异常工时草稿 */
@@ -166,12 +166,9 @@ interface NewDowntime {
 interface NewProcessInfo {
   operation_seq: number;
   operation_name: string;
-  material_batch_no: string;
   material_type: string;
+  material_batch_no: string;
   quantity: number;
-  material_label_image: string[];  // 多图数组
-  incoming_defect_image: string[];  // 多图数组
-  process_defect_image: string[];  // 多图数组
 }
 
 export function ReportDetailView({ reportId }: { reportId: string }) {
@@ -206,21 +203,18 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
   const [newDowntime, setNewDowntime] = useState<NewDowntime>({
     anomaly_type: "设备故障",
     equipment_code: "",
-    downtime_type: "故障停机",
+    downtime_type: "",
     problem_description: "",
     start_time: "",
     end_time: "",
-    confirmer: "当前用户",
+    confirmer: "",
   });
   const [newPI, setNewPI] = useState<NewProcessInfo>({
     operation_seq: 1,
     operation_name: "",
-    material_batch_no: "",
     material_type: "",
+    material_batch_no: "",
     quantity: 0,
-    material_label_image: [],
-    incoming_defect_image: [],
-    process_defect_image: [],
   });
 
   const [loading, setLoading] = useState(true);
@@ -237,6 +231,16 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
     if (defectNameFilter) result = result.filter(d => d.defect_name?.includes(defectNameFilter));
     return result;
   }, [detail?.defects, defectOpSeqFilter, defectCategoryFilter, defectNameFilter]);
+
+  /** 当前工序+分类下已登记的不良名称列表（用于快速选择） */
+  const registeredDefectNames = useMemo(() => {
+    if (!detail?.defects || defectOpSeq === "" || !newDefect.defect_category) return [];
+    const names = detail.defects
+      .filter(d => d.operation_seq === defectOpSeq && d.defect_category === newDefect.defect_category)
+      .map(d => d.defect_name)
+      .filter((n): n is string => !!n);
+    return [...new Set(names)]; // 去重
+  }, [detail?.defects, defectOpSeq, newDefect.defect_category]);
 
   /** 筛选后的异常工时记录 */
   const filteredDowntimes = useMemo(() => {
@@ -577,7 +581,7 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
       const j = (await r.json()) as ApiResp<ProcessInfo>;
       if (!j.success) throw new Error(j.error);
       setPageHint("制程信息已记录");
-      setNewPI({ ...newPI, material_batch_no: "", material_type: "", quantity: 0, material_label_image: [], incoming_defect_image: [], process_defect_image: [] });
+      setNewPI({ ...newPI, material_type: "", material_batch_no: "", quantity: 0 });
       await loadAll();
     } catch (e) {
       setPageError(e instanceof Error ? e.message : "保存失败");
@@ -842,7 +846,7 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
 
               {/* 新增不良表单 */}
               {!isClosed && (
-              <div className="grid grid-cols-1 gap-2 md:grid-cols-6">
+              <div className="grid grid-cols-1 gap-2 md:grid-cols-7">
                 <select
                   value={newDefect.defect_category}
                   disabled={defectOpSeq === ""}
@@ -852,6 +856,20 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
                   <option value="制程不良">制程不良</option>
                   <option value="来料不良">来料不良</option>
                   <option value="检验报废">检验报废</option>
+                </select>
+                {/* 快速选择已登记名称 */}
+                <select
+                  value=""
+                  disabled={defectOpSeq === "" || registeredDefectNames.length === 0}
+                  onChange={(e) => {
+                    if (e.target.value) setNewDefect({ ...newDefect, defect_name: e.target.value });
+                  }}
+                  className="h-9 rounded border border-border bg-background px-2 text-sm text-foreground disabled:opacity-50"
+                >
+                  <option value="">-- 快选名称 --</option>
+                  {registeredDefectNames.map((name) => (
+                    <option key={name} value={name}>{name}</option>
+                  ))}
                 </select>
                 <Input
                   placeholder="不良名称"
@@ -869,18 +887,36 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
                   onChange={(e) => setNewDefect({ ...newDefect, defect_quantity: Number(e.target.value) || 0 })}
                   className="border-border bg-background text-right text-foreground disabled:opacity-50"
                 />
-                <select
-                  value={newDefect.unit}
-                  disabled={defectOpSeq === ""}
-                  onChange={(e) => setNewDefect({ ...newDefect, unit: e.target.value as NewDefect["unit"] })}
-                  className="h-9 rounded border border-border bg-background px-2 text-sm text-foreground disabled:opacity-50"
-                >
-                  <option value="小片">小片</option>
-                  <option value="带盖">带盖</option>
-                </select>
+                {/* 单位单选框 */}
+                <div className="flex items-center gap-4 h-9">
+                  <label className="flex items-center gap-1.5 text-sm text-foreground cursor-pointer">
+                    <input
+                      type="radio"
+                      name="defect-unit"
+                      value="小片"
+                      checked={newDefect.unit === "小片"}
+                      disabled={defectOpSeq === ""}
+                      onChange={() => setNewDefect({ ...newDefect, unit: "小片" })}
+                      className="h-4 w-4 accent-primary"
+                    />
+                    小片
+                  </label>
+                  <label className="flex items-center gap-1.5 text-sm text-foreground cursor-pointer">
+                    <input
+                      type="radio"
+                      name="defect-unit"
+                      value="罐"
+                      checked={newDefect.unit === "罐"}
+                      disabled={defectOpSeq === ""}
+                      onChange={() => setNewDefect({ ...newDefect, unit: "罐" })}
+                      className="h-4 w-4 accent-primary"
+                    />
+                    罐
+                  </label>
+                </div>
                 <Button
                   size="sm"
-                  className="bg-primary text-white hover:bg-primary md:col-span-2 disabled:opacity-50"
+                  className="bg-primary text-white hover:bg-primary disabled:opacity-50"
                   onClick={addDefect}
                   disabled={saving || defectOpSeq === ""}
                 >
@@ -973,18 +1009,24 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
                   onChange={(e) => setNewDowntime({ ...newDowntime, confirmer: e.target.value })}
                   className="border-border bg-background text-foreground placeholder:text-muted-foreground"
                 />
-                <Input
-                  type="datetime-local"
-                  value={newDowntime.start_time}
-                  onChange={(e) => setNewDowntime({ ...newDowntime, start_time: e.target.value })}
-                  className="border-border bg-background text-foreground"
-                />
-                <Input
-                  type="datetime-local"
-                  value={newDowntime.end_time}
-                  onChange={(e) => setNewDowntime({ ...newDowntime, end_time: e.target.value })}
-                  className="border-border bg-background text-foreground"
-                />
+                <div className="flex items-center gap-2">
+                  <label className="text-xs text-muted-foreground whitespace-nowrap">开始时间</label>
+                  <Input
+                    type="datetime-local"
+                    value={newDowntime.start_time}
+                    onChange={(e) => setNewDowntime({ ...newDowntime, start_time: e.target.value })}
+                    className="border-border bg-background text-foreground"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-xs text-muted-foreground whitespace-nowrap">结束时间</label>
+                  <Input
+                    type="datetime-local"
+                    value={newDowntime.end_time}
+                    onChange={(e) => setNewDowntime({ ...newDowntime, end_time: e.target.value })}
+                    className="border-border bg-background text-foreground"
+                  />
+                </div>
                 <Input
                   placeholder="问题描述"
                   value={newDowntime.problem_description}
@@ -1079,12 +1121,6 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
                     </option>
                   ))}
                 </select>
-                <Input
-                  placeholder="物料批号"
-                  value={newPI.material_batch_no}
-                  onChange={(e) => setNewPI({ ...newPI, material_batch_no: e.target.value })}
-                  className="border-border bg-background text-foreground placeholder:text-muted-foreground"
-                />
                 {/* 物料类型下拉框 - 根据工序动态显示选项 */}
                 <select
                   value={newPI.material_type}
@@ -1098,6 +1134,12 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
                   ))}
                 </select>
                 <Input
+                  placeholder="物料批号"
+                  value={newPI.material_batch_no}
+                  onChange={(e) => setNewPI({ ...newPI, material_batch_no: e.target.value })}
+                  className="border-border bg-background text-foreground placeholder:text-muted-foreground"
+                />
+                <Input
                   type="number"
                   min={0}
                   placeholder="数量"
@@ -1108,24 +1150,6 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
                 <Button size="sm" className="bg-primary text-white hover:bg-primary" onClick={addPI} disabled={saving}>
                   <Save className="mr-1.5 h-4 w-4" /> 记录
                 </Button>
-                <textarea
-                  placeholder="物料标签图片 URL（每行一个）"
-                  value={(newPI.material_label_image ?? []).join("\n")}
-                  onChange={(e) => setNewPI({ ...newPI, material_label_image: e.target.value.split("\n").filter(Boolean) })}
-                  className="md:col-span-2 h-16 rounded border border-border bg-background p-2 text-xs text-foreground placeholder:text-muted-foreground"
-                />
-                <textarea
-                  placeholder="来料不良图片 URL（每行一个）"
-                  value={(newPI.incoming_defect_image ?? []).join("\n")}
-                  onChange={(e) => setNewPI({ ...newPI, incoming_defect_image: e.target.value.split("\n").filter(Boolean) })}
-                  className="h-16 rounded border border-border bg-background p-2 text-xs text-foreground placeholder:text-muted-foreground"
-                />
-                <textarea
-                  placeholder="制程不良图片 URL（每行一个）"
-                  value={(newPI.process_defect_image ?? []).join("\n")}
-                  onChange={(e) => setNewPI({ ...newPI, process_defect_image: e.target.value.split("\n").filter(Boolean) })}
-                  className="h-16 rounded border border-border bg-background p-2 text-xs text-foreground placeholder:text-muted-foreground"
-                />
               </div>
               )}
               {/* 制程信息筛选 */}
@@ -1285,12 +1309,9 @@ function ProcessInfoTable({ rows, onRemove, isClosed }: { rows: ProcessInfo[]; o
       <thead>
         <tr className="border-b border-border bg-muted text-xs uppercase text-muted-foreground">
           <th className="px-2 py-2 text-left">工序</th>
-          <th className="px-2 py-2 text-left">物料批号</th>
           <th className="px-2 py-2 text-left">物料类型</th>
+          <th className="px-2 py-2 text-left">物料批号</th>
           <th className="px-2 py-2 text-right">数量</th>
-          <th className="px-2 py-2 text-left">标签图</th>
-          <th className="px-2 py-2 text-left">来料图</th>
-          <th className="px-2 py-2 text-left">制程图</th>
           {!isClosed && <th className="px-2 py-2 text-center">操作</th>}
         </tr>
       </thead>
@@ -1301,12 +1322,9 @@ function ProcessInfoTable({ rows, onRemove, isClosed }: { rows: ProcessInfo[]; o
               <div className="text-xs text-muted-foreground">#{r.operation_seq}</div>
               <div>{r.operation_name}</div>
             </td>
-            <td className="px-2 py-1.5 font-mono">{r.material_batch_no || "—"}</td>
             <td className="px-2 py-1.5">{r.material_type || "—"}</td>
+            <td className="px-2 py-1.5 font-mono">{r.material_batch_no || "—"}</td>
             <td className="px-2 py-1.5 text-right font-mono">{formatNumber(r.quantity)}</td>
-            <td className="px-2 py-1.5 text-xs text-muted-foreground">{renderImages(r.material_label_image)}</td>
-            <td className="px-2 py-1.5 text-xs text-muted-foreground">{renderImages(r.incoming_defect_image)}</td>
-            <td className="px-2 py-1.5 text-xs text-muted-foreground">{renderImages(r.process_defect_image)}</td>
             {!isClosed && (
               <td className="px-2 py-1.5 text-center">
                 <Button size="sm" variant="ghost" className="h-6 text-danger" onClick={() => onRemove(r.id)}>

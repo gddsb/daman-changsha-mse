@@ -19,10 +19,8 @@ export async function POST(
       operation_seq: body.operation_seq,
       operation_name: body.operation_name,
       material_batch_no: body.material_batch_no,
+      material_type: body.material_type,
       quantity: body.quantity ?? 0,
-      material_label_image: body.material_label_image,
-      incoming_defect_image: body.incoming_defect_image,
-      process_defect_image: body.process_defect_image,
     });
     return NextResponse.json({ success: true, data });
   } catch (e) {

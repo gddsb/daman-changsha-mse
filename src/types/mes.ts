@@ -375,9 +375,6 @@ export interface ProcessInfo {
   material_batch_no: string;
   material_type: string;
   quantity: number;
-  material_label_image: string[];
-  incoming_defect_image: string[];
-  process_defect_image: string[];
   created_at: string;
 }
 
