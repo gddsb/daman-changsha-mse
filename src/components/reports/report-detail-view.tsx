@@ -32,6 +32,7 @@ import type {
   EquipmentDowntime,
   ProcessInfo,
   WorkOrder,
+  WorkOrderOperation,
 } from "@/types/mes";
 import { formatDateTime, formatNumber, formatPercent } from "@/lib/format";
 
@@ -45,6 +46,23 @@ interface ProcessItem {
 interface ApiOk<T> { success: true; data: T }
 interface ApiErr { success: false; error: string }
 type ApiResp<T> = ApiOk<T> | ApiErr
+
+/** 根据工序名称返回可选的物料类型 */
+function getMaterialTypeOptions(opName: string): string[] {
+  if (opName.includes("下料") || opName.includes("检验")) {
+    return ["马口铁素铁", "印花马口铁"];
+  }
+  if (opName.includes("焊接") || opName.includes("烘干")) {
+    return ["涂料", "稀释剂"];
+  }
+  if (opName.includes("封口") || opName.includes("测漏")) {
+    return ["底盖", "上盖"];
+  }
+  if (opName.includes("跺") || opName.includes("包装")) {
+    return ["纸板", "覆膜纸板", "缠绕膜", "PO袋", "PE膜", "其它"];
+  }
+  return [];
+}
 
 /** 一道工序的汇总展示数据（只读） */
 interface OpSummary {
@@ -135,7 +153,7 @@ interface NewDefect {
 
 /** 新增异常工时草稿 */
 interface NewDowntime {
-  anomaly_type: "设备故障" | "来料不良" | "其它原因";
+  anomaly_type: "设备故障" | "来料不良" | "产品换型" | "其它原因";
   equipment_code: string;
   downtime_type: string;
   problem_description: string;
@@ -149,6 +167,7 @@ interface NewProcessInfo {
   operation_seq: number;
   operation_name: string;
   material_batch_no: string;
+  material_type: string;
   quantity: number;
   material_label_image: string[];  // 多图数组
   incoming_defect_image: string[];  // 多图数组
@@ -197,6 +216,7 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
     operation_seq: 1,
     operation_name: "",
     material_batch_no: "",
+    material_type: "",
     quantity: 0,
     material_label_image: [],
     incoming_defect_image: [],
@@ -557,7 +577,7 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
       const j = (await r.json()) as ApiResp<ProcessInfo>;
       if (!j.success) throw new Error(j.error);
       setPageHint("制程信息已记录");
-      setNewPI({ ...newPI, material_batch_no: "", quantity: 0, material_label_image: [], incoming_defect_image: [], process_defect_image: [] });
+      setNewPI({ ...newPI, material_batch_no: "", material_type: "", quantity: 0, material_label_image: [], incoming_defect_image: [], process_defect_image: [] });
       await loadAll();
     } catch (e) {
       setPageError(e instanceof Error ? e.message : "保存失败");
@@ -908,7 +928,7 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
                     </select>
                   </div>
                 </div>
-                <DefectsTable defects={filteredDefects} onRemove={removeDefect} isClosed={isClosed} />
+                <DefectsTable defects={filteredDefects} onRemove={removeDefect} isClosed={isClosed} ops={detail?.work_order_operations ?? []} />
               </div>
             </CardContent>
           </Card>
@@ -932,6 +952,7 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
                 >
                   <option value="设备故障">设备故障</option>
                   <option value="来料不良">来料不良</option>
+                  <option value="产品换型">产品换型</option>
                   <option value="其它原因">其它原因</option>
                 </select>
                 <Input
@@ -1036,7 +1057,19 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
                   onChange={(e) => {
                     const seq = Number(e.target.value);
                     const op = reportedOps.find((o) => o.sequence === seq);
-                    setNewPI({ ...newPI, operation_seq: seq, operation_name: op?.operation_name ?? "" });
+                    // 根据工序设置默认物料类型
+                    const opName = op?.operation_name ?? "";
+                    let defaultMaterialType = "";
+                    if (opName.includes("下料") || opName.includes("检验")) {
+                      defaultMaterialType = "印花马口铁";
+                    } else if (opName.includes("焊接") || opName.includes("烘干")) {
+                      defaultMaterialType = "稀释剂";
+                    } else if (opName.includes("封口") || opName.includes("测漏")) {
+                      defaultMaterialType = "上盖";
+                    } else if (opName.includes("跺") || opName.includes("包装")) {
+                      defaultMaterialType = "";
+                    }
+                    setNewPI({ ...newPI, operation_seq: seq, operation_name: opName, material_type: defaultMaterialType });
                   }}
                   className="h-9 rounded border border-border bg-background px-2 text-sm text-foreground"
                 >
@@ -1052,6 +1085,18 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
                   onChange={(e) => setNewPI({ ...newPI, material_batch_no: e.target.value })}
                   className="border-border bg-background text-foreground placeholder:text-muted-foreground"
                 />
+                {/* 物料类型下拉框 - 根据工序动态显示选项 */}
+                <select
+                  value={newPI.material_type}
+                  onChange={(e) => setNewPI({ ...newPI, material_type: e.target.value })}
+                  className="h-9 rounded border border-border bg-background px-2 text-sm text-foreground"
+                  disabled={!getMaterialTypeOptions(newPI.operation_name).length}
+                >
+                  <option value="">-- 物料类型 --</option>
+                  {getMaterialTypeOptions(newPI.operation_name).map((opt) => (
+                    <option key={opt} value={opt}>{opt}</option>
+                  ))}
+                </select>
                 <Input
                   type="number"
                   min={0}
@@ -1133,14 +1178,21 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-function DefectsTable({ defects, onRemove, isClosed }: { defects: OperationDefect[]; onRemove: (id: string) => void; isClosed: boolean }) {
+function DefectsTable({ defects, onRemove, isClosed, ops }: { defects: OperationDefect[]; onRemove: (id: string) => void; isClosed: boolean; ops: WorkOrderOperation[] }) {
   if (defects.length === 0) {
     return <div className="rounded border border-dashed border-border p-4 text-center text-sm text-muted-foreground">该工序暂无不良记录</div>;
   }
+  // 获取工序名称
+  const getOpName = (seq: number | null) => {
+    if (seq === null) return "—";
+    const op = ops.find(o => o.sequence === seq);
+    return op ? `#${seq} ${op.operation_name}` : `#${seq}`;
+  };
   return (
     <table className="w-full border-collapse text-sm">
       <thead>
         <tr className="border-b border-border bg-muted text-xs uppercase text-muted-foreground">
+          <th className="px-2 py-2 text-left">工序</th>
           <th className="px-2 py-2 text-left">不良分类</th>
           <th className="px-2 py-2 text-left">不良名称</th>
           <th className="px-2 py-2 text-right">数量</th>
@@ -1152,6 +1204,7 @@ function DefectsTable({ defects, onRemove, isClosed }: { defects: OperationDefec
       <tbody>
         {defects.map((d) => (
           <tr key={d.id} className="border-b border-border text-foreground">
+            <td className="px-2 py-1.5 font-mono text-xs">{getOpName(d.operation_seq)}</td>
             <td className="px-2 py-1.5">{d.defect_category}</td>
             <td className="px-2 py-1.5">{d.defect_name}</td>
             <td className="px-2 py-1.5 text-right font-mono">{formatNumber(d.defect_quantity)}</td>
@@ -1233,6 +1286,7 @@ function ProcessInfoTable({ rows, onRemove, isClosed }: { rows: ProcessInfo[]; o
         <tr className="border-b border-border bg-muted text-xs uppercase text-muted-foreground">
           <th className="px-2 py-2 text-left">工序</th>
           <th className="px-2 py-2 text-left">物料批号</th>
+          <th className="px-2 py-2 text-left">物料类型</th>
           <th className="px-2 py-2 text-right">数量</th>
           <th className="px-2 py-2 text-left">标签图</th>
           <th className="px-2 py-2 text-left">来料图</th>
@@ -1248,6 +1302,7 @@ function ProcessInfoTable({ rows, onRemove, isClosed }: { rows: ProcessInfo[]; o
               <div>{r.operation_name}</div>
             </td>
             <td className="px-2 py-1.5 font-mono">{r.material_batch_no || "—"}</td>
+            <td className="px-2 py-1.5">{r.material_type || "—"}</td>
             <td className="px-2 py-1.5 text-right font-mono">{formatNumber(r.quantity)}</td>
             <td className="px-2 py-1.5 text-xs text-muted-foreground">{renderImages(r.material_label_image)}</td>
             <td className="px-2 py-1.5 text-xs text-muted-foreground">{renderImages(r.incoming_defect_image)}</td>

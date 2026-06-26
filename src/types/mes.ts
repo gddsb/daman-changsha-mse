@@ -373,6 +373,7 @@ export interface ProcessInfo {
   operation_seq: number;
   operation_name: string;
   material_batch_no: string;
+  material_type: string;
   quantity: number;
   material_label_image: string[];
   incoming_defect_image: string[];
