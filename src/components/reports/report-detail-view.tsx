@@ -131,11 +131,12 @@ interface NewDefect {
   defect_name: string;
   defect_quantity: number;
   unit: "小片" | "带盖" | "";
+  images: string[];
 }
 
 /** 新增异常工时草稿 */
 interface NewDowntime {
-  anomaly_type: "设备故障" | "来料不良" | "其它原因";
+  anomaly_type: "设备故障" | "来料不良" | "产品换型" | "其它原因";
   equipment_code: string;
   downtime_type: string;
   problem_description: string;
@@ -149,10 +150,24 @@ interface NewProcessInfo {
   operation_seq: number;
   operation_name: string;
   material_batch_no: string;
+  material_type: string;
   quantity: number;
   material_label_image: string[];  // 多图数组
   incoming_defect_image: string[];  // 多图数组
   process_defect_image: string[];  // 多图数组
+}
+
+// 物料类型选项映射（按工序）
+const MATERIAL_TYPE_OPTIONS: Record<number, { options: string[]; default: string }> = {
+  1: { options: ["马口铁素铁", "印花马口铁"], default: "印花马口铁" },
+  3: { options: ["涂料", "稀释剂"], default: "稀释剂" },
+  5: { options: ["底盖", "上盖"], default: "上盖" },
+  12: { options: ["纸板", "覆膜纸板", "缠绕膜", "PO袋", "PE膜", "其它"], default: "纸板" },
+};
+
+/** 获取工序对应的物料类型选项 */
+function getMaterialTypeOptions(seq: number): { options: string[]; default: string } {
+  return MATERIAL_TYPE_OPTIONS[seq] || { options: [], default: "" };
 }
 
 export function ReportDetailView({ reportId }: { reportId: string }) {
@@ -183,6 +198,7 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
     defect_name: "",
     defect_quantity: 0,
     unit: "小片",
+    images: [],
   });
   const [newDowntime, setNewDowntime] = useState<NewDowntime>({
     anomaly_type: "设备故障",
@@ -197,6 +213,7 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
     operation_seq: 1,
     operation_name: "",
     material_batch_no: "",
+    material_type: "",
     quantity: 0,
     material_label_image: [],
     incoming_defect_image: [],
@@ -461,11 +478,12 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
           defect_name: newDefect.defect_name,
           defect_quantity: newDefect.defect_quantity,
           unit: newDefect.unit || null,
+          images: newDefect.images.length > 0 ? newDefect.images : null,
         }),
       });
       const j = (await r.json()) as ApiResp<OperationDefect>;
       if (!j.success) throw new Error(j.error);
-      setNewDefect({ ...newDefect, defect_name: "", defect_quantity: 0 });
+      setNewDefect({ defect_category: "制程不良", defect_name: "", defect_quantity: 0, unit: "小片", images: [] });
       setPageHint("不良已记录");
       await loadAll();
     } catch (e) {
@@ -557,7 +575,7 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
       const j = (await r.json()) as ApiResp<ProcessInfo>;
       if (!j.success) throw new Error(j.error);
       setPageHint("制程信息已记录");
-      setNewPI({ ...newPI, material_batch_no: "", quantity: 0, material_label_image: [], incoming_defect_image: [], process_defect_image: [] });
+      setNewPI({ ...newPI, material_batch_no: "", material_type: "", quantity: 0, material_label_image: [], incoming_defect_image: [], process_defect_image: [] });
       await loadAll();
     } catch (e) {
       setPageError(e instanceof Error ? e.message : "保存失败");
@@ -858,9 +876,47 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
                   <option value="小片">小片</option>
                   <option value="带盖">带盖</option>
                 </select>
+                {/* 不良图片上传（最多7张） */}
+                <div className="flex flex-col gap-1">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    disabled={defectOpSeq === ""}
+                    onChange={(e) => {
+                      const files = Array.from(e.target.files || []);
+                      if (files.length + newDefect.images.length > 7) {
+                        alert("最多上传7张图片");
+                        return;
+                      }
+                      files.forEach(file => {
+                        if (file.size > 5 * 1024 * 1024) {
+                          alert(`图片 ${file.name} 大于5M，请压缩后上传`);
+                          return;
+                        }
+                        const url = URL.createObjectURL(file);
+                        setNewDefect({ ...newDefect, images: [...newDefect.images, url] });
+                      });
+                    }}
+                    className="h-9 rounded border border-border bg-background px-2 text-sm text-foreground disabled:opacity-50"
+                  />
+                  {newDefect.images.length > 0 && (
+                    <div className="flex gap-1">
+                      {newDefect.images.map((url, idx) => (
+                        <div key={idx} className="relative">
+                          <img src={url} alt={`不良图片${idx+1}`} className="h-6 w-6 rounded border border-border object-cover" />
+                          <button
+                            onClick={() => setNewDefect({ ...newDefect, images: newDefect.images.filter((_, i) => i !== idx) })}
+                            className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-danger text-white text-xs"
+                          >×</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
                 <Button
                   size="sm"
-                  className="bg-primary text-white hover:bg-primary md:col-span-2 disabled:opacity-50"
+                  className="bg-primary text-white hover:bg-primary md:col-span-1 disabled:opacity-50"
                   onClick={addDefect}
                   disabled={saving || defectOpSeq === ""}
                 >
@@ -880,6 +936,7 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
                       value={defectOpSeqFilter}
                       onChange={(e) => setDefectOpSeqFilter(e.target.value === "" ? "" : Number(e.target.value))}
                       className="h-7 rounded border border-border bg-background px-2 text-xs text-foreground"
+                      disabled={!isClosed}
                     >
                       <option value="">全部工序</option>
                       {(detail?.work_order_operations ?? []).sort((a, b) => a.sequence - b.sequence).map(op => (
@@ -890,6 +947,7 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
                       value={defectCategoryFilter}
                       onChange={(e) => setDefectCategoryFilter(e.target.value)}
                       className="h-7 rounded border border-border bg-background px-2 text-xs text-foreground"
+                      disabled={!isClosed}
                     >
                       <option value="">全部分类</option>
                       <option value="制程不良">制程不良</option>
@@ -900,6 +958,7 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
                       value={defectNameFilter}
                       onChange={(e) => setDefectNameFilter(e.target.value)}
                       className="h-7 rounded border border-border bg-background px-2 text-xs text-foreground"
+                      disabled={!isClosed}
                     >
                       <option value="">全部名称</option>
                       {Array.from(new Set((detail?.defects ?? []).map(d => d.defect_name))).sort().map(name => (
@@ -919,7 +978,7 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
           <Card className="border-border bg-card">
             <CardHeader>
               <CardTitle className="text-foreground">异常工时登记</CardTitle>
-              <CardDescription className="text-muted-foreground">设备故障/来料不良/其它原因停线记录</CardDescription>
+              <CardDescription className="text-muted-foreground">设备故障/来料不良/产品换型/其它原因停线记录</CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
               {/* 新增异常工时表单 */}
@@ -932,6 +991,7 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
                 >
                   <option value="设备故障">设备故障</option>
                   <option value="来料不良">来料不良</option>
+                  <option value="产品换型">产品换型</option>
                   <option value="其它原因">其它原因</option>
                 </select>
                 <Input
@@ -986,16 +1046,19 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
                       value={downtimeTypeFilter}
                       onChange={(e) => setDowntimeTypeFilter(e.target.value)}
                       className="h-7 rounded border border-border bg-background px-2 text-xs text-foreground"
+                      disabled={!isClosed}
                     >
                       <option value="">全部类型</option>
                       <option value="设备故障">设备故障</option>
                       <option value="来料不良">来料不良</option>
+                      <option value="产品换型">产品换型</option>
                       <option value="其它原因">其它原因</option>
                     </select>
                     <select
                       value={equipmentFilter}
                       onChange={(e) => setEquipmentFilter(e.target.value)}
                       className="h-7 rounded border border-border bg-background px-2 text-xs text-foreground"
+                      disabled={!isClosed}
                     >
                       <option value="">全部设备</option>
                       {Array.from(new Set((detail?.downtimes ?? []).map(d => d.equipment_code))).sort().filter(Boolean).map(code => (
@@ -1006,6 +1069,7 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
                       value={downtimeTypeFilter2}
                       onChange={(e) => setDowntimeTypeFilter2(e.target.value)}
                       className="h-7 rounded border border-border bg-background px-2 text-xs text-foreground"
+                      disabled={!isClosed}
                     >
                       <option value="">全部停机类型</option>
                       {Array.from(new Set((detail?.downtimes ?? []).map(d => d.downtime_type))).sort().filter(Boolean).map(type => (
@@ -1036,7 +1100,8 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
                   onChange={(e) => {
                     const seq = Number(e.target.value);
                     const op = reportedOps.find((o) => o.sequence === seq);
-                    setNewPI({ ...newPI, operation_seq: seq, operation_name: op?.operation_name ?? "" });
+                    const materialOpts = getMaterialTypeOptions(seq);
+                    setNewPI({ ...newPI, operation_seq: seq, operation_name: op?.operation_name ?? "", material_type: materialOpts.default });
                   }}
                   className="h-9 rounded border border-border bg-background px-2 text-sm text-foreground"
                 >
@@ -1052,6 +1117,19 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
                   onChange={(e) => setNewPI({ ...newPI, material_batch_no: e.target.value })}
                   className="border-border bg-background text-foreground placeholder:text-muted-foreground"
                 />
+                <select
+                  value={newPI.material_type}
+                  onChange={(e) => setNewPI({ ...newPI, material_type: e.target.value })}
+                  className="h-9 rounded border border-border bg-background px-2 text-sm text-foreground"
+                  disabled={getMaterialTypeOptions(newPI.operation_seq).options.length === 0}
+                >
+                  {getMaterialTypeOptions(newPI.operation_seq).options.map(opt => (
+                    <option key={opt} value={opt}>{opt}</option>
+                  ))}
+                  {getMaterialTypeOptions(newPI.operation_seq).options.length === 0 && (
+                    <option value="">—</option>
+                  )}
+                </select>
                 <Input
                   type="number"
                   min={0}
@@ -1063,24 +1141,65 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
                 <Button size="sm" className="bg-primary text-white hover:bg-primary" onClick={addPI} disabled={saving}>
                   <Save className="mr-1.5 h-4 w-4" /> 记录
                 </Button>
-                <textarea
-                  placeholder="物料标签图片 URL（每行一个）"
-                  value={(newPI.material_label_image ?? []).join("\n")}
-                  onChange={(e) => setNewPI({ ...newPI, material_label_image: e.target.value.split("\n").filter(Boolean) })}
-                  className="md:col-span-2 h-16 rounded border border-border bg-background p-2 text-xs text-foreground placeholder:text-muted-foreground"
-                />
-                <textarea
-                  placeholder="来料不良图片 URL（每行一个）"
-                  value={(newPI.incoming_defect_image ?? []).join("\n")}
-                  onChange={(e) => setNewPI({ ...newPI, incoming_defect_image: e.target.value.split("\n").filter(Boolean) })}
-                  className="h-16 rounded border border-border bg-background p-2 text-xs text-foreground placeholder:text-muted-foreground"
-                />
-                <textarea
-                  placeholder="制程不良图片 URL（每行一个）"
-                  value={(newPI.process_defect_image ?? []).join("\n")}
-                  onChange={(e) => setNewPI({ ...newPI, process_defect_image: e.target.value.split("\n").filter(Boolean) })}
-                  className="h-16 rounded border border-border bg-background p-2 text-xs text-foreground placeholder:text-muted-foreground"
-                />
+                {/* 物料标签图片上传（最多5张） */}
+                <div className="md:col-span-2 flex flex-col gap-1">
+                  <label className="text-xs text-muted-foreground">物料标签图片（最多5张，每张≤5M）</label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    onChange={(e) => {
+                      const files = Array.from(e.target.files || []);
+                      if (files.length + newPI.material_label_image.length > 5) {
+                        alert("最多上传5张图片");
+                        return;
+                      }
+                      files.forEach(file => {
+                        if (file.size > 5 * 1024 * 1024) {
+                          alert(`图片 ${file.name} 大于5M，请压缩后上传`);
+                          return;
+                        }
+                        // 这里使用 URL.createObjectURL 预览，实际需要上传到存储服务
+                        const url = URL.createObjectURL(file);
+                        setNewPI({ ...newPI, material_label_image: [...newPI.material_label_image, url] });
+                      });
+                    }}
+                    className="h-9 rounded border border-border bg-background px-2 text-sm text-foreground"
+                  />
+                  {newPI.material_label_image.length > 0 && (
+                    <div className="flex gap-1">
+                      {newPI.material_label_image.map((url, idx) => (
+                        <div key={idx} className="relative">
+                          <img src={url} alt={`物料标签${idx+1}`} className="h-10 w-10 rounded border border-border object-cover" />
+                          <button
+                            onClick={() => setNewPI({ ...newPI, material_label_image: newPI.material_label_image.filter((_, i) => i !== idx) })}
+                            className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-danger text-white text-xs"
+                          >×</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                {/* 来料不良图片（多图） */}
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-muted-foreground">来料不良图片</label>
+                  <textarea
+                    placeholder="图片 URL（每行一个）"
+                    value={(newPI.incoming_defect_image ?? []).join("\n")}
+                    onChange={(e) => setNewPI({ ...newPI, incoming_defect_image: e.target.value.split("\n").filter(Boolean) })}
+                    className="h-16 rounded border border-border bg-background p-2 text-xs text-foreground placeholder:text-muted-foreground"
+                  />
+                </div>
+                {/* 制程不良图片（多图） */}
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-muted-foreground">制程不良图片</label>
+                  <textarea
+                    placeholder="图片 URL（每行一个）"
+                    value={(newPI.process_defect_image ?? []).join("\n")}
+                    onChange={(e) => setNewPI({ ...newPI, process_defect_image: e.target.value.split("\n").filter(Boolean) })}
+                    className="h-16 rounded border border-border bg-background p-2 text-xs text-foreground placeholder:text-muted-foreground"
+                  />
+                </div>
               </div>
               )}
               {/* 制程信息筛选 */}
@@ -1094,6 +1213,7 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
                       value={processOpSeqFilter}
                       onChange={(e) => setProcessOpSeqFilter(Number(e.target.value) || "")}
                       className="h-7 rounded border border-border bg-background px-2 text-xs text-foreground"
+                      disabled={!isClosed}
                     >
                       <option value="">全部工序</option>
                       {reportedOps.map((p) => (
@@ -1106,6 +1226,7 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
                       value={batchNoFilter}
                       onChange={(e) => setBatchNoFilter(e.target.value)}
                       className="h-7 rounded border border-border bg-background px-2 text-xs text-foreground"
+                      disabled={!isClosed}
                     >
                       <option value="">全部批号</option>
                       {Array.from(new Set((detail?.process_infos ?? []).map(pi => pi.material_batch_no).filter(Boolean))).map(bn => (
@@ -1141,10 +1262,12 @@ function DefectsTable({ defects, onRemove, isClosed }: { defects: OperationDefec
     <table className="w-full border-collapse text-sm">
       <thead>
         <tr className="border-b border-border bg-muted text-xs uppercase text-muted-foreground">
+          <th className="px-2 py-2 text-left">工序</th>
           <th className="px-2 py-2 text-left">不良分类</th>
           <th className="px-2 py-2 text-left">不良名称</th>
           <th className="px-2 py-2 text-right">数量</th>
           <th className="px-2 py-2 text-left">单位</th>
+          <th className="px-2 py-2 text-left">不良图片</th>
           <th className="px-2 py-2 text-left">登记时间</th>
           {!isClosed && <th className="px-2 py-2 text-center">操作</th>}
         </tr>
@@ -1152,10 +1275,22 @@ function DefectsTable({ defects, onRemove, isClosed }: { defects: OperationDefec
       <tbody>
         {defects.map((d) => (
           <tr key={d.id} className="border-b border-border text-foreground">
+            <td className="px-2 py-1.5 font-mono text-xs">{d.operation_seq ? `#${d.operation_seq}` : "—"} {d.operation_name ?? ""}</td>
             <td className="px-2 py-1.5">{d.defect_category}</td>
             <td className="px-2 py-1.5">{d.defect_name}</td>
             <td className="px-2 py-1.5 text-right font-mono">{formatNumber(d.defect_quantity)}</td>
             <td className="px-2 py-1.5">{d.unit ?? "—"}</td>
+            <td className="px-2 py-1.5">
+              {d.images && d.images.length > 0 ? (
+                <div className="flex gap-1">
+                  {d.images.map((url, idx) => (
+                    <a key={idx} href={url} target="_blank" rel="noopener noreferrer" className="inline-block">
+                      <img src={url} alt={`不良图片${idx+1}`} className="h-6 w-6 rounded border border-border object-cover" />
+                    </a>
+                  ))}
+                </div>
+              ) : "—"}
+            </td>
             <td className="px-2 py-1.5 text-muted-foreground">{formatDateTime(d.created_at)}</td>
             {!isClosed && (
               <td className="px-2 py-1.5 text-center">
@@ -1218,11 +1353,15 @@ function DowntimesTable({ rows, onRemove, isClosed }: { rows: EquipmentDowntime[
 function ProcessInfoTable({ rows, onRemove, isClosed }: { rows: ProcessInfo[]; onRemove: (id: string) => void; isClosed: boolean }) {
   const renderImages = (urls: string[] | null | undefined) => {
     if (!urls || urls.length === 0) return "—";
-    return urls.map((url, i) => (
-      <div key={i} className="truncate max-w-[100px]">
-        {url}
+    return (
+      <div className="flex gap-1">
+        {urls.map((url, i) => (
+          <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="inline-block">
+            <img src={url} alt={`图片${i+1}`} className="h-6 w-6 rounded border border-border object-cover" />
+          </a>
+        ))}
       </div>
-    ));
+    );
   };
   if (rows.length === 0) {
     return <div className="rounded border border-dashed border-border p-4 text-center text-sm text-muted-foreground">暂无制程信息</div>;
@@ -1233,6 +1372,7 @@ function ProcessInfoTable({ rows, onRemove, isClosed }: { rows: ProcessInfo[]; o
         <tr className="border-b border-border bg-muted text-xs uppercase text-muted-foreground">
           <th className="px-2 py-2 text-left">工序</th>
           <th className="px-2 py-2 text-left">物料批号</th>
+          <th className="px-2 py-2 text-left">物料类型</th>
           <th className="px-2 py-2 text-right">数量</th>
           <th className="px-2 py-2 text-left">标签图</th>
           <th className="px-2 py-2 text-left">来料图</th>
@@ -1248,10 +1388,11 @@ function ProcessInfoTable({ rows, onRemove, isClosed }: { rows: ProcessInfo[]; o
               <div>{r.operation_name}</div>
             </td>
             <td className="px-2 py-1.5 font-mono">{r.material_batch_no || "—"}</td>
+            <td className="px-2 py-1.5">{r.material_type || "—"}</td>
             <td className="px-2 py-1.5 text-right font-mono">{formatNumber(r.quantity)}</td>
-            <td className="px-2 py-1.5 text-xs text-muted-foreground">{renderImages(r.material_label_image)}</td>
-            <td className="px-2 py-1.5 text-xs text-muted-foreground">{renderImages(r.incoming_defect_image)}</td>
-            <td className="px-2 py-1.5 text-xs text-muted-foreground">{renderImages(r.process_defect_image)}</td>
+            <td className="px-2 py-1.5">{renderImages(r.material_label_image)}</td>
+            <td className="px-2 py-1.5">{renderImages(r.incoming_defect_image)}</td>
+            <td className="px-2 py-1.5">{renderImages(r.process_defect_image)}</td>
             {!isClosed && (
               <td className="px-2 py-1.5 text-center">
                 <Button size="sm" variant="ghost" className="h-6 text-danger" onClick={() => onRemove(r.id)}>

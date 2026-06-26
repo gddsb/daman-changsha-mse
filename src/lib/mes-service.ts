@@ -846,10 +846,12 @@ const toOpDefectView = (r: Record<string, unknown>): OperationDefect => ({
   work_order_no: String(r.work_order_no ?? ""),
   batch_no: String(r.batch_no ?? ""),
   operation_seq: r.operation_seq == null ? null : Number(r.operation_seq),
+  operation_name: r.operation_name ? String(r.operation_name) : null,
   defect_category: (r.defect_category as OperationDefect["defect_category"]) ?? "制程不良",
   defect_name: String(r.defect_name ?? ""),
   defect_quantity: Number(r.defect_quantity ?? 0),
   unit: (r.unit as OperationDefect["unit"]) ?? null,
+  images: Array.isArray(r.images) ? r.images as string[] : null,
   created_at: String(r.created_at ?? ""),
 });
 
@@ -878,6 +880,7 @@ const toProcessInfoView = (r: Record<string, unknown>): ProcessInfo => ({
   operation_seq: Number(r.operation_seq ?? 0),
   operation_name: String(r.operation_name ?? ""),
   material_batch_no: String(r.material_batch_no ?? ""),
+  material_type: r.material_type ? String(r.material_type) : null,
   quantity: Number(r.quantity ?? 0),
   material_label_image: Array.isArray(r.material_label_image) ? r.material_label_image : [],
   incoming_defect_image: Array.isArray(r.incoming_defect_image) ? r.incoming_defect_image : [],
@@ -1334,6 +1337,8 @@ export interface CreateOpDefectInput {
   defect_name: string;
   defect_quantity: number;
   unit?: "小片" | "带盖" | null;
+  /** 不良图片URL数组 */
+  images?: string[];
 }
 
 export async function addOpDefect(input: CreateOpDefectInput): Promise<OperationDefect> {
@@ -1416,10 +1421,12 @@ export async function addOpDefect(input: CreateOpDefectInput): Promise<Operation
       work_order_no: op.work_order_no,
       batch_no: op.batch_no,
       operation_seq: op.operation_seq,
+      operation_name: input.operation_name ?? null,
       defect_category: input.defect_category,
       defect_name: input.defect_name,
       defect_quantity: input.defect_quantity,
       unit: input.unit ?? null,
+      images: input.images ?? null,
     })
     .select()
     .maybeSingle();
@@ -1512,6 +1519,7 @@ export interface CreateProcessInfoInput {
   operation_seq: number;
   operation_name?: string;
   material_batch_no?: string;
+  material_type?: string;
   quantity?: number;
   material_label_image?: string;
   incoming_defect_image?: string;
@@ -1537,6 +1545,7 @@ export async function addProcessInfo(input: CreateProcessInfoInput): Promise<Pro
       operation_seq: input.operation_seq,
       operation_name: input.operation_name ?? null,
       material_batch_no: input.material_batch_no ?? null,
+      material_type: input.material_type ?? null,
       quantity: input.quantity ?? 0,
       material_label_image: input.material_label_image ?? null,
       incoming_defect_image: input.incoming_defect_image ?? null,

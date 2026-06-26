@@ -325,10 +325,12 @@ export const operationDefects = pgTable("operation_defects", {
   workOrderNo: varchar("work_order_no", { length: 32 }).notNull(),
   batchNo: varchar("batch_no", { length: 32 }).notNull(),
   operationSeq: integer("operation_seq"),
+  operationName: varchar("operation_name", { length: 64 }),
   defectCategory: varchar("defect_category", { length: 32 }).notNull(),
   defectName: varchar("defect_name", { length: 64 }).notNull(),
   defectQuantity: integer("defect_quantity").default(0),
   unit: varchar("unit", { length: 16 }),
+  images: jsonb("images").$type<string[]>(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
 });
 
@@ -357,6 +359,7 @@ export const processInfos = pgTable("process_infos", {
   operationSeq: integer("operation_seq").notNull(),
   operationName: varchar("operation_name", { length: 64 }),
   materialBatchNo: varchar("material_batch_no", { length: 64 }),
+  materialType: varchar("material_type", { length: 64 }),
   quantity: integer("quantity").default(0),
   materialLabelImage: jsonb("material_label_image").$type<string[]>(),
   incomingDefectImage: jsonb("incoming_defect_image").$type<string[]>(),
