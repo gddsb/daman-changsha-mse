@@ -56,7 +56,7 @@ export function ProductionPlanView() {
         fetch("/api/production-lines"),
         fetch(
           "/api/work-orders?statuses=" +
-            encodeURIComponent("下发,暂停") +
+            encodeURIComponent("下发") +
             "&limit=200"
         ),
       ]);
@@ -622,11 +622,18 @@ function PlanCard({
 }) {
   const [hover, setHover] = useState(false);
   const tone = PLAN_STATUS[plan.status] ?? "border-slate-800 bg-slate-900/60";
+  
+  // 已开工/暂停/完工/已关闭的工单不允许拖拽和删除
+  const blockedStatuses = ['生产中', 'in_progress', '暂停', 'paused', '完工', 'completed', '已关闭', 'closed'];
+  const isBlocked = plan.wo_status && blockedStatuses.includes(plan.wo_status);
+  const statusLabel = plan.wo_status === '生产中' || plan.wo_status === 'in_progress' ? '已开工' :
+                      plan.wo_status === '暂停' || plan.wo_status === 'paused' ? '已暂停' :
+                      plan.wo_status === '完工' || plan.wo_status === 'completed' ? '已完工' : '已关闭';
 
   return (
     <div
-      draggable
-      onDragStart={onDragStart}
+      draggable={!isBlocked}
+      onDragStart={isBlocked ? undefined : onDragStart}
       onDragEnd={onDragEnd}
       onClick={onClick}
       onDoubleClick={onDoubleClick}
@@ -634,14 +641,23 @@ function PlanCard({
       onMouseLeave={() => setHover(false)}
       className={`group relative mb-1 w-full cursor-pointer rounded-sm border px-1.5 py-1 text-left transition-all hover:border-slate-500 ${
         isDragging ? "opacity-30" : ""
-      } ${disabled ? "pointer-events-none opacity-50" : ""} ${tone}`}
-      title={`双击查看工单详情 · ${plan.work_order_no}`}
+      } ${disabled || isBlocked ? "pointer-events-none" : ""} ${
+        isBlocked ? "opacity-70 border-warning/30 bg-warning/5" : ""
+      } ${tone}`}
+      title={isBlocked 
+        ? `工单 ${statusLabel}，不允许调整计划` 
+        : `双击查看工单详情 · ${plan.work_order_no}`}
     >
+      {isBlocked && (
+        <span className="absolute -top-1 -right-1 rounded bg-warning px-1 py-0.5 text-[9px] text-warning-foreground">
+          {statusLabel}
+        </span>
+      )}
       <div className="flex items-center justify-between gap-1">
         <span className="truncate font-mono text-[10px] text-slate-300">
           {plan.work_order_no}
         </span>
-        <GripVertical className="h-3 w-3 shrink-0 text-slate-600" />
+        {!isBlocked && <GripVertical className="h-3 w-3 shrink-0 text-slate-600" />}
       </div>
       <div className="mt-0.5 font-mono text-[11px] font-semibold text-slate-100 tabular-nums">
         {formatNumber(plan.planned_quantity)} 罐
@@ -649,7 +665,7 @@ function PlanCard({
       <div className="truncate text-[10px] text-slate-500">
         {plan.product_name}
       </div>
-      {hover && (
+      {!isBlocked && hover && (
         <button
           onClick={(e) => {
             e.stopPropagation();

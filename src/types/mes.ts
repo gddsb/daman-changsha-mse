@@ -133,6 +133,7 @@ export interface ProductionPlan {
   product_name: string;
   planned_quantity: number;
   status: string;
+  wo_status?: string; // 工单状态（用于限制拖拽/删除）
   notes: string | null;
   created_at: string;
   updated_at: string;

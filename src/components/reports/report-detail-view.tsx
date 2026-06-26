@@ -782,7 +782,8 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
               </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
-              {/* 工序选择 */}
+              {/* 工序选择 — 关闭后不显示 */}
+              {!isClosed && (
               <div className="flex flex-col gap-1.5 md:flex-row md:items-center md:gap-3">
                 <label className="text-xs uppercase tracking-wider text-muted-foreground md:w-20">选择工序</label>
                 <div className="relative md:w-80">
@@ -817,6 +818,7 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
                   </div>
                 )}
               </div>
+              )}
 
               {/* 新增不良表单 */}
               {!isClosed && (
@@ -1000,6 +1002,16 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
                         <option key={code} value={code}>{code}</option>
                       ))}
                     </select>
+                    <select
+                      value={downtimeTypeFilter2}
+                      onChange={(e) => setDowntimeTypeFilter2(e.target.value)}
+                      className="h-7 rounded border border-border bg-background px-2 text-xs text-foreground"
+                    >
+                      <option value="">全部停机类型</option>
+                      {Array.from(new Set((detail?.downtimes ?? []).map(d => d.downtime_type))).sort().filter(Boolean).map(type => (
+                        <option key={type} value={type}>{type}</option>
+                      ))}
+                    </select>
                   </div>
                 </div>
                 <DowntimesTable rows={filteredDowntimes} onRemove={removeDowntime} isClosed={isClosed} />
@@ -1084,9 +1096,9 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
                       className="h-7 rounded border border-border bg-background px-2 text-xs text-foreground"
                     >
                       <option value="">全部工序</option>
-                      {processes.map((p) => (
-                        <option key={p.id} value={Number(p.sequence)}>
-                          #{p.sequence} {p.process_name}
+                      {reportedOps.map((p) => (
+                        <option key={p.id ?? p.sequence} value={p.sequence}>
+                          #{p.sequence} {p.operation_name}
                         </option>
                       ))}
                     </select>

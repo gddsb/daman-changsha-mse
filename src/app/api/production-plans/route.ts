@@ -56,7 +56,7 @@ export async function PATCH(request: NextRequest) {
     if (!planId) {
       return NextResponse.json({ success: false, error: '缺少计划 id' }, { status: 400 });
     }
-    // 工单在生产中时禁止调整日期/产线
+    // 工单在生产中/暂停/完工/已关闭时禁止调整日期/产线
     if (currentPlan?.work_order_id && (body.plan_date || body.line_code)) {
       const supa2 = getSupabaseClient();
       const { data: wo } = await supa2
@@ -64,9 +64,13 @@ export async function PATCH(request: NextRequest) {
         .select('id, status, order_no')
         .eq('id', currentPlan.work_order_id)
         .maybeSingle();
-      if (wo && (wo as { status: string }).status === '生产中') {
+      const blockedStatuses = ['生产中', 'in_progress', '暂停', 'paused', '完工', 'completed', '已关闭', 'closed'];
+      if (wo && blockedStatuses.includes((wo as { status: string }).status)) {
+        const statusLabel = (wo as { status: string }).status === '生产中' || (wo as { status: string }).status === 'in_progress' ? '已开工（生产中）' :
+                           (wo as { status: string }).status === '暂停' || (wo as { status: string }).status === 'paused' ? '已暂停' :
+                           (wo as { status: string }).status === '完工' || (wo as { status: string }).status === 'completed' ? '已完工' : '已关闭';
         return NextResponse.json(
-          { success: false, error: `工单 ${(wo as { order_no: string }).order_no} 已开工（生产中），不允许调整 7 天生产计划` },
+          { success: false, error: `工单 ${(wo as { order_no: string }).order_no} ${statusLabel}，不允许调整 7 天生产计划` },
           { status: 400 },
         );
       }
@@ -150,7 +154,7 @@ export async function DELETE(request: NextRequest) {
     if (!id) {
       return NextResponse.json({ success: false, error: '缺少计划 id' }, { status: 400 });
     }
-    // 校验：开工中（生产中）的工单不允许移出七天生产计划
+    // 校验：已开工/暂停/完工/已关闭的工单不允许移出七天生产计划
     const c = getSupabaseClient();
     const { data: plan } = await c
       .from('production_plans')
@@ -165,12 +169,16 @@ export async function DELETE(request: NextRequest) {
         .eq('id', woId)
         .maybeSingle();
       const st = (wo as { status?: string } | null)?.status;
-      if (st === '生产中' || st === 'in_progress') {
+      const blockedStatuses = ['生产中', 'in_progress', '暂停', 'paused', '完工', 'completed', '已关闭', 'closed'];
+      if (st && blockedStatuses.includes(st)) {
         const orderNo = (wo as { order_no?: string }).order_no ?? woId;
+        const statusLabel = st === '生产中' || st === 'in_progress' ? '已开工（生产中）' :
+                           st === '暂停' || st === 'paused' ? '已暂停' :
+                           st === '完工' || st === 'completed' ? '已完工' : '已关闭';
         return NextResponse.json(
           {
             success: false,
-            error: `工单 ${orderNo} 已开工（生产中），不允许移出七天生产计划`,
+            error: `工单 ${orderNo} ${statusLabel}，不允许移出七天生产计划`,
           },
           { status: 400 }
         );
