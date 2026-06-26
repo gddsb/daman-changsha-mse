@@ -34,7 +34,6 @@ export async function POST(
       defect_name: body.defect_name,
       defect_quantity: body.defect_quantity ?? 0,
       unit: body.unit ?? null,
-      images: body.images ?? null,
     });
     return NextResponse.json({ success: true, data });
   } catch (e) {

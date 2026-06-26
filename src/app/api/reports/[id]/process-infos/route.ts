@@ -19,7 +19,6 @@ export async function POST(
       operation_seq: body.operation_seq,
       operation_name: body.operation_name,
       material_batch_no: body.material_batch_no,
-      material_type: body.material_type ?? null,
       quantity: body.quantity ?? 0,
       material_label_image: body.material_label_image,
       incoming_defect_image: body.incoming_defect_image,

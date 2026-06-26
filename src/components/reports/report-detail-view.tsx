@@ -1,22 +1,22 @@
 "use client";
+
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-
 import {
-    ArrowLeft,
-    CheckCircle2,
-    Circle,
-    Loader2,
-    RefreshCw,
-    Save,
-    Wrench,
-    XCircle,
-    Image as ImageIcon,
-    AlertTriangle,
-    PackageCheck,
-    ClipboardList,
-    ListChecks,
-    ChevronDown,
+  ArrowLeft,
+  CheckCircle2,
+  Circle,
+  Loader2,
+  RefreshCw,
+  Save,
+  Wrench,
+  XCircle,
+  Image as ImageIcon,
+  AlertTriangle,
+  PackageCheck,
+  ClipboardList,
+  ListChecks,
+  ChevronDown,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -25,1456 +25,1243 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 import type {
-    WorkOrderReport,
-    WorkOrderReportDetail,
-    OperationReport,
-    OperationDefect,
-    EquipmentDowntime,
-    ProcessInfo,
-    WorkOrder,
+  WorkOrderReport,
+  WorkOrderReportDetail,
+  OperationReport,
+  OperationDefect,
+  EquipmentDowntime,
+  ProcessInfo,
+  WorkOrder,
 } from "@/types/mes";
-
 import { formatDateTime, formatNumber, formatPercent } from "@/lib/format";
 
 interface ProcessItem {
-    id: string;
-    process_code: string;
-    process_name: string;
-    sequence: number;
+  id: string;
+  process_code: string;
+  process_name: string;
+  sequence: number;
 }
 
-interface ApiOk<T> {
-    success: true;
-    data: T;
-}
+interface ApiOk<T> { success: true; data: T }
+interface ApiErr { success: false; error: string }
+type ApiResp<T> = ApiOk<T> | ApiErr
 
-interface ApiErr {
-    success: false;
-    error: string;
-}
-
-type ApiResp<T> = ApiOk<T> | ApiErr;
-
+/** 一道工序的汇总展示数据（只读） */
 interface OpSummary {
-    operation_seq: number;
-    operation_name: string;
-    input_quantity: number;
-    pass_quantity: number;
-    fail_quantity: number;
-    incoming_piece: number;
-    incoming_cover: number;
-    process_piece: number;
-    process_cover: number;
-    fail_ratio: number;
-    incoming_ratio: number;
-    process_ratio: number;
+  operation_seq: number;
+  operation_name: string;
+  /** 投入数：首道=制程信息汇总，后续=上一道合格数 */
+  input_quantity: number;
+  /** 合格数 = 投入 - 不良 */
+  pass_quantity: number;
+  /** 不良总数（汇总自 operation_defects） */
+  fail_quantity: number;
+  /** 来料不良-小片 */
+  incoming_piece: number;
+  /** 来料不良-带盖 */
+  incoming_cover: number;
+  /** 制程不良-小片 */
+  process_piece: number;
+  /** 制程不良-带盖 */
+  process_cover: number;
+  /** 不良合计占比 = 不良合计数 / 第一道工序投入数 */
+  fail_ratio: number;
+  /** 来料不良占比 = (来料不良小片+来料不良带盖) / 第一道工序投入数 */
+  incoming_ratio: number;
+  /** 制程不良占比 = (制程不良小片+制程不良带盖) / 第一道工序投入数 */
+  process_ratio: number;
 }
 
+/** 计算工序汇总数据：投入数和不良分类 */
 function computeOpSummary(
-    ops: OperationReport[],
-    defects: OperationDefect[],
-    processInfos: ProcessInfo[]
+  ops: OperationReport[],
+  defects: OperationDefect[],
+  processInfos: ProcessInfo[]
 ): Record<number, OpSummary> {
-    const result: Record<number, OpSummary> = {};
-    const sortedOps = [...ops].sort((a, b) => a.operation_seq - b.operation_seq);
-    const firstInput = processInfos.filter(p => p.operation_seq === 1).reduce((s, p) => s + (p.quantity || 0), 0);
-    let prevPass = 0;
-
-    for (const op of sortedOps) {
-        const seq = op.operation_seq;
-        const input = seq === 1 ? firstInput : prevPass;
-        const opDefects = defects.filter(d => d.operation_seq === seq);
-        const incoming_piece = opDefects.filter(d => d.defect_category === "来料不良" && d.unit === "小片").reduce((s, d) => s + (d.defect_quantity || 0), 0);
-        const incoming_cover = opDefects.filter(d => d.defect_category === "来料不良" && d.unit === "带盖").reduce((s, d) => s + (d.defect_quantity || 0), 0);
-        const process_piece = opDefects.filter(d => d.defect_category === "制程不良" && d.unit === "小片").reduce((s, d) => s + (d.defect_quantity || 0), 0);
-        const process_cover = opDefects.filter(d => d.defect_category === "制程不良" && d.unit === "带盖").reduce((s, d) => s + (d.defect_quantity || 0), 0);
-        const fail = incoming_piece + incoming_cover + process_piece + process_cover;
-        const pass = input - fail;
-        prevPass = pass;
-        const fail_ratio = firstInput > 0 ? fail / firstInput : 0;
-        const incoming_ratio = firstInput > 0 ? (incoming_piece + incoming_cover) / firstInput : 0;
-        const process_ratio = firstInput > 0 ? (process_piece + process_cover) / firstInput : 0;
-
-        result[seq] = {
-            operation_seq: seq,
-            operation_name: op.operation_name,
-            input_quantity: input,
-            pass_quantity: pass,
-            fail_quantity: fail,
-            incoming_piece,
-            incoming_cover,
-            process_piece,
-            process_cover,
-            fail_ratio,
-            incoming_ratio,
-            process_ratio
-        };
-    }
-
-    return result;
+  const result: Record<number, OpSummary> = {};
+  const sortedOps = [...ops].sort((a, b) => a.operation_seq - b.operation_seq);
+  
+  // 计算第一道工序投入数（作为占比计算的基准）
+  const firstInput = processInfos.filter(p => p.operation_seq === 1).reduce((s, p) => s + (p.quantity || 0), 0);
+  
+  let prevPass = 0;
+  for (const op of sortedOps) {
+    const seq = op.operation_seq;
+    // 投入数：首道 = 制程信息汇总，后续 = 上一道合格数
+    const input = seq === 1 ? firstInput : prevPass;
+    
+    // 不良分类汇总
+    const opDefects = defects.filter(d => d.operation_seq === seq);
+    const incoming_piece = opDefects.filter(d => d.defect_category === "来料不良" && d.unit === "小片").reduce((s, d) => s + (d.defect_quantity || 0), 0);
+    const incoming_cover = opDefects.filter(d => d.defect_category === "来料不良" && d.unit === "带盖").reduce((s, d) => s + (d.defect_quantity || 0), 0);
+    const process_piece = opDefects.filter(d => d.defect_category === "制程不良" && d.unit === "小片").reduce((s, d) => s + (d.defect_quantity || 0), 0);
+    const process_cover = opDefects.filter(d => d.defect_category === "制程不良" && d.unit === "带盖").reduce((s, d) => s + (d.defect_quantity || 0), 0);
+    const fail = incoming_piece + incoming_cover + process_piece + process_cover;
+    
+    // 合格数 = 投入 - 不良
+    const pass = input - fail;
+    prevPass = pass;
+    
+    // 占比计算（基于第一道工序投入数）
+    const fail_ratio = firstInput > 0 ? fail / firstInput : 0;
+    const incoming_ratio = firstInput > 0 ? (incoming_piece + incoming_cover) / firstInput : 0;
+    const process_ratio = firstInput > 0 ? (process_piece + process_cover) / firstInput : 0;
+    
+    result[seq] = {
+      operation_seq: seq,
+      operation_name: op.operation_name,
+      input_quantity: input,
+      pass_quantity: pass,
+      fail_quantity: fail,
+      incoming_piece,
+      incoming_cover,
+      process_piece,
+      process_cover,
+      fail_ratio,
+      incoming_ratio,
+      process_ratio,
+    };
+  }
+  return result;
 }
 
+/** 新增不良草稿（每次一条） */
 interface NewDefect {
-    defect_category: "制程不良" | "来料不良" | "检验报废";
-    defect_name: string;
-    defect_quantity: number;
-    unit: "小片" | "带盖" | "";
-    images: string[];
+  defect_category: "制程不良" | "来料不良" | "检验报废";
+  defect_name: string;
+  defect_quantity: number;
+  unit: "小片" | "带盖" | "";
 }
 
+/** 新增异常工时草稿 */
 interface NewDowntime {
-    anomaly_type: "设备故障" | "来料不良" | "产品换型" | "其它原因";
-    equipment_code: string;
-    downtime_type: string;
-    problem_description: string;
-    start_time: string;
-    end_time: string;
-    confirmer: string;
+  anomaly_type: "设备故障" | "来料不良" | "其它原因";
+  equipment_code: string;
+  downtime_type: string;
+  problem_description: string;
+  start_time: string;
+  end_time: string;
+  confirmer: string;
 }
 
+/** 新增制程信息草稿 */
 interface NewProcessInfo {
-    operation_seq: number;
-    operation_name: string;
-    material_batch_no: string;
-    material_type: string;
-    quantity: number;
+  operation_seq: number;
+  operation_name: string;
+  material_batch_no: string;
+  quantity: number;
+  material_label_image: string[];  // 多图数组
+  incoming_defect_image: string[];  // 多图数组
+  process_defect_image: string[];  // 多图数组
 }
 
-const MATERIAL_TYPE_OPTIONS: Record<number, {
-    options: string[];
-    default: string;
-}> = {
-    1: {
-        options: ["马口铁素铁", "印花马口铁"],
-        default: "印花马口铁"
-    },
+export function ReportDetailView({ reportId }: { reportId: string }) {
+  const router = useRouter();
+  const [detail, setDetail] = useState<WorkOrderReportDetail | null>(null);
+  const [workOrder, setWorkOrder] = useState<WorkOrder | null>(null);
+  const [processes, setProcesses] = useState<ProcessItem[]>([]);
+  /** 新增不良时选择的工序 */
+  const [defectOpSeq, setDefectOpSeq] = useState<number | "">("");
+  /** 筛选不良记录的工序 */
+  const [defectOpSeqFilter, setDefectOpSeqFilter] = useState<number | "">("");
+  /** 筛选异常工时的类型 */
+  const [downtimeTypeFilter, setDowntimeTypeFilter] = useState<string>("");
+  /** 筛选制程信息的工序 */
+  const [processOpSeqFilter, setProcessOpSeqFilter] = useState<number | "">("");
+  /** 筛选不良记录的不良分类 */
+  const [defectCategoryFilter, setDefectCategoryFilter] = useState<string>("");
+  /** 筛选不良记录的不良名称 */
+  const [defectNameFilter, setDefectNameFilter] = useState<string>("");
+  /** 筛选异常工时的设备 */
+  const [equipmentFilter, setEquipmentFilter] = useState<string>("");
+  /** 筛选异常工时的停机类型 */
+  const [downtimeTypeFilter2, setDowntimeTypeFilter2] = useState<string>("");
+  /** 筛选制程信息的批号 */
+  const [batchNoFilter, setBatchNoFilter] = useState<string>("");
+  const [newDefect, setNewDefect] = useState<NewDefect>({
+    defect_category: "制程不良",
+    defect_name: "",
+    defect_quantity: 0,
+    unit: "小片",
+  });
+  const [newDowntime, setNewDowntime] = useState<NewDowntime>({
+    anomaly_type: "设备故障",
+    equipment_code: "",
+    downtime_type: "故障停机",
+    problem_description: "",
+    start_time: "",
+    end_time: "",
+    confirmer: "当前用户",
+  });
+  const [newPI, setNewPI] = useState<NewProcessInfo>({
+    operation_seq: 1,
+    operation_name: "",
+    material_batch_no: "",
+    quantity: 0,
+    material_label_image: [],
+    incoming_defect_image: [],
+    process_defect_image: [],
+  });
 
-    3: {
-        options: ["涂料", "稀释剂"],
-        default: "稀释剂"
-    },
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [pageError, setPageError] = useState<string | null>(null);
+  const [pageHint, setPageHint] = useState<string | null>(null);
 
-    5: {
-        options: ["底盖", "上盖"],
-        default: "上盖"
-    },
+  /** 筛选后的不良记录 */
+  const filteredDefects = useMemo(() => {
+    if (!detail?.defects) return [];
+    let result = detail.defects;
+    if (defectOpSeqFilter !== "") result = result.filter(d => d.operation_seq === defectOpSeqFilter);
+    if (defectCategoryFilter) result = result.filter(d => d.defect_category === defectCategoryFilter);
+    if (defectNameFilter) result = result.filter(d => d.defect_name?.includes(defectNameFilter));
+    return result;
+  }, [detail?.defects, defectOpSeqFilter, defectCategoryFilter, defectNameFilter]);
 
-    12: {
-        options: ["纸板", "覆膜纸板", "缠绕膜", "PO袋", "PE膜", "其它"],
-        default: "纸板"
+  /** 筛选后的异常工时记录 */
+  const filteredDowntimes = useMemo(() => {
+    if (!detail?.downtimes) return [];
+    let result = detail.downtimes;
+    if (downtimeTypeFilter) result = result.filter(d => d.anomaly_type === downtimeTypeFilter);
+    if (equipmentFilter) result = result.filter(d => d.equipment_code?.includes(equipmentFilter));
+    if (downtimeTypeFilter2) result = result.filter(d => d.downtime_type === downtimeTypeFilter2);
+    return result;
+  }, [detail?.downtimes, downtimeTypeFilter, equipmentFilter, downtimeTypeFilter2]);
+
+  /** 筛选后的制程信息记录 */
+  const filteredProcessInfos = useMemo(() => {
+    if (!detail?.process_infos) return [];
+    let result = detail.process_infos;
+    if (processOpSeqFilter !== "") result = result.filter(p => p.operation_seq === processOpSeqFilter);
+    if (batchNoFilter) result = result.filter(p => p.material_batch_no?.includes(batchNoFilter));
+    return result;
+  }, [detail?.process_infos, processOpSeqFilter, batchNoFilter]);
+
+  /** 加载批次详情 + 工单 + 工序字典 */
+  const loadAll = async () => {
+    setLoading(true);
+    setPageError(null);
+    try {
+      // 1) 批次详情
+      const r = await fetch(`/api/reports/${reportId}`);
+      const rj = (await r.json()) as ApiResp<WorkOrderReportDetail>;
+      if (!rj.success) throw new Error(rj.error);
+      setDetail(rj.data);
+      const woId = rj.data.work_order_id;
+
+      // 2) 工单详情
+      const w = await fetch(`/api/work-orders/${woId}`);
+      const wj = (await w.json()) as ApiResp<WorkOrder>;
+      if (wj.success) setWorkOrder(wj.data);
+
+      // 3) 工序字典（按 sequence 升序）
+      const p = await fetch(`/api/process-dictionary`);
+      const pj = (await p.json()) as ApiResp<ProcessItem[]>;
+      if (pj.success) setProcesses(pj.data);
+
+      // 工序报工数据直接从 detail.operations 读取，不再初始化本地草稿
+    } catch (e) {
+      setPageError(e instanceof Error ? e.message : "加载失败");
+    } finally {
+      setLoading(false);
     }
-};
+  };
 
-function getMaterialTypeOptions(seq: number): {
-    options: string[];
-    default: string;
-} {
-    return MATERIAL_TYPE_OPTIONS[seq] || {
-        options: [],
-        default: ""
-    };
-}
+  useEffect(() => {
+    void loadAll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reportId]);
 
-export function ReportDetailView(
-    {
-        reportId
-    }: {
-        reportId: string;
+  /** 工序汇总数据（按工序顺序计算投入数） */
+  const opSummaries = useMemo(() => {
+    if (!detail || !processes.length) return [];
+    
+    // 按 operation_seq 排序的工序
+    const sortedOps = [...detail.operations].sort((a, b) => a.operation_seq - b.operation_seq);
+    
+    // 首道投入 = 制程信息汇总
+    const firstInput = detail.process_infos
+      .filter((pi) => pi.operation_seq === 1)
+      .reduce((s, pi) => s + (Number(pi.quantity) || 0), 0);
+    
+    // 计算每道工序的汇总数据
+    const results: OpSummary[] = [];
+    let prevPass = 0;
+    
+    for (let i = 0; i < sortedOps.length; i++) {
+      const op = sortedOps[i];
+      const input = i === 0 ? firstInput : prevPass;
+      const fail = op.fail_quantity;
+      const pass = input - fail;
+      prevPass = pass;
+      
+      // 从 defects 按4类汇总
+      const opDefects = detail.defects.filter((d) => d.operation_seq === op.operation_seq);
+      const incomingPiece = opDefects
+        .filter((d) => d.defect_category === "来料不良" && d.unit === "小片")
+        .reduce((s, d) => s + (Number(d.defect_quantity) || 0), 0);
+      const incomingCover = opDefects
+        .filter((d) => d.defect_category === "来料不良" && d.unit === "带盖")
+        .reduce((s, d) => s + (Number(d.defect_quantity) || 0), 0);
+      const processPiece = opDefects
+        .filter((d) => d.defect_category === "制程不良" && d.unit === "小片")
+        .reduce((s, d) => s + (Number(d.defect_quantity) || 0), 0);
+      const processCover = opDefects
+        .filter((d) => d.defect_category === "制程不良" && d.unit === "带盖")
+        .reduce((s, d) => s + (Number(d.defect_quantity) || 0), 0);
+      
+      // 占比计算
+      const fail_ratio = firstInput > 0 ? fail / firstInput : 0;
+      const incoming_ratio = firstInput > 0 ? (incomingPiece + incomingCover) / firstInput : 0;
+      const process_ratio = firstInput > 0 ? (processPiece + processCover) / firstInput : 0;
+      
+      results.push({
+        operation_seq: op.operation_seq,
+        operation_name: op.operation_name,
+        input_quantity: input,
+        pass_quantity: pass,
+        fail_quantity: fail,
+        incoming_piece: incomingPiece,
+        incoming_cover: incomingCover,
+        process_piece: processPiece,
+        process_cover: processCover,
+        fail_ratio,
+        incoming_ratio,
+        process_ratio,
+      });
     }
-) {
-    const router = useRouter();
-    const [detail, setDetail] = useState<WorkOrderReportDetail | null>(null);
-    const [workOrder, setWorkOrder] = useState<WorkOrder | null>(null);
-    const [processes, setProcesses] = useState<ProcessItem[]>([]);
-    const [defectOpSeq, setDefectOpSeq] = useState<number | "">("");
-    const [defectOpSeqFilter, setDefectOpSeqFilter] = useState<number | "">("");
-    const [downtimeTypeFilter, setDowntimeTypeFilter] = useState<string>("");
-    const [processOpSeqFilter, setProcessOpSeqFilter] = useState<number | "">("");
-    const [defectCategoryFilter, setDefectCategoryFilter] = useState<string>("");
-    const [defectNameFilter, setDefectNameFilter] = useState<string>("");
-    const [equipmentFilter, setEquipmentFilter] = useState<string>("");
-    const [downtimeTypeFilter2, setDowntimeTypeFilter2] = useState<string>("");
-    const [batchNoFilter, setBatchNoFilter] = useState<string>("");
+    
+    // 补齐未报工工序（从 process_dictionary）
+    for (const proc of processes) {
+      if (!results.find((r) => r.operation_seq === proc.sequence)) {
+        const input = results.length === 0 ? firstInput : prevPass;
+        results.push({
+          operation_seq: proc.sequence,
+          operation_name: proc.process_name,
+          input_quantity: input,
+          pass_quantity: 0,
+          fail_quantity: 0,
+          incoming_piece: 0,
+          incoming_cover: 0,
+          process_piece: 0,
+          process_cover: 0,
+          fail_ratio: 0,
+          incoming_ratio: 0,
+          process_ratio: 0,
+        });
+        prevPass = input; // 未报工工序假设 pass = input
+      }
+    }
+    
+    return results.sort((a, b) => a.operation_seq - b.operation_seq);
+  }, [detail, processes]);
 
-    const [newDefect, setNewDefect] = useState<NewDefect>({
-        defect_category: "制程不良",
-        defect_name: "",
-        defect_quantity: 0,
-        unit: "小片",
-        images: []
-    });
-
-    const [newDowntime, setNewDowntime] = useState<NewDowntime>({
-        anomaly_type: "设备故障",
-        equipment_code: "",
-        downtime_type: "",
-        problem_description: "",
-        start_time: "",
-        end_time: "",
-        confirmer: ""
-    });
-
-    const [newPI, setNewPI] = useState<NewProcessInfo>({
-        operation_seq: 1,
-        operation_name: "",
-        material_batch_no: "",
-        material_type: "",
-        quantity: 0
-    });
-
-    const [loading, setLoading] = useState(true);
-    const [saving, setSaving] = useState(false);
-    const [pageError, setPageError] = useState<string | null>(null);
-    const [pageHint, setPageHint] = useState<string | null>(null);
-
-    const filteredDefects = useMemo(() => {
-        if (!detail?.defects)
-            return [];
-
-        let result = detail.defects;
-
-        if (defectOpSeqFilter !== "")
-            result = result.filter(d => d.operation_seq === defectOpSeqFilter);
-
-        if (defectCategoryFilter)
-            result = result.filter(d => d.defect_category === defectCategoryFilter);
-
-        if (defectNameFilter)
-            result = result.filter(d => d.defect_name?.includes(defectNameFilter));
-
-        return result;
-    }, [detail?.defects, defectOpSeqFilter, defectCategoryFilter, defectNameFilter]);
-
-    const filteredDowntimes = useMemo(() => {
-        if (!detail?.downtimes)
-            return [];
-
-        let result = detail.downtimes;
-
-        if (downtimeTypeFilter)
-            result = result.filter(d => d.anomaly_type === downtimeTypeFilter);
-
-        if (equipmentFilter)
-            result = result.filter(d => d.equipment_code?.includes(equipmentFilter));
-
-        if (downtimeTypeFilter2)
-            result = result.filter(d => d.downtime_type === downtimeTypeFilter2);
-
-        return result;
-    }, [
-        detail?.downtimes,
-        downtimeTypeFilter,
-        equipmentFilter,
-        downtimeTypeFilter2
-    ]);
-
-    const filteredProcessInfos = useMemo(() => {
-        if (!detail?.process_infos)
-            return [];
-
-        let result = detail.process_infos;
-
-        if (processOpSeqFilter !== "")
-            result = result.filter(p => p.operation_seq === processOpSeqFilter);
-
-        if (batchNoFilter)
-            result = result.filter(p => p.material_batch_no?.includes(batchNoFilter));
-
-        return result;
-    }, [detail?.process_infos, processOpSeqFilter, batchNoFilter]);
-
-    const loadAll = async () => {
-        setLoading(true);
-        setPageError(null);
-
-        try {
-            const r = await fetch(`/api/reports/${reportId}`);
-            const rj = await r.json() as ApiResp<WorkOrderReportDetail>;
-
-            if (!rj.success)
-                throw new Error(rj.error);
-
-            setDetail(rj.data);
-            const woId = rj.data.work_order_id;
-            const w = await fetch(`/api/work-orders/${woId}`);
-            const wj = await w.json() as ApiResp<WorkOrder>;
-
-            if (wj.success)
-                setWorkOrder(wj.data);
-
-            const p = await fetch(`/api/process-dictionary`);
-            const pj = await p.json() as ApiResp<ProcessItem[]>;
-
-            if (pj.success)
-                setProcesses(pj.data);
-        } catch (e) {
-            setPageError(e instanceof Error ? e.message : "加载失败");
-        } finally {
-            setLoading(false);
-        }
+  /** 累计（input / pass / fail 总和） */
+  const aggregate = useMemo(() => {
+    if (!opSummaries.length) return { input: 0, pass: 0, fail: 0 };
+    return {
+      input: opSummaries.reduce((s, o) => s + o.input_quantity, 0),
+      pass: opSummaries.reduce((s, o) => s + o.pass_quantity, 0),
+      fail: opSummaries.reduce((s, o) => s + o.fail_quantity, 0),
     };
+  }, [opSummaries]);
 
-    useEffect(() => {
-        void loadAll();
-    }, [reportId]);
+  /** 整体一致性（关闭时校验）：input = pass + fail */
+  const consistencyOk = useMemo(() => {
+    if (aggregate.input <= 0) return null;
+    return aggregate.input === aggregate.pass + aggregate.fail;
+  }, [aggregate]);
 
-    const opSummaries = useMemo(() => {
-        if (!detail || !processes.length)
-            return [];
+  /** 当前批次是否已关闭 */
+  const isClosed = !!detail?.is_closed;
 
-        const sortedOps = [...detail.operations].sort((a, b) => a.operation_seq - b.operation_seq);
-        const firstInput = detail.process_infos.filter(pi => pi.operation_seq === 1).reduce((s, pi) => s + (Number(pi.quantity) || 0), 0);
-        const results: OpSummary[] = [];
-        let prevPass = 0;
+  /** 工单的所有工序（用于不良 Tab 中选择工序） */
+  const reportedOps = useMemo(
+    () => detail?.work_order_operations?.sort((a, b) => a.sequence - b.sequence) ?? [],
+    [detail]
+  );
 
-        for (let i = 0; i < sortedOps.length; i++) {
-            const op = sortedOps[i];
-            const input = i === 0 ? firstInput : prevPass;
-            const fail = op.fail_quantity;
-            const pass = input - fail;
-            prevPass = pass;
-            const opDefects = detail.defects.filter(d => d.operation_seq === op.operation_seq);
-            const incomingPiece = opDefects.filter(d => d.defect_category === "来料不良" && d.unit === "小片").reduce((s, d) => s + (Number(d.defect_quantity) || 0), 0);
-            const incomingCover = opDefects.filter(d => d.defect_category === "来料不良" && d.unit === "带盖").reduce((s, d) => s + (Number(d.defect_quantity) || 0), 0);
-            const processPiece = opDefects.filter(d => d.defect_category === "制程不良" && d.unit === "小片").reduce((s, d) => s + (Number(d.defect_quantity) || 0), 0);
-            const processCover = opDefects.filter(d => d.defect_category === "制程不良" && d.unit === "带盖").reduce((s, d) => s + (Number(d.defect_quantity) || 0), 0);
-            const fail_ratio = firstInput > 0 ? fail / firstInput : 0;
-            const incoming_ratio = firstInput > 0 ? (incomingPiece + incomingCover) / firstInput : 0;
-            const process_ratio = firstInput > 0 ? (processPiece + processCover) / firstInput : 0;
+  /** 当前 defectOpSeq 对应的 operation_report（可能不存在，需要自动创建） */
+  const currentOpReport = useMemo(() => {
+    if (defectOpSeq === "" || !detail) return null;
+    return detail.operations.find((o) => o.operation_seq === defectOpSeq) ?? null;
+  }, [defectOpSeq, detail]);
 
-            results.push({
-                operation_seq: op.operation_seq,
-                operation_name: op.operation_name,
-                input_quantity: input,
-                pass_quantity: pass,
-                fail_quantity: fail,
-                incoming_piece: incomingPiece,
-                incoming_cover: incomingCover,
-                process_piece: processPiece,
-                process_cover: processCover,
-                fail_ratio,
-                incoming_ratio,
-                process_ratio
-            });
-        }
+  /** 当前选择的工序信息（从工单工序列表获取） */
+  const currentWoOp = useMemo(() => {
+    if (defectOpSeq === "" || !detail) return null;
+    return detail.work_order_operations?.find((o) => o.sequence === defectOpSeq) ?? null;
+  }, [defectOpSeq, detail]);
 
-        for (const proc of processes) {
-            if (!results.find(r => r.operation_seq === proc.sequence)) {
-                const input = results.length === 0 ? firstInput : prevPass;
+  /** 该工序已有不良列表（来自 detail.defects，按 operation_seq 过滤） */
+  const currentDefects = useMemo(() => {
+    if (defectOpSeq === "" || !detail) return [];
+    return (detail?.defects ?? []).filter((d) => d.operation_seq === defectOpSeq);
+  }, [defectOpSeq, detail]);
 
-                results.push({
-                    operation_seq: proc.sequence,
-                    operation_name: proc.process_name,
-                    input_quantity: input,
-                    pass_quantity: 0,
-                    fail_quantity: 0,
-                    incoming_piece: 0,
-                    incoming_cover: 0,
-                    process_piece: 0,
-                    process_cover: 0,
-                    fail_ratio: 0,
-                    incoming_ratio: 0,
-                    process_ratio: 0
-                });
+  /** 工序汇总数据（投入/合格/不良，自动计算） */
+  const opSummary = useMemo<Record<number, OpSummary>>(() => {
+    if (!detail) return {};
+    return computeOpSummary(detail.operations, detail.defects, detail.process_infos);
+  }, [detail]);
 
-                prevPass = input;
-            }
-        }
+  // 工序报工已改为纯汇总视图，不再需要保存功能
 
-        return results.sort((a, b) => a.operation_seq - b.operation_seq);
-    }, [detail, processes]);
+  /** 关闭批次（手工） */
+  const closeReport = async () => {
+    if (!detail) return;
+    if (!confirm("确认关闭该报工批次？关闭后不可修改。")) return;
+    setSaving(true);
+    setPageError(null);
+    try {
+      const r = await fetch(`/api/reports/${detail.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "close", manual: true }),
+      });
+      const j = (await r.json()) as ApiResp<WorkOrderReport>;
+      if (!j.success) throw new Error(j.error);
+      setPageHint("批次已关闭");
+      await loadAll();
+    } catch (e) {
+      setPageError(e instanceof Error ? e.message : "关闭失败");
+    } finally {
+      setSaving(false);
+    }
+  };
 
-    const aggregate = useMemo(() => {
-        if (!opSummaries.length) return {
-            input: 0,
-            pass: 0,
-            fail: 0
-        };
+  /** 新增不良（支持自动创建工序报工记录） */
+  const addDefect = async () => {
+    if (!detail) return;
+    if (isClosed) {
+      setPageError("报工批次已关闭，不能新增不良");
+      return;
+    }
+    if (defectOpSeq === "") {
+      setPageError("请先选择工序");
+      return;
+    }
+    if (!newDefect.defect_name.trim() || newDefect.defect_quantity <= 0) {
+      setPageError("请填写不良名称和数量");
+      return;
+    }
+    setSaving(true);
+    setPageError(null);
+    try {
+      const r = await fetch(`/api/reports/${detail.id}/defects`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          // 如果已有 operation_report 则直接使用，否则传 operation_seq 让 API 自动创建
+          operation_report_id: currentOpReport?.id ?? undefined,
+          work_order_report_id: detail.id,
+          operation_seq: defectOpSeq,
+          operation_name: currentWoOp?.operation_name ?? `工序${defectOpSeq}`,
+          defect_category: newDefect.defect_category,
+          defect_name: newDefect.defect_name,
+          defect_quantity: newDefect.defect_quantity,
+          unit: newDefect.unit || null,
+        }),
+      });
+      const j = (await r.json()) as ApiResp<OperationDefect>;
+      if (!j.success) throw new Error(j.error);
+      setNewDefect({ ...newDefect, defect_name: "", defect_quantity: 0 });
+      setPageHint("不良已记录");
+      await loadAll();
+    } catch (e) {
+      setPageError(e instanceof Error ? e.message : "保存失败");
+    } finally {
+      setSaving(false);
+    }
+  };
 
-        return {
-            input: opSummaries.reduce((s, o) => s + o.input_quantity, 0),
-            pass: opSummaries.reduce((s, o) => s + o.pass_quantity, 0),
-            fail: opSummaries.reduce((s, o) => s + o.fail_quantity, 0)
-        };
-    }, [opSummaries]);
+  /** 删除不良 */
+  const removeDefect = async (id: string) => {
+    if (!detail) return;
+    if (isClosed) return;
+    if (!confirm("确认删除该不良记录？")) return;
+    const r = await fetch(`/api/reports/${detail.id}/defects?defect_id=${id}`, { method: "DELETE" });
+    const j = (await r.json()) as ApiResp<{ ok: boolean }>;
+    if (!j.success) {
+      setPageError(j.error);
+      return;
+    }
+    await loadAll();
+  };
 
-    const consistencyOk = useMemo(() => {
-        if (aggregate.input <= 0)
-            return null;
+  /** 新增异常工时 */
+  const addDowntime = async () => {
+    if (!detail) return;
+    if (!newDowntime.start_time || !newDowntime.end_time) {
+      setPageError("请填写停线开始/生产恢复时间");
+      return;
+    }
+    // 开始时间不能早于本次开工时间
+    if (detail.start_time && new Date(newDowntime.start_time).getTime() < new Date(detail.start_time).getTime()) {
+      setPageError("开始时间不能早于本次开工时间");
+      return;
+    }
+    // 结束时间不能晚于当前时间
+    if (new Date(newDowntime.end_time).getTime() > new Date().getTime()) {
+      setPageError("结束时间不能晚于当前时间");
+      return;
+    }
+    if (new Date(newDowntime.end_time).getTime() < new Date(newDowntime.start_time).getTime()) {
+      setPageError("生产恢复时间不能小于停线开始时间");
+      return;
+    }
+    setSaving(true);
+    setPageError(null);
+    try {
+      const r = await fetch(`/api/reports/${detail.id}/downtimes`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...newDowntime, work_order_report_id: detail.id }),
+      });
+      const j = (await r.json()) as ApiResp<EquipmentDowntime>;
+      if (!j.success) throw new Error(j.error);
+      setNewDowntime({ ...newDowntime, problem_description: "" });
+      setPageHint("异常工时已记录");
+      await loadAll();
+    } catch (e) {
+      setPageError(e instanceof Error ? e.message : "保存失败");
+    } finally {
+      setSaving(false);
+    }
+  };
 
-        return aggregate.input === aggregate.pass + aggregate.fail;
-    }, [aggregate]);
+  const removeDowntime = async (id: string) => {
+    if (!detail) return;
+    if (isClosed) return;
+    if (!confirm("确认删除该异常工时？")) return;
+    const r = await fetch(`/api/reports/${detail.id}/downtimes?downtime_id=${id}`, { method: "DELETE" });
+    const j = (await r.json()) as ApiResp<{ ok: boolean }>;
+    if (!j.success) {
+      setPageError(j.error);
+      return;
+    }
+    await loadAll();
+  };
 
-    const isClosed = !!detail?.is_closed;
+  /** 新增制程信息 */
+  const addPI = async () => {
+    if (!detail) return;
+    setSaving(true);
+    setPageError(null);
+    try {
+      const r = await fetch(`/api/reports/${detail.id}/process-infos`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...newPI, work_order_report_id: detail.id }),
+      });
+      const j = (await r.json()) as ApiResp<ProcessInfo>;
+      if (!j.success) throw new Error(j.error);
+      setPageHint("制程信息已记录");
+      setNewPI({ ...newPI, material_batch_no: "", quantity: 0, material_label_image: [], incoming_defect_image: [], process_defect_image: [] });
+      await loadAll();
+    } catch (e) {
+      setPageError(e instanceof Error ? e.message : "保存失败");
+    } finally {
+      setSaving(false);
+    }
+  };
 
-    const reportedOps = useMemo(
-        () => detail?.work_order_operations?.sort((a, b) => a.sequence - b.sequence) ?? [],
-        [detail]
+  const removePI = async (id: string) => {
+    if (!detail) return;
+    if (isClosed) return;
+    if (!confirm("确认删除该制程信息？")) return;
+    const r = await fetch(`/api/reports/${detail.id}/process-infos?process_info_id=${id}`, { method: "DELETE" });
+    const j = (await r.json()) as ApiResp<{ ok: boolean }>;
+    if (!j.success) {
+      setPageError(j.error);
+      return;
+    }
+    await loadAll();
+  };
+
+  if (loading && !detail) {
+    return (
+      <div className="flex h-[60vh] items-center justify-center text-muted-foreground">
+        <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+        正在加载报工批次...
+      </div>
     );
-
-    const currentOpReport = useMemo(() => {
-        if (defectOpSeq === "" || !detail)
-            return null;
-
-        return detail.operations.find(o => o.operation_seq === defectOpSeq) ?? null;
-    }, [defectOpSeq, detail]);
-
-    const currentWoOp = useMemo(() => {
-        if (defectOpSeq === "" || !detail)
-            return null;
-
-        return detail.work_order_operations?.find(o => o.sequence === defectOpSeq) ?? null;
-    }, [defectOpSeq, detail]);
-
-    const currentDefects = useMemo(() => {
-        if (defectOpSeq === "" || !detail)
-            return [];
-
-        return (detail?.defects ?? []).filter(d => d.operation_seq === defectOpSeq);
-    }, [defectOpSeq, detail]);
-
-    const opSummary = useMemo<Record<number, OpSummary>>(() => {
-        if (!detail)
-            return {};
-
-        return computeOpSummary(detail.operations, detail.defects, detail.process_infos);
-    }, [detail]);
-
-    const closeReport = async () => {
-        if (!detail)
-            return;
-
-        if (!confirm("确认关闭该报工批次？关闭后不可修改。"))
-            return;
-
-        setSaving(true);
-        setPageError(null);
-
-        try {
-            const r = await fetch(`/api/reports/${detail.id}`, {
-                method: "PATCH",
-
-                headers: {
-                    "Content-Type": "application/json"
-                },
-
-                body: JSON.stringify({
-                    action: "close",
-                    manual: true
-                })
-            });
-
-            const j = await r.json() as ApiResp<WorkOrderReport>;
-
-            if (!j.success)
-                throw new Error(j.error);
-
-            setPageHint("批次已关闭");
-            await loadAll();
-        } catch (e) {
-            setPageError(e instanceof Error ? e.message : "关闭失败");
-        } finally {
-            setSaving(false);
-        }
-    };
-
-    const addDefect = async () => {
-        if (!detail)
-            return;
-
-        if (isClosed) {
-            setPageError("报工批次已关闭，不能新增不良");
-            return;
-        }
-
-        if (defectOpSeq === "") {
-            setPageError("请先选择工序");
-            return;
-        }
-
-        if (!newDefect.defect_name.trim() || newDefect.defect_quantity <= 0) {
-            setPageError("请填写不良名称和数量");
-            return;
-        }
-
-        setSaving(true);
-        setPageError(null);
-
-        try {
-            const r = await fetch(`/api/reports/${detail.id}/defects`, {
-                method: "POST",
-
-                headers: {
-                    "Content-Type": "application/json"
-                },
-
-                body: JSON.stringify({
-                    operation_report_id: currentOpReport?.id ?? undefined,
-                    work_order_report_id: detail.id,
-                    operation_seq: defectOpSeq,
-                    operation_name: currentWoOp?.operation_name ?? `工序${defectOpSeq}`,
-                    defect_category: newDefect.defect_category,
-                    defect_name: newDefect.defect_name,
-                    defect_quantity: newDefect.defect_quantity,
-                    unit: newDefect.unit || null,
-                    images: newDefect.images.length > 0 ? newDefect.images : null
-                })
-            });
-
-            const j = await r.json() as ApiResp<OperationDefect>;
-
-            if (!j.success)
-                throw new Error(j.error);
-
-            setNewDefect({
-                defect_category: "制程不良",
-                defect_name: "",
-                defect_quantity: 0,
-                unit: "小片",
-                images: []
-            });
-
-            setPageHint("不良已记录");
-            await loadAll();
-        } catch (e) {
-            setPageError(e instanceof Error ? e.message : "保存失败");
-        } finally {
-            setSaving(false);
-        }
-    };
-
-    const removeDefect = async (id: string) => {
-        if (!detail)
-            return;
-
-        if (isClosed)
-            return;
-
-        if (!confirm("确认删除该不良记录？"))
-            return;
-
-        const r = await fetch(`/api/reports/${detail.id}/defects?defect_id=${id}`, {
-            method: "DELETE"
-        });
-
-        const j = await r.json() as ApiResp<{
-            ok: boolean;
-        }>;
-
-        if (!j.success) {
-            setPageError(j.error);
-            return;
-        }
-
-        await loadAll();
-    };
-
-    const addDowntime = async () => {
-        if (!detail)
-            return;
-
-        if (!newDowntime.start_time || !newDowntime.end_time) {
-            setPageError("请填写停线开始/生产恢复时间");
-            return;
-        }
-
-        if (detail.start_time && new Date(newDowntime.start_time).getTime() < new Date(detail.start_time).getTime()) {
-            setPageError("开始时间不能早于本次开工时间");
-            return;
-        }
-
-        if (new Date(newDowntime.end_time).getTime() > new Date().getTime()) {
-            setPageError("结束时间不能晚于当前时间");
-            return;
-        }
-
-        if (new Date(newDowntime.end_time).getTime() < new Date(newDowntime.start_time).getTime()) {
-            setPageError("生产恢复时间不能小于停线开始时间");
-            return;
-        }
-
-        setSaving(true);
-        setPageError(null);
-
-        try {
-            const r = await fetch(`/api/reports/${detail.id}/downtimes`, {
-                method: "POST",
-
-                headers: {
-                    "Content-Type": "application/json"
-                },
-
-                body: JSON.stringify({
-                    ...newDowntime,
-                    work_order_report_id: detail.id
-                })
-            });
-
-            const j = await r.json() as ApiResp<EquipmentDowntime>;
-
-            if (!j.success)
-                throw new Error(j.error);
-
-            setNewDowntime({
-                ...newDowntime,
-                problem_description: ""
-            });
-
-            setPageHint("异常工时已记录");
-            await loadAll();
-        } catch (e) {
-            setPageError(e instanceof Error ? e.message : "保存失败");
-        } finally {
-            setSaving(false);
-        }
-    };
-
-    const removeDowntime = async (id: string) => {
-        if (!detail)
-            return;
-
-        if (isClosed)
-            return;
-
-        if (!confirm("确认删除该异常工时？"))
-            return;
-
-        const r = await fetch(`/api/reports/${detail.id}/downtimes?downtime_id=${id}`, {
-            method: "DELETE"
-        });
-
-        const j = await r.json() as ApiResp<{
-            ok: boolean;
-        }>;
-
-        if (!j.success) {
-            setPageError(j.error);
-            return;
-        }
-
-        await loadAll();
-    };
-
-    const addPI = async () => {
-        if (!detail)
-            return;
-
-        setSaving(true);
-        setPageError(null);
-
-        try {
-            const r = await fetch(`/api/reports/${detail.id}/process-infos`, {
-                method: "POST",
-
-                headers: {
-                    "Content-Type": "application/json"
-                },
-
-                body: JSON.stringify({
-                    ...newPI,
-                    work_order_report_id: detail.id
-                })
-            });
-
-            const j = await r.json() as ApiResp<ProcessInfo>;
-
-            if (!j.success)
-                throw new Error(j.error);
-
-            setPageHint("制程信息已记录");
-
-            setNewPI({
-                ...newPI,
-                material_batch_no: "",
-                material_type: "",
-                quantity: 0
-            });
-
-            await loadAll();
-        } catch (e) {
-            setPageError(e instanceof Error ? e.message : "保存失败");
-        } finally {
-            setSaving(false);
-        }
-    };
-
-    const removePI = async (id: string) => {
-        if (!detail)
-            return;
-
-        if (isClosed)
-            return;
-
-        if (!confirm("确认删除该制程信息？"))
-            return;
-
-        const r = await fetch(`/api/reports/${detail.id}/process-infos?process_info_id=${id}`, {
-            method: "DELETE"
-        });
-
-        const j = await r.json() as ApiResp<{
-            ok: boolean;
-        }>;
-
-        if (!j.success) {
-            setPageError(j.error);
-            return;
-        }
-
-        await loadAll();
-    };
-
-    if (loading && !detail) {
-        return (
-            <div
-                className="flex h-[60vh] items-center justify-center text-muted-foreground">
-                <Loader2 className="mr-2 h-5 w-5 animate-spin" />正在加载报工批次...
-                      </div>
-        );
-    }
-
-    if (!detail) {
-        return (
-            <div className="p-6">
-                <div className="text-danger">批次不存在或加载失败：{pageError}</div>
+  }
+
+  if (!detail) {
+    return (
+      <div className="p-6">
+        <div className="text-danger">批次不存在或加载失败：{pageError}</div>
+        <Button variant="outline" className="mt-4" onClick={() => router.push("/reports")}>
+          <ArrowLeft className="mr-2 h-4 w-4" /> 返回报工列表
+        </Button>
+      </div>
+    );
+  }
+
+  const sortedSeq = Object.keys(opSummary).map(Number).sort((a, b) => a - b);
+
+  return (
+    <div className="flex flex-col gap-4 p-4">
+      {/* 顶部抬头 */}
+      <Card className="border-border bg-card">
+        <CardHeader className="flex flex-row items-center justify-between gap-3 pb-3">
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Button variant="ghost" size="sm" className="h-7 px-2 text-muted-foreground" onClick={() => router.push("/reports")}>
+                <ArrowLeft className="mr-1 h-3.5 w-3.5" /> 返回列表
+              </Button>
+              <span>/</span>
+              <span>报工批次 {detail.report_no}</span>
+            </div>
+            <CardTitle className="flex items-center gap-3 text-foreground">
+              <span className="font-mono text-lg">{detail.batch_no}</span>
+              <span className="text-sm text-muted-foreground">完工顺序 #{detail.completion_seq}</span>
+              {detail.is_closed ? (
+                <span className="inline-flex items-center gap-1 rounded border border-border bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+                  <CheckCircle2 className="h-3.5 w-3.5" /> 已关闭
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 rounded border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-xs text-success">
+                  <Circle className="h-3.5 w-3.5 fill-success" /> 进行中
+                </span>
+              )}
+            </CardTitle>
+            <CardDescription className="text-muted-foreground">
+              工单 {detail.work_order_no} · {workOrder?.product_name ?? "-"} · {workOrder?.specification ?? "-"}
+            </CardDescription>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => void loadAll()}>
+              <RefreshCw className="mr-1 h-3.5 w-3.5" /> 刷新
+            </Button>
+            <Button
+              size="sm"
+              className="bg-danger text-white hover:bg-danger"
+              disabled={isClosed || saving}
+              onClick={closeReport}
+            >
+              <PackageCheck className="mr-1 h-3.5 w-3.5" /> 关闭报工
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="grid grid-cols-2 gap-3 border-t border-border pt-3 text-sm md:grid-cols-4 lg:grid-cols-6">
+          <Field label="开工时间">{formatDateTime(detail.start_time)}</Field>
+          <Field label="完工时间">{detail.end_time ? formatDateTime(detail.end_time) : "—"}</Field>
+          <Field label="关闭类型">{detail.close_type ? (detail.close_type === "auto" ? "自动" : "手工") : "—"}</Field>
+          <Field label="技工人数">{formatNumber(detail.skilled_worker_count)}</Field>
+          <Field label="普工人数">{formatNumber(detail.regular_worker_count)}</Field>
+          <Field label="劳务人工">{formatNumber(detail.contract_worker_count)}</Field>
+          <Field label="其它人工">{formatNumber(detail.other_worker_count)}</Field>
+          <Field label="累计投入">{formatNumber(aggregate.input)}</Field>
+          <Field label="累计合格">{formatNumber(aggregate.pass)}</Field>
+          <Field label="累计不良">
+            <span className="text-warning">{formatNumber(aggregate.fail)}</span>
+            <span className="ml-1 text-[10px] text-muted-foreground">（自动汇总）</span>
+          </Field>
+          <Field label="一致性（投=合+不良）">
+            {consistencyOk === null ? (
+              <span className="text-muted-foreground">未录入</span>
+            ) : consistencyOk ? (
+              <span className="text-success">通过</span>
+            ) : (
+              <span className="text-danger">不合格</span>
+            )}
+          </Field>
+        </CardContent>
+      </Card>
+
+      {pageError ? (
+        <div className="flex items-center gap-2 rounded border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
+          <AlertTriangle className="h-4 w-4" /> {pageError}
+        </div>
+      ) : null}
+      {pageHint ? (
+        <div className="flex items-center gap-2 rounded border border-success/30 bg-success/10 px-3 py-2 text-sm text-success">
+          <CheckCircle2 className="h-4 w-4" /> {pageHint}
+        </div>
+      ) : null}
+
+      <Tabs defaultValue="operations" className="w-full">
+        <TabsList className="border-b border-border bg-card">
+          <TabsTrigger value="operations" className="data-[state=active]:bg-muted">
+            <ClipboardList className="mr-1.5 h-4 w-4" /> 工序报工
+          </TabsTrigger>
+          <TabsTrigger value="defects" className="data-[state=active]:bg-muted">
+            <XCircle className="mr-1.5 h-4 w-4" /> 工序不良 ({detail.defects?.length ?? 0})
+          </TabsTrigger>
+          <TabsTrigger value="downtimes" className="data-[state=active]:bg-muted">
+            <Wrench className="mr-1.5 h-4 w-4" /> 异常工时 ({detail.downtimes?.length ?? 0})
+          </TabsTrigger>
+          <TabsTrigger value="process" className="data-[state=active]:bg-muted">
+            <ImageIcon className="mr-1.5 h-4 w-4" /> 制程信息 ({detail.process_infos?.length ?? 0})
+          </TabsTrigger>
+        </TabsList>
+
+        {/* 工序报工明细（纯汇总展示） */}
+        <TabsContent value="operations" className="mt-3">
+          <Card className="border-border bg-card">
+            <CardHeader>
+              <CardTitle className="text-foreground">工序报工明细</CardTitle>
+              <CardDescription className="text-muted-foreground">
+                投入数自动计算：首道=制程信息汇总，后续=上一道合格；不良按4类汇总自「工序不良」Tab
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="overflow-x-auto">
+              <table className="w-full min-w-[1000px] border-collapse text-sm">
+                <thead>
+                  <tr className="border-b border-border bg-muted text-xs uppercase text-muted-foreground">
+                    <th className="px-2 py-2 text-left">工序</th>
+                    <th className="px-2 py-2 text-right">投入</th>
+                    <th className="px-2 py-2 text-right">合格</th>
+                    <th className="px-2 py-2 text-right">不良合计</th>
+                    <th className="px-2 py-2 text-right">来料不良-小片</th>
+                    <th className="px-2 py-2 text-right">来料不良-带盖</th>
+                    <th className="px-2 py-2 text-right">制程不良-小片</th>
+                    <th className="px-2 py-2 text-right">制程不良-带盖</th>
+                    <th className="px-2 py-2 text-right">不良合计占比</th>
+                    <th className="px-2 py-2 text-right">来料不良占比</th>
+                    <th className="px-2 py-2 text-right">制程不良占比</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sortedSeq.map((seq) => {
+                    const s = opSummary[seq];
+                    return (
+                      <tr key={seq} className="border-b border-border text-foreground">
+                        <td className="px-2 py-2 align-top">
+                          <div className="font-mono text-xs text-muted-foreground">#{seq}</div>
+                          <div className="text-foreground">{s.operation_name}</div>
+                        </td>
+                        <td className="px-2 py-2 align-top text-right font-mono text-foreground">
+                          {formatNumber(s.input_quantity)}
+                        </td>
+                        <td className="px-2 py-2 align-top text-right font-mono text-foreground">
+                          {formatNumber(s.pass_quantity)}
+                        </td>
+                        <td className="px-2 py-2 align-top text-right font-mono text-warning">
+                          {formatNumber(s.fail_quantity)}
+                        </td>
+                        <td className="px-2 py-2 align-top text-right font-mono text-muted-foreground">
+                          {formatNumber(s.incoming_piece)}
+                        </td>
+                        <td className="px-2 py-2 align-top text-right font-mono text-muted-foreground">
+                          {formatNumber(s.incoming_cover)}
+                        </td>
+                        <td className="px-2 py-2 align-top text-right font-mono text-muted-foreground">
+                          {formatNumber(s.process_piece)}
+                        </td>
+                        <td className="px-2 py-2 align-top text-right font-mono text-muted-foreground">
+                          {formatNumber(s.process_cover)}
+                        </td>
+                        <td className="px-2 py-2 align-top text-right font-mono text-warning">
+                          {s.fail_ratio !== null ? formatPercent(s.fail_ratio) : '-'}
+                        </td>
+                        <td className="px-2 py-2 align-top text-right font-mono text-muted-foreground">
+                          {s.incoming_ratio !== null ? formatPercent(s.incoming_ratio) : '-'}
+                        </td>
+                        <td className="px-2 py-2 align-top text-right font-mono text-muted-foreground">
+                          {s.process_ratio !== null ? formatPercent(s.process_ratio) : '-'}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* 工序不良 — 按工序选择录入 */}
+        <TabsContent value="defects" className="mt-3">
+          <Card className="border-border bg-card">
+            <CardHeader>
+              <CardTitle className="text-foreground">工序不良登记</CardTitle>
+              <CardDescription className="text-muted-foreground">
+                选择工序 → 录入该工序的多条不良；该工序的「不良（自动汇总）」= SUM(defect_quantity)
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-3">
+              {/* 工序选择 — 关闭后不显示 */}
+              {!isClosed && (
+              <div className="flex flex-col gap-1.5 md:flex-row md:items-center md:gap-3">
+                <label className="text-xs uppercase tracking-wider text-muted-foreground md:w-20">选择工序</label>
+                <div className="relative md:w-80">
+                  <select
+                    value={defectOpSeq === "" ? "" : defectOpSeq}
+                    onChange={(e) => setDefectOpSeq(e.target.value ? Number(e.target.value) : "")}
+                    className="h-9 w-full appearance-none rounded border border-border bg-background px-2 pr-8 text-sm text-foreground"
+                  >
+                    <option value="">-- 请选择工序 --</option>
+                    {reportedOps.map((o) => (
+                      <option key={o.sequence} value={o.sequence}>
+                        #{o.sequence} {o.operation_name}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                </div>
+                {defectOpSeq !== "" ? (
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <span>已选：</span>
+                    <span className="font-mono text-warning">
+                      #{defectOpSeq} {currentWoOp?.operation_name ?? ""}
+                    </span>
+                    <span>· 已登记不良：</span>
+                    <span className="font-mono text-warning">
+                      {formatNumber(currentDefects.reduce((s, d) => s + (d.defect_quantity ?? 0), 0))}
+                    </span>
+                  </div>
+                ) : (
+                  <div className="text-xs text-muted-foreground">
+                    {reportedOps.length === 0 ? "该工单暂无工序信息" : "请选择一道工序"}
+                  </div>
+                )}
+              </div>
+              )}
+
+              {/* 新增不良表单 */}
+              {!isClosed && (
+              <div className="grid grid-cols-1 gap-2 md:grid-cols-6">
+                <select
+                  value={newDefect.defect_category}
+                  disabled={defectOpSeq === ""}
+                  onChange={(e) => setNewDefect({ ...newDefect, defect_category: e.target.value as NewDefect["defect_category"] })}
+                  className="h-9 rounded border border-border bg-background px-2 text-sm text-foreground disabled:opacity-50"
+                >
+                  <option value="制程不良">制程不良</option>
+                  <option value="来料不良">来料不良</option>
+                  <option value="检验报废">检验报废</option>
+                </select>
+                <Input
+                  placeholder="不良名称"
+                  value={newDefect.defect_name}
+                  disabled={defectOpSeq === ""}
+                  onChange={(e) => setNewDefect({ ...newDefect, defect_name: e.target.value })}
+                  className="border-border bg-background text-foreground placeholder:text-muted-foreground disabled:opacity-50"
+                />
+                <Input
+                  type="number"
+                  min={0}
+                  placeholder="数量"
+                  value={newDefect.defect_quantity || ""}
+                  disabled={defectOpSeq === ""}
+                  onChange={(e) => setNewDefect({ ...newDefect, defect_quantity: Number(e.target.value) || 0 })}
+                  className="border-border bg-background text-right text-foreground disabled:opacity-50"
+                />
+                <select
+                  value={newDefect.unit}
+                  disabled={defectOpSeq === ""}
+                  onChange={(e) => setNewDefect({ ...newDefect, unit: e.target.value as NewDefect["unit"] })}
+                  className="h-9 rounded border border-border bg-background px-2 text-sm text-foreground disabled:opacity-50"
+                >
+                  <option value="小片">小片</option>
+                  <option value="带盖">带盖</option>
+                </select>
                 <Button
-                    variant="outline"
-                    className="mt-4"
-                    onClick={() => router.push("/reports")}>
-                    <ArrowLeft className="mr-2 h-4 w-4" />返回报工列表
-                            </Button>
-            </div>
-        );
-    }
+                  size="sm"
+                  className="bg-primary text-white hover:bg-primary md:col-span-2 disabled:opacity-50"
+                  onClick={addDefect}
+                  disabled={saving || defectOpSeq === ""}
+                >
+                  <ListChecks className="mr-1.5 h-4 w-4" /> 新增不良（按工序）
+                </Button>
+              </div>
+              )}
 
-    const sortedSeq = Object.keys(opSummary).map(Number).sort((a, b) => a - b);
+              {/* 不良记录筛选 */}
+              <div className="border-t border-border pt-3">
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="text-xs uppercase tracking-wider text-muted-foreground">
+                    不良记录 ({filteredDefects.length}/{(detail?.defects ?? []).length})
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={defectOpSeqFilter}
+                      onChange={(e) => setDefectOpSeqFilter(e.target.value === "" ? "" : Number(e.target.value))}
+                      className="h-7 rounded border border-border bg-background px-2 text-xs text-foreground"
+                    >
+                      <option value="">全部工序</option>
+                      {(detail?.work_order_operations ?? []).sort((a, b) => a.sequence - b.sequence).map(op => (
+                        <option key={op.id} value={op.sequence}>#{op.sequence} {op.operation_name}</option>
+                      ))}
+                    </select>
+                    <select
+                      value={defectCategoryFilter}
+                      onChange={(e) => setDefectCategoryFilter(e.target.value)}
+                      className="h-7 rounded border border-border bg-background px-2 text-xs text-foreground"
+                    >
+                      <option value="">全部分类</option>
+                      <option value="制程不良">制程不良</option>
+                      <option value="来料不良">来料不良</option>
+                      <option value="检验报废">检验报废</option>
+                    </select>
+                    <select
+                      value={defectNameFilter}
+                      onChange={(e) => setDefectNameFilter(e.target.value)}
+                      className="h-7 rounded border border-border bg-background px-2 text-xs text-foreground"
+                    >
+                      <option value="">全部名称</option>
+                      {Array.from(new Set((detail?.defects ?? []).map(d => d.defect_name))).sort().map(name => (
+                        <option key={name} value={name}>{name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <DefectsTable defects={filteredDefects} onRemove={removeDefect} isClosed={isClosed} />
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-    return (
-        <div className="flex flex-col gap-4 p-4">
-            {}
-            <Card className="border-border bg-card">
-                <CardHeader className="flex flex-row items-center justify-between gap-3 pb-3">
-                    <div className="flex flex-col gap-1">
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-7 px-2 text-muted-foreground"
-                                onClick={() => router.push("/reports")}>
-                                <ArrowLeft className="mr-1 h-3.5 w-3.5" />返回列表
-                                              </Button>
-                            <span>/</span>
-                            <span>报工批次 {detail.report_no}</span>
-                        </div>
-                        <CardTitle className="flex items-center gap-3 text-foreground">
-                            <span className="font-mono text-lg">{detail.batch_no}</span>
-                            <span className="text-sm text-muted-foreground">完工顺序 #{detail.completion_seq}</span>
-                            {detail.is_closed ? <span
-                                className="inline-flex items-center gap-1 rounded border border-border bg-muted px-2 py-0.5 text-xs text-muted-foreground">
-                                <CheckCircle2 className="h-3.5 w-3.5" />已关闭
-                                                </span> : <span
-                                className="inline-flex items-center gap-1 rounded border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-xs text-success">
-                                <Circle className="h-3.5 w-3.5 fill-success" />进行中
-                                                </span>}
-                        </CardTitle>
-                        <CardDescription className="text-muted-foreground">工单 {detail.work_order_no}· {workOrder?.product_name ?? "-"}· {workOrder?.specification ?? "-"}
-                        </CardDescription>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <Button variant="outline" size="sm" onClick={() => void loadAll()}>
-                            <RefreshCw className="mr-1 h-3.5 w-3.5" />刷新
-                                        </Button>
-                        <Button
-                            size="sm"
-                            className="bg-danger text-white hover:bg-danger"
-                            disabled={isClosed || saving}
-                            onClick={closeReport}>
-                            <PackageCheck className="mr-1 h-3.5 w-3.5" />关闭报工
-                                        </Button>
-                    </div>
-                </CardHeader>
-                <CardContent
-                    className="grid grid-cols-2 gap-3 border-t border-border pt-3 text-sm md:grid-cols-4 lg:grid-cols-6">
-                    <Field label="开工时间">{formatDateTime(detail.start_time)}</Field>
-                    <Field label="完工时间">{detail.end_time ? formatDateTime(detail.end_time) : "—"}</Field>
-                    <Field label="关闭类型">{detail.close_type ? detail.close_type === "auto" ? "自动" : "手工" : "—"}</Field>
-                    <Field label="技工人数">{formatNumber(detail.skilled_worker_count)}</Field>
-                    <Field label="普工人数">{formatNumber(detail.regular_worker_count)}</Field>
-                    <Field label="劳务人工">{formatNumber(detail.contract_worker_count)}</Field>
-                    <Field label="其它人工">{formatNumber(detail.other_worker_count)}</Field>
-                    <Field label="累计投入">{formatNumber(aggregate.input)}</Field>
-                    <Field label="累计合格">{formatNumber(aggregate.pass)}</Field>
-                    <Field label="累计不良">
-                        <span className="text-warning">{formatNumber(aggregate.fail)}</span>
-                        <span className="ml-1 text-[10px] text-muted-foreground">（自动汇总）</span>
-                    </Field>
-                    <Field label="一致性（投=合+不良）">
-                        {consistencyOk === null ? <span className="text-muted-foreground">未录入</span> : consistencyOk ? <span className="text-success">通过</span> : <span className="text-danger">不合格</span>}
-                    </Field>
-                </CardContent>
-            </Card>
-            {pageError ? <div
-                className="flex items-center gap-2 rounded border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
-                <AlertTriangle className="h-4 w-4" /> {pageError}
-            </div> : null}
-            {pageHint ? <div
-                className="flex items-center gap-2 rounded border border-success/30 bg-success/10 px-3 py-2 text-sm text-success">
-                <CheckCircle2 className="h-4 w-4" /> {pageHint}
-            </div> : null}
-            <Tabs defaultValue="operations" className="w-full">
-                <TabsList className="border-b border-border bg-card">
-                    <TabsTrigger value="operations" className="data-[state=active]:bg-muted">
-                        <ClipboardList className="mr-1.5 h-4 w-4" />工序报工
-                                  </TabsTrigger>
-                    <TabsTrigger value="defects" className="data-[state=active]:bg-muted">
-                        <XCircle className="mr-1.5 h-4 w-4" />工序不良 ({detail.defects?.length ?? 0})
-                                  </TabsTrigger>
-                    <TabsTrigger value="downtimes" className="data-[state=active]:bg-muted">
-                        <Wrench className="mr-1.5 h-4 w-4" />异常工时 ({detail.downtimes?.length ?? 0})
-                                  </TabsTrigger>
-                    <TabsTrigger value="process" className="data-[state=active]:bg-muted">
-                        <ImageIcon className="mr-1.5 h-4 w-4" />制程信息 ({detail.process_infos?.length ?? 0})
-                                  </TabsTrigger>
-                </TabsList>
-                {}
-                <TabsContent value="operations" className="mt-3">
-                    <Card className="border-border bg-card">
-                        <CardHeader>
-                            <CardTitle className="text-foreground">工序报工明细</CardTitle>
-                            <CardDescription className="text-muted-foreground">投入数自动计算：首道=制程信息汇总，后续=上一道合格；不良按4类汇总自「工序不良」Tab
-                                              </CardDescription>
-                        </CardHeader>
-                        <CardContent className="overflow-x-auto">
-                            <table className="w-full min-w-[1000px] border-collapse text-sm">
-                                <thead>
-                                    <tr
-                                        className="border-b border-border bg-muted text-xs uppercase text-muted-foreground">
-                                        <th className="px-2 py-2 text-left">工序</th>
-                                        <th className="px-2 py-2 text-right">投入</th>
-                                        <th className="px-2 py-2 text-right">合格</th>
-                                        <th className="px-2 py-2 text-right">不良合计</th>
-                                        <th className="px-2 py-2 text-right">来料不良-小片</th>
-                                        <th className="px-2 py-2 text-right">来料不良-带盖</th>
-                                        <th className="px-2 py-2 text-right">制程不良-小片</th>
-                                        <th className="px-2 py-2 text-right">制程不良-带盖</th>
-                                        <th className="px-2 py-2 text-right">不良合计占比</th>
-                                        <th className="px-2 py-2 text-right">来料不良占比</th>
-                                        <th className="px-2 py-2 text-right">制程不良占比</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {sortedSeq.map(seq => {
-                                        const s = opSummary[seq];
+        {/* 异常工时 */}
+        <TabsContent value="downtimes" className="mt-3">
+          <Card className="border-border bg-card">
+            <CardHeader>
+              <CardTitle className="text-foreground">异常工时登记</CardTitle>
+              <CardDescription className="text-muted-foreground">设备故障/来料不良/其它原因停线记录</CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-3">
+              {/* 新增异常工时表单 */}
+              {!isClosed && (
+              <div className="grid grid-cols-1 gap-2 md:grid-cols-4">
+                <select
+                  value={newDowntime.anomaly_type}
+                  onChange={(e) => setNewDowntime({ ...newDowntime, anomaly_type: e.target.value as NewDowntime["anomaly_type"] })}
+                  className="h-9 rounded border border-border bg-background px-2 text-sm text-foreground"
+                >
+                  <option value="设备故障">设备故障</option>
+                  <option value="来料不良">来料不良</option>
+                  <option value="其它原因">其它原因</option>
+                </select>
+                <Input
+                  placeholder="设备编号"
+                  value={newDowntime.equipment_code}
+                  onChange={(e) => setNewDowntime({ ...newDowntime, equipment_code: e.target.value })}
+                  className="border-border bg-background text-foreground placeholder:text-muted-foreground"
+                />
+                <Input
+                  placeholder="停机类型"
+                  value={newDowntime.downtime_type}
+                  onChange={(e) => setNewDowntime({ ...newDowntime, downtime_type: e.target.value })}
+                  className="border-border bg-background text-foreground placeholder:text-muted-foreground"
+                />
+                <Input
+                  placeholder="确认人"
+                  value={newDowntime.confirmer}
+                  onChange={(e) => setNewDowntime({ ...newDowntime, confirmer: e.target.value })}
+                  className="border-border bg-background text-foreground placeholder:text-muted-foreground"
+                />
+                <Input
+                  type="datetime-local"
+                  value={newDowntime.start_time}
+                  onChange={(e) => setNewDowntime({ ...newDowntime, start_time: e.target.value })}
+                  className="border-border bg-background text-foreground"
+                />
+                <Input
+                  type="datetime-local"
+                  value={newDowntime.end_time}
+                  onChange={(e) => setNewDowntime({ ...newDowntime, end_time: e.target.value })}
+                  className="border-border bg-background text-foreground"
+                />
+                <Input
+                  placeholder="问题描述"
+                  value={newDowntime.problem_description}
+                  onChange={(e) => setNewDowntime({ ...newDowntime, problem_description: e.target.value })}
+                  className="md:col-span-1 border-border bg-background text-foreground placeholder:text-muted-foreground"
+                />
+                <Button size="sm" className="bg-primary text-white hover:bg-primary" onClick={addDowntime} disabled={saving}>
+                  <Save className="mr-1.5 h-4 w-4" /> 记录
+                </Button>
+              </div>
+              )}
+              {/* 异常工时筛选 */}
+              <div className="border-t border-border pt-3">
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="text-xs uppercase tracking-wider text-muted-foreground">
+                    异常工时记录 ({filteredDowntimes.length}/{(detail?.downtimes ?? []).length})
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={downtimeTypeFilter}
+                      onChange={(e) => setDowntimeTypeFilter(e.target.value)}
+                      className="h-7 rounded border border-border bg-background px-2 text-xs text-foreground"
+                    >
+                      <option value="">全部类型</option>
+                      <option value="设备故障">设备故障</option>
+                      <option value="来料不良">来料不良</option>
+                      <option value="其它原因">其它原因</option>
+                    </select>
+                    <select
+                      value={equipmentFilter}
+                      onChange={(e) => setEquipmentFilter(e.target.value)}
+                      className="h-7 rounded border border-border bg-background px-2 text-xs text-foreground"
+                    >
+                      <option value="">全部设备</option>
+                      {Array.from(new Set((detail?.downtimes ?? []).map(d => d.equipment_code))).sort().filter(Boolean).map(code => (
+                        <option key={code} value={code}>{code}</option>
+                      ))}
+                    </select>
+                    <select
+                      value={downtimeTypeFilter2}
+                      onChange={(e) => setDowntimeTypeFilter2(e.target.value)}
+                      className="h-7 rounded border border-border bg-background px-2 text-xs text-foreground"
+                    >
+                      <option value="">全部停机类型</option>
+                      {Array.from(new Set((detail?.downtimes ?? []).map(d => d.downtime_type))).sort().filter(Boolean).map(type => (
+                        <option key={type} value={type}>{type}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <DowntimesTable rows={filteredDowntimes} onRemove={removeDowntime} isClosed={isClosed} />
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-                                        return (
-                                            <tr key={seq} className="border-b border-border text-foreground">
-                                                <td className="px-2 py-2 align-top">
-                                                    <div className="font-mono text-xs text-muted-foreground">#{seq}</div>
-                                                    <div className="text-foreground">{s.operation_name}</div>
-                                                </td>
-                                                <td className="px-2 py-2 align-top text-right font-mono text-foreground">
-                                                    {formatNumber(s.input_quantity)}
-                                                </td>
-                                                <td className="px-2 py-2 align-top text-right font-mono text-foreground">
-                                                    {formatNumber(s.pass_quantity)}
-                                                </td>
-                                                <td className="px-2 py-2 align-top text-right font-mono text-warning">
-                                                    {formatNumber(s.fail_quantity)}
-                                                </td>
-                                                <td
-                                                    className="px-2 py-2 align-top text-right font-mono text-muted-foreground">
-                                                    {formatNumber(s.incoming_piece)}
-                                                </td>
-                                                <td
-                                                    className="px-2 py-2 align-top text-right font-mono text-muted-foreground">
-                                                    {formatNumber(s.incoming_cover)}
-                                                </td>
-                                                <td
-                                                    className="px-2 py-2 align-top text-right font-mono text-muted-foreground">
-                                                    {formatNumber(s.process_piece)}
-                                                </td>
-                                                <td
-                                                    className="px-2 py-2 align-top text-right font-mono text-muted-foreground">
-                                                    {formatNumber(s.process_cover)}
-                                                </td>
-                                                <td className="px-2 py-2 align-top text-right font-mono text-warning">
-                                                    {s.fail_ratio !== null ? formatPercent(s.fail_ratio) : "-"}
-                                                </td>
-                                                <td
-                                                    className="px-2 py-2 align-top text-right font-mono text-muted-foreground">
-                                                    {s.incoming_ratio !== null ? formatPercent(s.incoming_ratio) : "-"}
-                                                </td>
-                                                <td
-                                                    className="px-2 py-2 align-top text-right font-mono text-muted-foreground">
-                                                    {s.process_ratio !== null ? formatPercent(s.process_ratio) : "-"}
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
-                        </CardContent>
-                    </Card>
-                </TabsContent>
-                {}
-                <TabsContent value="defects" className="mt-3">
-                    <Card className="border-border bg-card">
-                        <CardHeader>
-                            <CardTitle className="text-foreground">工序不良登记</CardTitle>
-                            <CardDescription className="text-muted-foreground">选择工序 → 录入该工序的多条不良；该工序的「不良（自动汇总）」= SUM(defect_quantity)
-                                              </CardDescription>
-                        </CardHeader>
-                        <CardContent className="flex flex-col gap-3">
-                            {}
-                            {!isClosed && <div className="flex flex-col gap-1.5 md:flex-row md:items-center md:gap-3">
-                                <label
-                                    className="text-xs uppercase tracking-wider text-muted-foreground md:w-20">选择工序</label>
-                                <div
-                                    className="relative md:w-80"
-                                    style={{
-                                        padding: "4px"
-                                    }}>
-                                    <select
-                                        value={defectOpSeq === "" ? "" : defectOpSeq}
-                                        onChange={e => setDefectOpSeq(e.target.value ? Number(e.target.value) : "")}
-                                        className="h-9 w-full appearance-none rounded border border-border bg-background px-2 pr-8 text-sm text-foreground">
-                                        <option value="">-- 请选择工序 --</option>
-                                        {reportedOps.map(
-                                            o => <option key={o.sequence} value={o.sequence}>#{o.sequence} {o.operation_name}
-                                            </option>
-                                        )}
-                                    </select>
-                                    <ChevronDown
-                                        className="pointer-events-none absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                                </div>
-                                {defectOpSeq !== "" ? <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                    <span>已选：</span>
-                                    <span className="font-mono text-warning">#{defectOpSeq} {currentWoOp?.operation_name ?? ""}
-                                    </span>
-                                    <span>· 已登记不良：</span>
-                                    <span className="font-mono text-warning">
-                                        {formatNumber(currentDefects.reduce((s, d) => s + (d.defect_quantity ?? 0), 0))}
-                                    </span>
-                                </div> : <div className="text-xs text-muted-foreground">
-                                    {reportedOps.length === 0 ? "该工单暂无工序信息" : "请选择一道工序"}
-                                </div>}
-                            </div>}
-                            {}
-                            {!isClosed && <div className="grid grid-cols-1 gap-2 md:grid-cols-6">
-                                <select
-                                    value={newDefect.defect_category}
-                                    disabled={defectOpSeq === ""}
-                                    onChange={e => setNewDefect({
-                                        ...newDefect,
-                                        defect_category: e.target.value as NewDefect["defect_category"]
-                                    })}
-                                    className="h-9 rounded border border-border bg-background px-2 text-sm text-foreground disabled:opacity-50">
-                                    <option value="制程不良">制程不良</option>
-                                    <option value="来料不良">来料不良</option>
-                                    <option value="检验报废">检验报废</option>
-                                </select>
-                                <Input
-                                    placeholder="不良名称"
-                                    value={newDefect.defect_name}
-                                    disabled={defectOpSeq === ""}
-                                    onChange={e => setNewDefect({
-                                        ...newDefect,
-                                        defect_name: e.target.value
-                                    })}
-                                    className="border-border bg-background text-foreground placeholder:text-muted-foreground disabled:opacity-50" />
-                                <Input
-                                    type="number"
-                                    min={0}
-                                    placeholder="数量"
-                                    value={newDefect.defect_quantity || ""}
-                                    disabled={defectOpSeq === ""}
-                                    onChange={e => setNewDefect({
-                                        ...newDefect,
-                                        defect_quantity: Number(e.target.value) || 0
-                                    })}
-                                    className="border-border bg-background text-right text-foreground disabled:opacity-50" />
-                                <select
-                                    value={newDefect.unit}
-                                    disabled={defectOpSeq === ""}
-                                    onChange={e => setNewDefect({
-                                        ...newDefect,
-                                        unit: e.target.value as NewDefect["unit"]
-                                    })}
-                                    className="h-9 rounded border border-border bg-background px-2 text-sm text-foreground disabled:opacity-50">
-                                    <option value="小片">小片</option>
-                                    <option value="带盖">带盖</option>
-                                </select>
-                                <Button
-                                    size="sm"
-                                    className="bg-primary text-white hover:bg-primary md:col-span-1 disabled:opacity-50"
-                                    onClick={addDefect}
-                                    disabled={saving || defectOpSeq === ""}>
-                                    <ListChecks className="mr-1.5 h-4 w-4" />新增不良（按工序）
-                                                    </Button>
-                            </div>}
-                            {}
-                            <div className="border-t border-border pt-3">
-                                <div className="mb-2 flex items-center justify-between">
-                                    <span className="text-xs uppercase tracking-wider text-muted-foreground">不良记录 ({filteredDefects.length}/{(detail?.defects ?? []).length})
-                                                          </span>
-                                    <div className="flex items-center gap-2">
-                                        <select
-                                            value={defectOpSeqFilter}
-                                            onChange={e => setDefectOpSeqFilter(e.target.value === "" ? "" : Number(e.target.value))}
-                                            className="h-7 rounded border border-border bg-background px-2 text-xs text-foreground"
-                                            disabled={!isClosed}>
-                                            <option value="">全部工序</option>
-                                            {(detail?.work_order_operations ?? []).sort((a, b) => a.sequence - b.sequence).map(
-                                                op => <option key={op.id} value={op.sequence}>#{op.sequence} {op.operation_name}</option>
-                                            )}
-                                        </select>
-                                        <select
-                                            value={defectCategoryFilter}
-                                            onChange={e => setDefectCategoryFilter(e.target.value)}
-                                            className="h-7 rounded border border-border bg-background px-2 text-xs text-foreground"
-                                            disabled={!isClosed}>
-                                            <option value="">全部分类</option>
-                                            <option value="制程不良">制程不良</option>
-                                            <option value="来料不良">来料不良</option>
-                                            <option value="检验报废">检验报废</option>
-                                        </select>
-                                        <select
-                                            value={defectNameFilter}
-                                            onChange={e => setDefectNameFilter(e.target.value)}
-                                            className="h-7 rounded border border-border bg-background px-2 text-xs text-foreground"
-                                            disabled={!isClosed}>
-                                            <option value="">全部名称</option>
-                                            {Array.from(new Set((detail?.defects ?? []).map(d => d.defect_name))).sort().map(name => <option key={name} value={name}>{name}</option>)}
-                                        </select>
-                                    </div>
-                                </div>
-                                <DefectsTable defects={filteredDefects} onRemove={removeDefect} isClosed={isClosed} />
-                            </div>
-                        </CardContent>
-                    </Card>
-                </TabsContent>
-                {}
-                <TabsContent value="downtimes" className="mt-3">
-                    <Card className="border-border bg-card">
-                        <CardHeader>
-                            <CardTitle className="text-foreground">异常工时登记</CardTitle>
-                            <CardDescription className="text-muted-foreground">设备故障/来料不良/产品换型/其它原因停线记录</CardDescription>
-                        </CardHeader>
-                        <CardContent className="flex flex-col gap-3">
-                            {}
-                            {!isClosed && <div className="grid grid-cols-1 gap-2 md:grid-cols-4">
-                                <select
-                                    value={newDowntime.anomaly_type}
-                                    onChange={e => setNewDowntime({
-                                        ...newDowntime,
-                                        anomaly_type: e.target.value as NewDowntime["anomaly_type"]
-                                    })}
-                                    className="h-9 rounded border border-border bg-background px-2 text-sm text-foreground">
-                                    <option value="设备故障">设备故障</option>
-                                    <option value="来料不良">来料不良</option>
-                                    <option value="产品换型">产品换型</option>
-                                    <option value="其它原因">其它原因</option>
-                                </select>
-                                <Input
-                                    placeholder="设备编号"
-                                    value={newDowntime.equipment_code}
-                                    onChange={e => setNewDowntime({
-                                        ...newDowntime,
-                                        equipment_code: e.target.value
-                                    })}
-                                    className="border-border bg-background text-foreground placeholder:text-muted-foreground" />
-                                <Input
-                                    placeholder="停机类型"
-                                    value={newDowntime.downtime_type}
-                                    onChange={e => setNewDowntime({
-                                        ...newDowntime,
-                                        downtime_type: e.target.value
-                                    })}
-                                    className="border-border bg-background text-foreground placeholder:text-muted-foreground" />
-                                <Input
-                                    placeholder="确认人"
-                                    value={newDowntime.confirmer}
-                                    onChange={e => setNewDowntime({
-                                        ...newDowntime,
-                                        confirmer: e.target.value
-                                    })}
-                                    className="border-border bg-background text-foreground placeholder:text-muted-foreground" />
-                                <Input
-                                    type="datetime-local"
-                                    value={newDowntime.start_time}
-                                    onChange={e => setNewDowntime({
-                                        ...newDowntime,
-                                        start_time: e.target.value
-                                    })}
-                                    className="border-border bg-background text-foreground" />
-                                <Input
-                                    type="datetime-local"
-                                    value={newDowntime.end_time}
-                                    onChange={e => setNewDowntime({
-                                        ...newDowntime,
-                                        end_time: e.target.value
-                                    })}
-                                    className="border-border bg-background text-foreground" />
-                                <Input
-                                    placeholder="问题描述"
-                                    value={newDowntime.problem_description}
-                                    onChange={e => setNewDowntime({
-                                        ...newDowntime,
-                                        problem_description: e.target.value
-                                    })}
-                                    className="md:col-span-1 border-border bg-background text-foreground placeholder:text-muted-foreground" />
-                                <Button
-                                    size="sm"
-                                    className="bg-primary text-white hover:bg-primary"
-                                    onClick={addDowntime}
-                                    disabled={saving}>
-                                    <Save className="mr-1.5 h-4 w-4" />记录
-                                                    </Button>
-                            </div>}
-                            {}
-                            <div className="border-t border-border pt-3">
-                                <div className="mb-2 flex items-center justify-between">
-                                    <span className="text-xs uppercase tracking-wider text-muted-foreground">异常工时记录 ({filteredDowntimes.length}/{(detail?.downtimes ?? []).length})
-                                                          </span>
-                                    <div className="flex items-center gap-2">
-                                        <select
-                                            value={downtimeTypeFilter}
-                                            onChange={e => setDowntimeTypeFilter(e.target.value)}
-                                            className="h-7 rounded border border-border bg-background px-2 text-xs text-foreground"
-                                            disabled={!isClosed}>
-                                            <option value="">全部类型</option>
-                                            <option value="设备故障">设备故障</option>
-                                            <option value="来料不良">来料不良</option>
-                                            <option value="产品换型">产品换型</option>
-                                            <option value="其它原因">其它原因</option>
-                                        </select>
-                                        <select
-                                            value={equipmentFilter}
-                                            onChange={e => setEquipmentFilter(e.target.value)}
-                                            className="h-7 rounded border border-border bg-background px-2 text-xs text-foreground"
-                                            disabled={!isClosed}>
-                                            <option value="">全部设备</option>
-                                            {Array.from(new Set((detail?.downtimes ?? []).map(d => d.equipment_code))).sort().filter(Boolean).map(code => <option key={code} value={code}>{code}</option>)}
-                                        </select>
-                                        <select
-                                            value={downtimeTypeFilter2}
-                                            onChange={e => setDowntimeTypeFilter2(e.target.value)}
-                                            className="h-7 rounded border border-border bg-background px-2 text-xs text-foreground"
-                                            disabled={!isClosed}>
-                                            <option value="">全部停机类型</option>
-                                            {Array.from(new Set((detail?.downtimes ?? []).map(d => d.downtime_type))).sort().filter(Boolean).map(type => <option key={type} value={type}>{type}</option>)}
-                                        </select>
-                                    </div>
-                                </div>
-                                <DowntimesTable rows={filteredDowntimes} onRemove={removeDowntime} isClosed={isClosed} />
-                            </div>
-                        </CardContent>
-                    </Card>
-                </TabsContent>
-                {}
-                <TabsContent value="process" className="mt-3">
-                    <Card className="border-border bg-card">
-                        <CardHeader>
-                            <CardTitle className="text-foreground">制程信息登记</CardTitle>
-                            <CardDescription className="text-muted-foreground">物料批号/数量/图片留痕</CardDescription>
-                        </CardHeader>
-                        <CardContent className="flex flex-col gap-3">
-                            {}
-                            {!isClosed && <div className="grid grid-cols-1 gap-2 md:grid-cols-4">
-                                <select
-                                    value={newPI.operation_seq}
-                                    onChange={e => {
-                                        const seq = Number(e.target.value);
-                                        const op = reportedOps.find(o => o.sequence === seq);
-                                        const materialOpts = getMaterialTypeOptions(seq);
-
-                                        setNewPI({
-                                            ...newPI,
-                                            operation_seq: seq,
-                                            operation_name: op?.operation_name ?? "",
-                                            material_type: materialOpts.default
-                                        });
-                                    }}
-                                    className="h-9 rounded border border-border bg-background px-2 text-sm text-foreground">
-                                    {reportedOps.map(
-                                        p => <option key={p.id ?? p.sequence} value={p.sequence}>#{p.sequence} {p.operation_name}
-                                        </option>
-                                    )}
-                                </select>
-                                <Input
-                                    placeholder="物料批号"
-                                    value={newPI.material_batch_no}
-                                    onChange={e => setNewPI({
-                                        ...newPI,
-                                        material_batch_no: e.target.value
-                                    })}
-                                    className="border-border bg-background text-foreground placeholder:text-muted-foreground" />
-                                <select
-                                    value={newPI.material_type}
-                                    onChange={e => setNewPI({
-                                        ...newPI,
-                                        material_type: e.target.value
-                                    })}
-                                    className="h-9 rounded border border-border bg-background px-2 text-sm text-foreground"
-                                    disabled={getMaterialTypeOptions(newPI.operation_seq).options.length === 0}>
-                                    {getMaterialTypeOptions(newPI.operation_seq).options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                                    {getMaterialTypeOptions(newPI.operation_seq).options.length === 0 && <option value="">—</option>}
-                                </select>
-                                <Input
-                                    type="number"
-                                    min={0}
-                                    placeholder="数量"
-                                    value={newPI.quantity || ""}
-                                    onChange={e => setNewPI({
-                                        ...newPI,
-                                        quantity: Number(e.target.value) || 0
-                                    })}
-                                    className="border-border bg-background text-right text-foreground" />
-                                <Button
-                                    size="sm"
-                                    className="bg-primary text-white hover:bg-primary"
-                                    onClick={addPI}
-                                    disabled={saving}>
-                                    <Save className="mr-1.5 h-4 w-4" />记录
-                                                    </Button>
-                            </div>}
-                            <div className="border-t border-border pt-3">
-                                <div className="mb-2 flex items-center justify-between">
-                                    <span className="text-xs uppercase tracking-wider text-muted-foreground">制程信息记录 ({filteredProcessInfos.length}/{(detail?.process_infos ?? []).length})
-                                                          </span>
-                                    <div className="flex gap-2">
-                                        <select
-                                            value={processOpSeqFilter}
-                                            onChange={e => setProcessOpSeqFilter(Number(e.target.value) || "")}
-                                            className="h-7 rounded border border-border bg-background px-2 text-xs text-foreground"
-                                            disabled={!isClosed}>
-                                            <option value="">全部工序</option>
-                                            {reportedOps.map(
-                                                p => <option key={p.id ?? p.sequence} value={p.sequence}>#{p.sequence} {p.operation_name}
-                                                </option>
-                                            )}
-                                        </select>
-                                        <select
-                                            value={batchNoFilter}
-                                            onChange={e => setBatchNoFilter(e.target.value)}
-                                            className="h-7 rounded border border-border bg-background px-2 text-xs text-foreground"
-                                            disabled={!isClosed}>
-                                            <option value="">全部批号</option>
-                                            {Array.from(new Set(
-                                                (detail?.process_infos ?? []).map(pi => pi.material_batch_no).filter(Boolean)
-                                            )).map(bn => <option key={bn} value={bn}>{bn}</option>)}
-                                        </select>
-                                    </div>
-                                </div>
-                                <ProcessInfoTable rows={filteredProcessInfos} onRemove={removePI} isClosed={isClosed} />
-                            </div>
-                        </CardContent>
-                    </Card>
-                </TabsContent>
-            </Tabs>
-        </div>
-    );
+        {/* 制程信息 */}
+        <TabsContent value="process" className="mt-3">
+          <Card className="border-border bg-card">
+            <CardHeader>
+              <CardTitle className="text-foreground">制程信息登记</CardTitle>
+              <CardDescription className="text-muted-foreground">物料批号/数量/图片留痕</CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-3">
+              {/* 新增制程信息表单 */}
+              {!isClosed && (
+              <div className="grid grid-cols-1 gap-2 md:grid-cols-4">
+                <select
+                  value={newPI.operation_seq}
+                  onChange={(e) => {
+                    const seq = Number(e.target.value);
+                    const op = reportedOps.find((o) => o.sequence === seq);
+                    setNewPI({ ...newPI, operation_seq: seq, operation_name: op?.operation_name ?? "" });
+                  }}
+                  className="h-9 rounded border border-border bg-background px-2 text-sm text-foreground"
+                >
+                  {reportedOps.map((p) => (
+                    <option key={p.id ?? p.sequence} value={p.sequence}>
+                      #{p.sequence} {p.operation_name}
+                    </option>
+                  ))}
+                </select>
+                <Input
+                  placeholder="物料批号"
+                  value={newPI.material_batch_no}
+                  onChange={(e) => setNewPI({ ...newPI, material_batch_no: e.target.value })}
+                  className="border-border bg-background text-foreground placeholder:text-muted-foreground"
+                />
+                <Input
+                  type="number"
+                  min={0}
+                  placeholder="数量"
+                  value={newPI.quantity || ""}
+                  onChange={(e) => setNewPI({ ...newPI, quantity: Number(e.target.value) || 0 })}
+                  className="border-border bg-background text-right text-foreground"
+                />
+                <Button size="sm" className="bg-primary text-white hover:bg-primary" onClick={addPI} disabled={saving}>
+                  <Save className="mr-1.5 h-4 w-4" /> 记录
+                </Button>
+                <textarea
+                  placeholder="物料标签图片 URL（每行一个）"
+                  value={(newPI.material_label_image ?? []).join("\n")}
+                  onChange={(e) => setNewPI({ ...newPI, material_label_image: e.target.value.split("\n").filter(Boolean) })}
+                  className="md:col-span-2 h-16 rounded border border-border bg-background p-2 text-xs text-foreground placeholder:text-muted-foreground"
+                />
+                <textarea
+                  placeholder="来料不良图片 URL（每行一个）"
+                  value={(newPI.incoming_defect_image ?? []).join("\n")}
+                  onChange={(e) => setNewPI({ ...newPI, incoming_defect_image: e.target.value.split("\n").filter(Boolean) })}
+                  className="h-16 rounded border border-border bg-background p-2 text-xs text-foreground placeholder:text-muted-foreground"
+                />
+                <textarea
+                  placeholder="制程不良图片 URL（每行一个）"
+                  value={(newPI.process_defect_image ?? []).join("\n")}
+                  onChange={(e) => setNewPI({ ...newPI, process_defect_image: e.target.value.split("\n").filter(Boolean) })}
+                  className="h-16 rounded border border-border bg-background p-2 text-xs text-foreground placeholder:text-muted-foreground"
+                />
+              </div>
+              )}
+              {/* 制程信息筛选 */}
+              <div className="border-t border-border pt-3">
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="text-xs uppercase tracking-wider text-muted-foreground">
+                    制程信息记录 ({filteredProcessInfos.length}/{(detail?.process_infos ?? []).length})
+                  </span>
+                  <div className="flex gap-2">
+                    <select
+                      value={processOpSeqFilter}
+                      onChange={(e) => setProcessOpSeqFilter(Number(e.target.value) || "")}
+                      className="h-7 rounded border border-border bg-background px-2 text-xs text-foreground"
+                    >
+                      <option value="">全部工序</option>
+                      {reportedOps.map((p) => (
+                        <option key={p.id ?? p.sequence} value={p.sequence}>
+                          #{p.sequence} {p.operation_name}
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      value={batchNoFilter}
+                      onChange={(e) => setBatchNoFilter(e.target.value)}
+                      className="h-7 rounded border border-border bg-background px-2 text-xs text-foreground"
+                    >
+                      <option value="">全部批号</option>
+                      {Array.from(new Set((detail?.process_infos ?? []).map(pi => pi.material_batch_no).filter(Boolean))).map(bn => (
+                        <option key={bn} value={bn}>{bn}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <ProcessInfoTable rows={filteredProcessInfos} onRemove={removePI} isClosed={isClosed} />
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
 }
 
-function Field(
-    {
-        label,
-        children
-    }: {
-        label: string;
-        children: React.ReactNode;
-    }
-) {
-    return (
-        <div className="flex flex-col gap-0.5">
-            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</div>
-            <div className="text-foreground">{children}</div>
-        </div>
-    );
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col gap-0.5">
+      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</div>
+      <div className="text-foreground">{children}</div>
+    </div>
+  );
 }
 
-function DefectsTable(
-    {
-        defects,
-        onRemove,
-        isClosed
-    }: {
-        defects: OperationDefect[];
-        onRemove: (id: string) => void;
-        isClosed: boolean;
-    }
-) {
-    if (defects.length === 0) {
-        return (
-            <div
-                className="rounded border border-dashed border-border p-4 text-center text-sm text-muted-foreground">该工序暂无不良记录</div>
-        );
-    }
-
-    return (
-        <table className="w-full border-collapse text-sm">
-            <thead>
-                <tr
-                    className="border-b border-border bg-muted text-xs uppercase text-muted-foreground">
-                    <th className="px-2 py-2 text-left">工序</th>
-                    <th className="px-2 py-2 text-left">不良分类</th>
-                    <th className="px-2 py-2 text-left">不良名称</th>
-                    <th className="px-2 py-2 text-right">数量</th>
-                    <th className="px-2 py-2 text-left">单位</th>
-                    <th className="px-2 py-2 text-left">登记时间</th>
-                    {!isClosed && <th className="px-2 py-2 text-center">操作</th>}
-                </tr>
-            </thead>
-            <tbody>
-                {defects.map(d => <tr key={d.id} className="border-b border-border text-foreground">
-                    <td className="px-2 py-1.5 font-mono text-xs">{d.operation_seq ? `#${d.operation_seq}` : "—"} {d.operation_name ?? ""}</td>
-                    <td className="px-2 py-1.5">{d.defect_category}</td>
-                    <td className="px-2 py-1.5">{d.defect_name}</td>
-                    <td className="px-2 py-1.5 text-right font-mono">{formatNumber(d.defect_quantity)}</td>
-                    <td className="px-2 py-1.5">{d.unit ?? "—"}</td>
-                    <td className="px-2 py-1.5 text-muted-foreground">{formatDateTime(d.created_at)}</td>
-                    {!isClosed && <td className="px-2 py-1.5 text-center">
-                        <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-6 text-danger"
-                            onClick={() => onRemove(d.id)}>删除
-                                            </Button>
-                    </td>}
-                </tr>)}
-            </tbody>
-        </table>
-    );
+function DefectsTable({ defects, onRemove, isClosed }: { defects: OperationDefect[]; onRemove: (id: string) => void; isClosed: boolean }) {
+  if (defects.length === 0) {
+    return <div className="rounded border border-dashed border-border p-4 text-center text-sm text-muted-foreground">该工序暂无不良记录</div>;
+  }
+  return (
+    <table className="w-full border-collapse text-sm">
+      <thead>
+        <tr className="border-b border-border bg-muted text-xs uppercase text-muted-foreground">
+          <th className="px-2 py-2 text-left">不良分类</th>
+          <th className="px-2 py-2 text-left">不良名称</th>
+          <th className="px-2 py-2 text-right">数量</th>
+          <th className="px-2 py-2 text-left">单位</th>
+          <th className="px-2 py-2 text-left">登记时间</th>
+          {!isClosed && <th className="px-2 py-2 text-center">操作</th>}
+        </tr>
+      </thead>
+      <tbody>
+        {defects.map((d) => (
+          <tr key={d.id} className="border-b border-border text-foreground">
+            <td className="px-2 py-1.5">{d.defect_category}</td>
+            <td className="px-2 py-1.5">{d.defect_name}</td>
+            <td className="px-2 py-1.5 text-right font-mono">{formatNumber(d.defect_quantity)}</td>
+            <td className="px-2 py-1.5">{d.unit ?? "—"}</td>
+            <td className="px-2 py-1.5 text-muted-foreground">{formatDateTime(d.created_at)}</td>
+            {!isClosed && (
+              <td className="px-2 py-1.5 text-center">
+                <Button size="sm" variant="ghost" className="h-6 text-danger" onClick={() => onRemove(d.id)}>
+                  删除
+                </Button>
+              </td>
+            )}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
 }
 
-function DowntimesTable(
-    {
-        rows,
-        onRemove,
-        isClosed
-    }: {
-        rows: EquipmentDowntime[];
-        onRemove: (id: string) => void;
-        isClosed: boolean;
-    }
-) {
-    if (rows.length === 0) {
-        return (
-            <div
-                className="rounded border border-dashed border-border p-4 text-center text-sm text-muted-foreground">暂无异常工时</div>
-        );
-    }
-
-    return (
-        <table className="w-full border-collapse text-sm">
-            <thead>
-                <tr
-                    className="border-b border-border bg-muted text-xs uppercase text-muted-foreground">
-                    <th className="px-2 py-2 text-left">异常类型</th>
-                    <th className="px-2 py-2 text-left">设备</th>
-                    <th className="px-2 py-2 text-left">停机类型</th>
-                    <th className="px-2 py-2 text-left">开始</th>
-                    <th className="px-2 py-2 text-left">恢复</th>
-                    <th className="px-2 py-2 text-right">时长(min)</th>
-                    <th className="px-2 py-2 text-left">确认人</th>
-                    <th className="px-2 py-2 text-left">描述</th>
-                    {!isClosed && <th className="px-2 py-2 text-center">操作</th>}
-                </tr>
-            </thead>
-            <tbody>
-                {rows.map(d => <tr key={d.id} className="border-b border-border text-foreground">
-                    <td className="px-2 py-1.5">{d.anomaly_type}</td>
-                    <td className="px-2 py-1.5 font-mono">{d.equipment_code || "—"}</td>
-                    <td className="px-2 py-1.5">{d.downtime_type || "—"}</td>
-                    <td className="px-2 py-1.5 text-muted-foreground">{formatDateTime(d.start_time)}</td>
-                    <td className="px-2 py-1.5 text-muted-foreground">{formatDateTime(d.end_time)}</td>
-                    <td className="px-2 py-1.5 text-right font-mono">{formatNumber(d.duration_minutes)}</td>
-                    <td className="px-2 py-1.5">{d.confirmer || "—"}</td>
-                    <td className="px-2 py-1.5 text-muted-foreground">{d.problem_description || "—"}</td>
-                    {!isClosed && <td className="px-2 py-1.5 text-center">
-                        <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-6 text-danger"
-                            onClick={() => onRemove(d.id)}>删除
-                                            </Button>
-                    </td>}
-                </tr>)}
-            </tbody>
-        </table>
-    );
+function DowntimesTable({ rows, onRemove, isClosed }: { rows: EquipmentDowntime[]; onRemove: (id: string) => void; isClosed: boolean }) {
+  if (rows.length === 0) {
+    return <div className="rounded border border-dashed border-border p-4 text-center text-sm text-muted-foreground">暂无异常工时</div>;
+  }
+  return (
+    <table className="w-full border-collapse text-sm">
+      <thead>
+        <tr className="border-b border-border bg-muted text-xs uppercase text-muted-foreground">
+          <th className="px-2 py-2 text-left">异常类型</th>
+          <th className="px-2 py-2 text-left">设备</th>
+          <th className="px-2 py-2 text-left">停机类型</th>
+          <th className="px-2 py-2 text-left">开始</th>
+          <th className="px-2 py-2 text-left">恢复</th>
+          <th className="px-2 py-2 text-right">时长(min)</th>
+          <th className="px-2 py-2 text-left">确认人</th>
+          <th className="px-2 py-2 text-left">描述</th>
+          {!isClosed && <th className="px-2 py-2 text-center">操作</th>}
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((d) => (
+          <tr key={d.id} className="border-b border-border text-foreground">
+            <td className="px-2 py-1.5">{d.anomaly_type}</td>
+            <td className="px-2 py-1.5 font-mono">{d.equipment_code || "—"}</td>
+            <td className="px-2 py-1.5">{d.downtime_type || "—"}</td>
+            <td className="px-2 py-1.5 text-muted-foreground">{formatDateTime(d.start_time)}</td>
+            <td className="px-2 py-1.5 text-muted-foreground">{formatDateTime(d.end_time)}</td>
+            <td className="px-2 py-1.5 text-right font-mono">{formatNumber(d.duration_minutes)}</td>
+            <td className="px-2 py-1.5">{d.confirmer || "—"}</td>
+            <td className="px-2 py-1.5 text-muted-foreground">{d.problem_description || "—"}</td>
+            {!isClosed && (
+              <td className="px-2 py-1.5 text-center">
+                <Button size="sm" variant="ghost" className="h-6 text-danger" onClick={() => onRemove(d.id)}>
+                  删除
+                </Button>
+              </td>
+            )}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
 }
 
-function ProcessInfoTable(
-    {
-        rows,
-        onRemove,
-        isClosed
-    }: {
-        rows: ProcessInfo[];
-        onRemove: (id: string) => void;
-        isClosed: boolean;
-    }
-) {
-    const renderImages = (urls: string[] | null | undefined) => {
-        if (!urls || urls.length === 0)
-            return "—";
-
-        return (
-            <div className="flex gap-1">
-                {urls.map((url, i) => <a
-                    key={i}
-                    href={url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-block">
-                    <img
-                        src={url}
-                        alt={`图片${i + 1}`}
-                        className="h-6 w-6 rounded border border-border object-cover" />
-                </a>)}
-            </div>
-        );
-    };
-
-    if (rows.length === 0) {
-        return (
-            <div
-                className="rounded border border-dashed border-border p-4 text-center text-sm text-muted-foreground">暂无制程信息</div>
-        );
-    }
-
-    return (
-        <table className="w-full border-collapse text-sm">
-            <thead>
-                <tr
-                    className="border-b border-border bg-muted text-xs uppercase text-muted-foreground">
-                    <th className="px-2 py-2 text-left">工序</th>
-                    <th className="px-2 py-2 text-left">物料批号</th>
-                    <th className="px-2 py-2 text-left">物料类型</th>
-                    <th className="px-2 py-2 text-right">数量</th>
-                    {!isClosed && <th className="px-2 py-2 text-center">操作</th>}
-                </tr>
-            </thead>
-            <tbody>
-                {rows.map(r => <tr key={r.id} className="border-b border-border text-foreground">
-                    <td className="px-2 py-1.5">
-                        <div className="text-xs text-muted-foreground">#{r.operation_seq}</div>
-                        <div>{r.operation_name}</div>
-                    </td>
-                    <td className="px-2 py-1.5 font-mono">{r.material_batch_no || "—"}</td>
-                    <td className="px-2 py-1.5">{r.material_type || "—"}</td>
-                    <td className="px-2 py-1.5 text-right font-mono">{formatNumber(r.quantity)}</td>
-                    {!isClosed && <td className="px-2 py-1.5 text-center">
-                        <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-6 text-danger"
-                            onClick={() => onRemove(r.id)}>删除
-                                            </Button>
-                    </td>}
-                </tr>)}
-            </tbody>
-        </table>
-    );
+function ProcessInfoTable({ rows, onRemove, isClosed }: { rows: ProcessInfo[]; onRemove: (id: string) => void; isClosed: boolean }) {
+  const renderImages = (urls: string[] | null | undefined) => {
+    if (!urls || urls.length === 0) return "—";
+    return urls.map((url, i) => (
+      <div key={i} className="truncate max-w-[100px]">
+        {url}
+      </div>
+    ));
+  };
+  if (rows.length === 0) {
+    return <div className="rounded border border-dashed border-border p-4 text-center text-sm text-muted-foreground">暂无制程信息</div>;
+  }
+  return (
+    <table className="w-full border-collapse text-sm">
+      <thead>
+        <tr className="border-b border-border bg-muted text-xs uppercase text-muted-foreground">
+          <th className="px-2 py-2 text-left">工序</th>
+          <th className="px-2 py-2 text-left">物料批号</th>
+          <th className="px-2 py-2 text-right">数量</th>
+          <th className="px-2 py-2 text-left">标签图</th>
+          <th className="px-2 py-2 text-left">来料图</th>
+          <th className="px-2 py-2 text-left">制程图</th>
+          {!isClosed && <th className="px-2 py-2 text-center">操作</th>}
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((r) => (
+          <tr key={r.id} className="border-b border-border text-foreground">
+            <td className="px-2 py-1.5">
+              <div className="text-xs text-muted-foreground">#{r.operation_seq}</div>
+              <div>{r.operation_name}</div>
+            </td>
+            <td className="px-2 py-1.5 font-mono">{r.material_batch_no || "—"}</td>
+            <td className="px-2 py-1.5 text-right font-mono">{formatNumber(r.quantity)}</td>
+            <td className="px-2 py-1.5 text-xs text-muted-foreground">{renderImages(r.material_label_image)}</td>
+            <td className="px-2 py-1.5 text-xs text-muted-foreground">{renderImages(r.incoming_defect_image)}</td>
+            <td className="px-2 py-1.5 text-xs text-muted-foreground">{renderImages(r.process_defect_image)}</td>
+            {!isClosed && (
+              <td className="px-2 py-1.5 text-center">
+                <Button size="sm" variant="ghost" className="h-6 text-danger" onClick={() => onRemove(r.id)}>
+                  删除
+                </Button>
+              </td>
+            )}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
 }

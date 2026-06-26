@@ -339,12 +339,10 @@ export interface OperationDefect {
   work_order_no: string;
   batch_no: string;
   operation_seq: number | null;
-  operation_name: string | null;
   defect_category: "制程不良" | "来料不良" | "检验报废";
   defect_name: string;
   defect_quantity: number;
   unit: "小片" | "带盖" | null;
-  images: string[] | null;
   created_at: string;
 }
 
@@ -354,7 +352,7 @@ export interface EquipmentDowntime {
   work_order_report_id: string;
   work_order_no: string;
   batch_no: string;
-  anomaly_type: "设备故障" | "来料不良" | "产品换型" | "其它原因";
+  anomaly_type: "设备故障" | "来料不良" | "其它原因";
   equipment_code: string;
   downtime_type: string;
   problem_description: string;
@@ -375,7 +373,6 @@ export interface ProcessInfo {
   operation_seq: number;
   operation_name: string;
   material_batch_no: string;
-  material_type: string | null;
   quantity: number;
   material_label_image: string[];
   incoming_defect_image: string[];
