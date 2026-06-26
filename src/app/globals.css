@@ -59,26 +59,29 @@
     'Times New Roman', Times, serif;
 }
 
+/* ===========================================================
+ *  浅色主题（默认）— 白色背景，工业管控台调性
+ * =========================================================== */
 :root {
   --radius: 0.25rem;
-  /* 浅色 fallback（不实际使用，但 shadcn 组件需要这些变量存在） */
-  --background: #0A0E1A;
-  --foreground: #E8ECF4;
-  --card: #111726;
-  --card-foreground: #E8ECF4;
-  --popover: #111726;
-  --popover-foreground: #E8ECF4;
+  /* 浅色主题 — 白色背景 */
+  --background: #FFFFFF;
+  --foreground: #1F2937;
+  --card: #F9FAFB;
+  --card-foreground: #1F2937;
+  --popover: #FFFFFF;
+  --popover-foreground: #1F2937;
   --primary: #F97316;
-  --primary-foreground: #0A0E1A;
-  --secondary: #1A2030;
-  --secondary-foreground: #E8ECF4;
-  --muted: #1A2030;
-  --muted-foreground: #A0AABE;
-  --accent: #1A2030;
-  --accent-foreground: #E8ECF4;
+  --primary-foreground: #FFFFFF;
+  --secondary: #F3F4F6;
+  --secondary-foreground: #374151;
+  --muted: #F3F4F6;
+  --muted-foreground: #6B7280;
+  --accent: #F3F4F6;
+  --accent-foreground: #374151;
   --destructive: #EF4444;
-  --border: #1F2738;
-  --input: #1F2738;
+  --border: #E5E7EB;
+  --input: #E5E7EB;
   --ring: #F97316;
   --success: #22C55E;
   --warning: #EAB308;
@@ -90,23 +93,62 @@
   --chart-3: #EAB308;
   --chart-4: #F97316;
   --chart-5: #EF4444;
-  --sidebar: #0A0E1A;
-  --sidebar-foreground: #E8ECF4;
+  --sidebar: #FFFFFF;
+  --sidebar-foreground: #1F2937;
   --sidebar-primary: #F97316;
-  --sidebar-primary-foreground: #0A0E1A;
-  --sidebar-accent: #1A2030;
-  --sidebar-accent-foreground: #E8ECF4;
-  --sidebar-border: #1F2738;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #F3F4F6;
+  --sidebar-accent-foreground: #374151;
+  --sidebar-border: #E5E7EB;
   --sidebar-ring: #F97316;
 }
 
 /* ===========================================================
- *  5 套预设深色主题 — 工业管控台调性
- *  默认主题：mes-dark（工业橙，原始色）
- *  切换方式：html[data-theme="xxx"]
+ *  主题切换 — 支持浅色/深色切换
+ *  html[data-theme="xxx"]
  * =========================================================== */
 
-/* 主题 1: 工业橙（默认）— 长沙大满品牌色 */
+/* 浅色主题: mes-light（白色背景，默认）*/
+html[data-theme='mes-light'] {
+  --background: #FFFFFF;
+  --foreground: #1F2937;
+  --card: #F9FAFB;
+  --card-foreground: #1F2937;
+  --popover: #FFFFFF;
+  --popover-foreground: #1F2937;
+  --primary: #F97316;
+  --primary-foreground: #FFFFFF;
+  --secondary: #F3F4F6;
+  --secondary-foreground: #374151;
+  --muted: #F3F4F6;
+  --muted-foreground: #6B7280;
+  --accent: #F3F4F6;
+  --accent-foreground: #374151;
+  --destructive: #EF4444;
+  --border: #E5E7EB;
+  --input: #E5E7EB;
+  --ring: #F97316;
+  --success: #22C55E;
+  --warning: #EAB308;
+  --info: #3B82F6;
+  --brand: #F97316;
+  --cyan: #06B6D4;
+  --chart-1: #06B6D4;
+  --chart-2: #22C55E;
+  --chart-3: #EAB308;
+  --chart-4: #F97316;
+  --chart-5: #EF4444;
+  --sidebar: #FFFFFF;
+  --sidebar-foreground: #1F2937;
+  --sidebar-primary: #F97316;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #F3F4F6;
+  --sidebar-accent-foreground: #374151;
+  --sidebar-border: #E5E7EB;
+  --sidebar-ring: #F97316;
+}
+
+/* 深色主题 1: mes-dark（工业橙）*/
 html[data-theme='mes-dark'] {
   --background: #0A0E1A;
   --foreground: #E8ECF4;
@@ -146,7 +188,7 @@ html[data-theme='mes-dark'] {
   --sidebar-ring: #F97316;
 }
 
-/* 主题 2: 冰蓝 — 冷静、医疗、洁净车间感 */
+/* 深色主题 2: mes-cyan（冰蓝）*/
 html[data-theme='mes-cyan'] {
   --background: #07131C;
   --foreground: #E2ECF5;
@@ -186,7 +228,7 @@ html[data-theme='mes-cyan'] {
   --sidebar-ring: #38BDF8;
 }
 
-/* 主题 3: 翡翠绿 — 安全、顺行、合规 */
+/* 深色主题 3: mes-emerald（翡翠绿）*/
 html[data-theme='mes-emerald'] {
   --background: #061512;
   --foreground: #E1F1EA;
@@ -226,7 +268,7 @@ html[data-theme='mes-emerald'] {
   --sidebar-ring: #10B981;
 }
 
-/* 主题 4: 朱红 — 警示、应急、异常高亮 */
+/* 深色主题 4: mes-crimson（朱红）*/
 html[data-theme='mes-crimson'] {
   --background: #16090B;
   --foreground: #F2E2E5;
@@ -266,7 +308,7 @@ html[data-theme='mes-crimson'] {
   --sidebar-ring: #F43F5E;
 }
 
-/* 主题 5: 琥珀金 — 高级、稳重、领导办公室 */
+/* 深色主题 5: mes-amber（琥珀金）*/
 html[data-theme='mes-amber'] {
   --background: #15100A;
   --foreground: #F2EBE2;
