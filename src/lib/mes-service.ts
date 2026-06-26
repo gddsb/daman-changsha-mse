@@ -466,19 +466,30 @@ export async function listPlans(filter: PlanFilter = {}): Promise<ProductionPlan
   const c = getSupabaseClient();
   let q = c
     .from("production_plans")
-    .select(`
-      *,
-      work_orders!work_order_id ( status )
-    `)
+    .select("*")
     .order("plan_date", { ascending: true });
   if (filter.start_date) q = q.gte("plan_date", filter.start_date);
   if (filter.end_date) q = q.lte("plan_date", filter.end_date);
   if (filter.line_code) q = q.eq("line_code", filter.line_code);
   const { data, error } = await q.limit(500);
   if (error) throw error;
+  
+  // 手动获取工单状态（因为没有外键约束）
+  const woIds = (data ?? []).map((p) => p.work_order_id).filter(Boolean);
+  const woStatusMap: Record<string, string> = {};
+  if (woIds.length > 0) {
+    const { data: woData } = await c
+      .from("work_orders")
+      .select("id, status")
+      .in("id", woIds);
+    for (const wo of (woData ?? [])) {
+      woStatusMap[(wo as { id: string }).id] = (wo as { status: string }).status;
+    }
+  }
+  
   return (data ?? []).map((row: Record<string, unknown>) => {
-    const wo = row.work_orders as { status: string } | null;
-    return { ...toPlanView(row), wo_status: wo?.status ?? undefined };
+    const woId = row.work_order_id as string | undefined;
+    return { ...toPlanView(row), wo_status: woId ? woStatusMap[woId] : undefined };
   });
 }
 
