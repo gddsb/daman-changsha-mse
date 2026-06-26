@@ -11,35 +11,35 @@ import { Activity } from "lucide-react";
 import type { LineStatusItem } from "@/types/mes";
 
 const STATUS_TONE: Record<string, string> = {
-  运行: "border-emerald-500/30 bg-emerald-500/10 text-emerald-400",
-  停机: "border-slate-700 bg-slate-800/40 text-slate-400",
-  维保: "border-amber-500/30 bg-amber-500/10 text-amber-400",
-  故障: "border-rose-500/30 bg-rose-500/10 text-rose-400",
+  运行: "border-success/30 bg-success/10 text-success",
+  停机: "border-border bg-muted/40 text-muted-foreground",
+  维保: "border-warning/30 bg-warning/10 text-warning",
+  故障: "border-destructive/30 bg-destructive/10 text-destructive",
 };
 
 export function LineStatusCard({ lines }: { lines: LineStatusItem[] }) {
   return (
-    <Card className="border-slate-800 bg-slate-900/60">
-      <CardHeader className="flex flex-row items-center justify-between border-b border-slate-800 pb-2">
-        <CardTitle className="text-sm font-medium text-slate-200">产线状态</CardTitle>
-        <Badge variant="outline" className="border-slate-700 text-slate-400">
+    <Card className="border-border bg-card">
+      <CardHeader className="flex flex-row items-center justify-between border-b border-border pb-2">
+        <CardTitle className="text-sm font-medium text-foreground">产线状态</CardTitle>
+        <Badge variant="outline" className="border-border text-muted-foreground">
           {lines.length} 条线
         </Badge>
       </CardHeader>
       <CardContent className="space-y-3 pt-3">
         {lines.length === 0 && (
-          <p className="py-4 text-center text-xs text-slate-500">暂无产线数据</p>
+          <p className="py-4 text-center text-xs text-muted-foreground">暂无产线数据</p>
         )}
         {lines.map((l) => {
           const pct = l.todayPlanned > 0 ? (l.todayActual / l.todayPlanned) * 100 : 0;
           const tone = STATUS_TONE[l.status] ?? STATUS_TONE.停机;
           return (
-            <div key={l.code} className="space-y-2 rounded border border-slate-800 bg-slate-950/40 p-3">
+            <div key={l.code} className="space-y-2 rounded border border-border bg-background/40 p-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <Activity className="h-3.5 w-3.5 text-slate-500" />
-                  <span className="font-mono text-sm text-slate-200">{l.name}</span>
-                  <span className="font-mono text-[10px] text-slate-500">
+                  <Activity className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span className="font-mono text-sm text-foreground">{l.name}</span>
+                  <span className="font-mono text-[10px] text-muted-foreground">
                     {l.code}
                   </span>
                 </div>
@@ -50,24 +50,24 @@ export function LineStatusCard({ lines }: { lines: LineStatusItem[] }) {
 
               <div className="grid grid-cols-3 gap-2 text-[11px]">
                 <div>
-                  <div className="text-slate-500">在制工单</div>
-                  <div className="mt-0.5 font-mono text-slate-200">{l.orderCount}</div>
+                  <div className="text-muted-foreground">在制工单</div>
+                  <div className="mt-0.5 font-mono text-foreground">{l.orderCount}</div>
                 </div>
                 <div>
-                  <div className="text-slate-500">实际/计划</div>
-                  <div className="mt-0.5 font-mono text-slate-200">
+                  <div className="text-muted-foreground">实际/计划</div>
+                  <div className="mt-0.5 font-mono text-foreground">
                     {l.todayActual.toLocaleString()} / {l.todayPlanned.toLocaleString()}
                   </div>
                 </div>
                 <div>
-                  <div className="text-slate-500">合格率</div>
+                  <div className="text-muted-foreground">合格率</div>
                   <div
                     className={`mt-0.5 font-mono ${
                       l.todayPassRate >= 99
-                        ? "text-emerald-400"
+                        ? "text-success"
                         : l.todayPassRate >= 95
-                          ? "text-amber-400"
-                          : "text-rose-400"
+                          ? "text-warning"
+                          : "text-destructive"
                     }`}
                   >
                     {l.todayPassRate.toFixed(2)}%
@@ -76,13 +76,13 @@ export function LineStatusCard({ lines }: { lines: LineStatusItem[] }) {
               </div>
 
               <div className="space-y-1">
-                <div className="flex items-center justify-between text-[10px] text-slate-500">
+                <div className="flex items-center justify-between text-[10px] text-muted-foreground">
                   <span>计划达成</span>
-                  <span className="font-mono text-slate-400">{pct.toFixed(0)}%</span>
+                  <span className="font-mono text-muted-foreground">{pct.toFixed(0)}%</span>
                 </div>
                 <Progress
                   value={Math.min(pct, 100)}
-                  className="h-1 bg-slate-800 [&>div]:bg-orange-500"
+                  className="h-1 bg-muted [&>div]:bg-primary"
                 />
               </div>
             </div>

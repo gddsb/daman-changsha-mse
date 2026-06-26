@@ -192,7 +192,7 @@ export function WorkOrderDetailView({ params }: { params: Promise<{ id: string }
             <Button
               onClick={startWorkOrder}
               disabled={operating}
-              className="gap-1.5 bg-orange-500 hover:bg-orange-600 text-white"
+              className="gap-1.5 bg-primary hover:bg-primary text-primary-foreground"
             >
               <Play className="h-4 w-4" />
               {operating ? "开工中..." : "开工"}
@@ -203,7 +203,7 @@ export function WorkOrderDetailView({ params }: { params: Promise<{ id: string }
               variant="outline"
               onClick={pauseWorkOrder}
               disabled={operating}
-              className="gap-1.5 border-orange-500/40 text-orange-500 hover:bg-orange-500/10"
+              className="gap-1.5 border-orange-500/40 text-primary hover:bg-orange-500/10"
             >
               <Pause className="h-4 w-4" />
               {operating ? "暂停中..." : "暂停"}
@@ -213,7 +213,7 @@ export function WorkOrderDetailView({ params }: { params: Promise<{ id: string }
             <Button
               onClick={startNewReport}
               disabled={creating}
-              className="gap-1.5 bg-orange-500 hover:bg-orange-600 text-white"
+              className="gap-1.5 bg-primary hover:bg-primary text-primary-foreground"
             >
               <Play className="h-4 w-4" />
               {creating ? "创建中..." : "开始报工"}
@@ -223,7 +223,7 @@ export function WorkOrderDetailView({ params }: { params: Promise<{ id: string }
             <Button
               variant="outline"
               onClick={gotoOpenReport}
-              className="gap-1.5 border-amber-500/40 text-amber-500 hover:bg-amber-500/10"
+              className="gap-1.5 border-warning/40 text-warning hover:bg-warning/10"
             >
               <FileText className="h-4 w-4" />
               继续报工
@@ -295,7 +295,7 @@ export function WorkOrderDetailView({ params }: { params: Promise<{ id: string }
             <div className="py-6 text-center text-sm text-muted-foreground">
               暂无报工批次
               {canReport && (
-                <span className="ml-1 text-orange-500">点击右上「开始报工」创建第一批次</span>
+                <span className="ml-1 text-primary">点击右上「开始报工」创建第一批次</span>
               )}
               {!canReport && wo.status !== "生产中" && (
                 <span className="ml-1 text-fg-3">（工单需先开工才能报工）</span>
@@ -310,7 +310,7 @@ export function WorkOrderDetailView({ params }: { params: Promise<{ id: string }
                     "rounded border px-3 py-2 text-sm " +
                     (r.is_closed
                       ? "border-line bg-bg-1/40"
-                      : "border-amber-500/30 bg-amber-500/5")
+                      : "border-warning/30 bg-warning/5")
                   }
                 >
                   <div className="flex items-center justify-between">
@@ -331,7 +331,7 @@ export function WorkOrderDetailView({ params }: { params: Promise<{ id: string }
                         投入 {r.input_quantity} / 合格 {r.pass_quantity} / 不良 {r.fail_quantity}
                       </span>
                       {r.is_closed ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-sm border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 text-xs">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-sm border border-success/30 bg-success/10 text-success text-xs">
                           {r.close_type === "auto" ? "自动关闭" : "手工关闭"}
                         </span>
                       ) : (
@@ -339,7 +339,7 @@ export function WorkOrderDetailView({ params }: { params: Promise<{ id: string }
                           size="sm"
                           variant="outline"
                           onClick={() => router.push(`/reports/${r.id}`)}
-                          className="h-6 text-xs border-amber-500/40 text-amber-500 hover:bg-amber-500/10"
+                          className="h-6 text-xs border-warning/40 text-warning hover:bg-warning/10"
                         >
                           录入工序 / 结束
                         </Button>

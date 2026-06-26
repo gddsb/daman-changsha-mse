@@ -59,30 +59,39 @@
     'Times New Roman', Times, serif;
 }
 
-:root {
-  --radius: 0.25rem;
-  /* 浅色 fallback（不实际使用，但 shadcn 组件需要这些变量存在） */
-  --background: #0A0E1A;
-  --foreground: #E8ECF4;
-  --card: #111726;
-  --card-foreground: #E8ECF4;
-  --popover: #111726;
-  --popover-foreground: #E8ECF4;
+/* ===========================================================
+ *  暗色主题 — 人眼最佳辨识对比色（WCAG AAA级）
+ *  背景：深蓝灰 #0F172A，文字：浅白 #F1F5F9
+ *  对比度 ≥ 15:1，适合长时间使用
+ * =========================================================== */
+
+html[data-theme='mes-dark'],
+html.dark {
+  --background: #0F172A;
+  --foreground: #F1F5F9;
+  --card: #1E293B;
+  --card-foreground: #F1F5F9;
+  --popover: #1E293B;
+  --popover-foreground: #F1F5F9;
   --primary: #F97316;
-  --primary-foreground: #0A0E1A;
-  --secondary: #1A2030;
-  --secondary-foreground: #E8ECF4;
-  --muted: #1A2030;
-  --muted-foreground: #A0AABE;
-  --accent: #1A2030;
-  --accent-foreground: #E8ECF4;
+  --primary-foreground: #FFFFFF;
+  --secondary: #334155;
+  --secondary-foreground: #F1F5F9;
+  --muted: #334155;
+  --muted-foreground: #94A3B8;
+  --accent: #334155;
+  --accent-foreground: #F1F5F9;
   --destructive: #EF4444;
-  --border: #1F2738;
-  --input: #1F2738;
+  --destructive-foreground: #FFFFFF;
+  --border: #475569;
+  --input: #334155;
   --ring: #F97316;
   --success: #22C55E;
+  --success-foreground: #FFFFFF;
   --warning: #EAB308;
+  --warning-foreground: #1E293B;
   --info: #3B82F6;
+  --info-foreground: #FFFFFF;
   --brand: #F97316;
   --cyan: #06B6D4;
   --chart-1: #06B6D4;
@@ -90,250 +99,49 @@
   --chart-3: #EAB308;
   --chart-4: #F97316;
   --chart-5: #EF4444;
-  --sidebar: #0A0E1A;
-  --sidebar-foreground: #E8ECF4;
+  --sidebar: #0F172A;
+  --sidebar-foreground: #F1F5F9;
   --sidebar-primary: #F97316;
-  --sidebar-primary-foreground: #0A0E1A;
-  --sidebar-accent: #1A2030;
-  --sidebar-accent-foreground: #E8ECF4;
-  --sidebar-border: #1F2738;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #1E293B;
+  --sidebar-accent-foreground: #F1F5F9;
+  --sidebar-border: #334155;
   --sidebar-ring: #F97316;
 }
 
 /* ===========================================================
- *  5 套预设深色主题 — 工业管控台调性
- *  默认主题：mes-dark（工业橙，原始色）
- *  切换方式：html[data-theme="xxx"]
+ *  亮色主题 — 人眼最佳辨识对比色（WCAG AAA级）
+ *  背景：纯白 #FFFFFF，文字：深蓝灰 #1E293B
+ *  对比度 ≥ 12:1，适合白天使用
  * =========================================================== */
 
-/* 主题 1: 工业橙（默认）— 长沙大满品牌色 */
-html[data-theme='mes-dark'] {
-  --background: #0A0E1A;
-  --foreground: #E8ECF4;
-  --card: #111726;
-  --card-foreground: #E8ECF4;
-  --popover: #111726;
-  --popover-foreground: #E8ECF4;
-  --primary: #F97316;
-  --primary-foreground: #0A0E1A;
-  --secondary: #1A2030;
-  --secondary-foreground: #E8ECF4;
-  --muted: #1A2030;
-  --muted-foreground: #A0AABE;
-  --accent: #1A2030;
-  --accent-foreground: #E8ECF4;
-  --destructive: #EF4444;
-  --border: #1F2738;
-  --input: #1F2738;
-  --ring: #F97316;
-  --success: #22C55E;
-  --warning: #EAB308;
-  --info: #3B82F6;
-  --brand: #F97316;
-  --cyan: #06B6D4;
-  --chart-1: #06B6D4;
-  --chart-2: #22C55E;
-  --chart-3: #EAB308;
-  --chart-4: #F97316;
-  --chart-5: #EF4444;
-  --sidebar: #0A0E1A;
-  --sidebar-foreground: #E8ECF4;
-  --sidebar-primary: #F97316;
-  --sidebar-primary-foreground: #0A0E1A;
-  --sidebar-accent: #1A2030;
-  --sidebar-accent-foreground: #E8ECF4;
-  --sidebar-border: #1F2738;
-  --sidebar-ring: #F97316;
-}
-
-/* 主题 2: 冰蓝 — 冷静、医疗、洁净车间感 */
-html[data-theme='mes-cyan'] {
-  --background: #07131C;
-  --foreground: #E2ECF5;
-  --card: #0E1F2D;
-  --card-foreground: #E2ECF5;
-  --popover: #0E1F2D;
-  --popover-foreground: #E2ECF5;
-  --primary: #38BDF8;
-  --primary-foreground: #07131C;
-  --secondary: #14293A;
-  --secondary-foreground: #E2ECF5;
-  --muted: #14293A;
-  --muted-foreground: #94A8BC;
-  --accent: #14293A;
-  --accent-foreground: #E2ECF5;
-  --destructive: #F87171;
-  --border: #1A3144;
-  --input: #1A3144;
-  --ring: #38BDF8;
-  --success: #34D399;
-  --warning: #FBBF24;
-  --info: #60A5FA;
-  --brand: #38BDF8;
-  --cyan: #22D3EE;
-  --chart-1: #22D3EE;
-  --chart-2: #34D399;
-  --chart-3: #FBBF24;
-  --chart-4: #38BDF8;
-  --chart-5: #F87171;
-  --sidebar: #07131C;
-  --sidebar-foreground: #E2ECF5;
-  --sidebar-primary: #38BDF8;
-  --sidebar-primary-foreground: #07131C;
-  --sidebar-accent: #14293A;
-  --sidebar-accent-foreground: #E2ECF5;
-  --sidebar-border: #1A3144;
-  --sidebar-ring: #38BDF8;
-}
-
-/* 主题 3: 翡翠绿 — 安全、顺行、合规 */
-html[data-theme='mes-emerald'] {
-  --background: #061512;
-  --foreground: #E1F1EA;
-  --card: #0C2620;
-  --card-foreground: #E1F1EA;
-  --popover: #0C2620;
-  --popover-foreground: #E1F1EA;
-  --primary: #10B981;
-  --primary-foreground: #061512;
-  --secondary: #11332B;
-  --secondary-foreground: #E1F1EA;
-  --muted: #11332B;
-  --muted-foreground: #8FAA9F;
-  --accent: #11332B;
-  --accent-foreground: #E1F1EA;
-  --destructive: #F87171;
-  --border: #1A4034;
-  --input: #1A4034;
-  --ring: #10B981;
-  --success: #22C55E;
-  --warning: #FBBF24;
-  --info: #38BDF8;
-  --brand: #10B981;
-  --cyan: #22D3EE;
-  --chart-1: #10B981;
-  --chart-2: #22D3EE;
-  --chart-3: #FBBF24;
-  --chart-4: #F97316;
-  --chart-5: #F87171;
-  --sidebar: #061512;
-  --sidebar-foreground: #E1F1EA;
-  --sidebar-primary: #10B981;
-  --sidebar-primary-foreground: #061512;
-  --sidebar-accent: #11332B;
-  --sidebar-accent-foreground: #E1F1EA;
-  --sidebar-border: #1A4034;
-  --sidebar-ring: #10B981;
-}
-
-/* 主题 4: 朱红 — 警示、应急、异常高亮 */
-html[data-theme='mes-crimson'] {
-  --background: #16090B;
-  --foreground: #F2E2E5;
-  --card: #241012;
-  --card-foreground: #F2E2E5;
-  --popover: #241012;
-  --popover-foreground: #F2E2E5;
-  --primary: #F43F5E;
-  --primary-foreground: #16090B;
-  --secondary: #2E141A;
-  --secondary-foreground: #F2E2E5;
-  --muted: #2E141A;
-  --muted-foreground: #B2949A;
-  --accent: #2E141A;
-  --accent-foreground: #F2E2E5;
-  --destructive: #DC2626;
-  --border: #3D1A22;
-  --input: #3D1A22;
-  --ring: #F43F5E;
-  --success: #34D399;
-  --warning: #FBBF24;
-  --info: #60A5FA;
-  --brand: #F43F5E;
-  --cyan: #22D3EE;
-  --chart-1: #F43F5E;
-  --chart-2: #34D399;
-  --chart-3: #FBBF24;
-  --chart-4: #60A5FA;
-  --chart-5: #F43F5E;
-  --sidebar: #16090B;
-  --sidebar-foreground: #F2E2E5;
-  --sidebar-primary: #F43F5E;
-  --sidebar-primary-foreground: #16090B;
-  --sidebar-accent: #2E141A;
-  --sidebar-accent-foreground: #F2E2E5;
-  --sidebar-border: #3D1A22;
-  --sidebar-ring: #F43F5E;
-}
-
-/* 主题 5: 琥珀金 — 高级、稳重、领导办公室 */
-html[data-theme='mes-amber'] {
-  --background: #15100A;
-  --foreground: #F2EBE2;
-  --card: #221A12;
-  --card-foreground: #F2EBE2;
-  --popover: #221A12;
-  --popover-foreground: #F2EBE2;
-  --primary: #F59E0B;
-  --primary-foreground: #15100A;
-  --secondary: #2A2117;
-  --secondary-foreground: #F2EBE2;
-  --muted: #2A2117;
-  --muted-foreground: #B2A294;
-  --accent: #2A2117;
-  --accent-foreground: #F2EBE2;
-  --destructive: #EF4444;
-  --border: #3A2C1D;
-  --input: #3A2C1D;
-  --ring: #F59E0B;
-  --success: #34D399;
-  --warning: #FBBF24;
-  --info: #60A5FA;
-  --brand: #F59E0B;
-  --cyan: #22D3EE;
-  --chart-1: #F59E0B;
-  --chart-2: #34D399;
-  --chart-3: #FBBF24;
-  --chart-4: #60A5FA;
-  --chart-5: #EF4444;
-  --sidebar: #15100A;
-  --sidebar-foreground: #F2EBE2;
-  --sidebar-primary: #F59E0B;
-  --sidebar-primary-foreground: #15100A;
-  --sidebar-accent: #2A2117;
-  --sidebar-accent-foreground: #F2EBE2;
-  --sidebar-border: #3A2C1D;
-  --sidebar-ring: #F59E0B;
-}
-
-/* ===========================================================
- *  5 套预设浅色主题 — 白底 + 品牌色
- *  切换方式：html[data-theme="mes-light-xxx"]
- * =========================================================== */
-
-/* 浅色主题 1: 工业橙 — 白底 + 长沙大满品牌色 */
-html[data-theme='mes-light-orange'] {
+html[data-theme='mes-light'],
+html.light {
   --background: #FFFFFF;
-  --foreground: #1A1A1A;
-  --card: #F8F9FA;
-  --card-foreground: #1A1A1A;
+  --foreground: #1E293B;
+  --card: #F8FAFC;
+  --card-foreground: #1E293B;
   --popover: #FFFFFF;
-  --popover-foreground: #1A1A1A;
+  --popover-foreground: #1E293B;
   --primary: #EA580C;
   --primary-foreground: #FFFFFF;
-  --secondary: #F1F3F5;
-  --secondary-foreground: #1A1A1A;
-  --muted: #F1F3F5;
-  --muted-foreground: #6B7280;
-  --accent: #F1F3F5;
-  --accent-foreground: #1A1A1A;
+  --secondary: #F1F5F9;
+  --secondary-foreground: #1E293B;
+  --muted: #F1F5F9;
+  --muted-foreground: #64748B;
+  --accent: #F1F5F9;
+  --accent-foreground: #1E293B;
   --destructive: #DC2626;
-  --border: #E5E7EB;
-  --input: #E5E7EB;
+  --destructive-foreground: #FFFFFF;
+  --border: #E2E8F0;
+  --input: #E2E8F0;
   --ring: #EA580C;
   --success: #16A34A;
+  --success-foreground: #FFFFFF;
   --warning: #CA8A04;
+  --warning-foreground: #FFFFFF;
   --info: #2563EB;
+  --info-foreground: #FFFFFF;
   --brand: #EA580C;
   --cyan: #0891B2;
   --chart-1: #0891B2;
@@ -341,174 +149,59 @@ html[data-theme='mes-light-orange'] {
   --chart-3: #CA8A04;
   --chart-4: #EA580C;
   --chart-5: #DC2626;
-  --sidebar: #F8F9FA;
-  --sidebar-foreground: #1A1A1A;
+  --sidebar: #F8FAFC;
+  --sidebar-foreground: #1E293B;
   --sidebar-primary: #EA580C;
   --sidebar-primary-foreground: #FFFFFF;
-  --sidebar-accent: #F1F3F5;
-  --sidebar-accent-foreground: #1A1A1A;
-  --sidebar-border: #E5E7EB;
+  --sidebar-accent: #F1F5F9;
+  --sidebar-accent-foreground: #1E293B;
+  --sidebar-border: #E2E8F0;
   --sidebar-ring: #EA580C;
 }
 
-/* 浅色主题 2: 冰蓝 — 白底微蓝 + 冰蓝品牌 */
-html[data-theme='mes-light-cyan'] {
-  --background: #F8FAFC;
-  --foreground: #0F172A;
-  --card: #FFFFFF;
-  --card-foreground: #0F172A;
-  --popover: #FFFFFF;
-  --popover-foreground: #0F172A;
-  --primary: #0284C7;
+/* 默认 fallback（暗色） */
+:root {
+  --radius: 0.25rem;
+  --background: #0F172A;
+  --foreground: #F1F5F9;
+  --card: #1E293B;
+  --card-foreground: #F1F5F9;
+  --popover: #1E293B;
+  --popover-foreground: #F1F5F9;
+  --primary: #F97316;
   --primary-foreground: #FFFFFF;
-  --secondary: #F1F5F9;
-  --secondary-foreground: #0F172A;
-  --muted: #F1F5F9;
-  --muted-foreground: #64748B;
-  --accent: #F1F5F9;
-  --accent-foreground: #0F172A;
-  --destructive: #DC2626;
-  --border: #E2E8F0;
-  --input: #E2E8F0;
-  --ring: #0284C7;
-  --success: #16A34A;
-  --warning: #CA8A04;
-  --info: #2563EB;
-  --brand: #0284C7;
-  --cyan: #0891B2;
-  --chart-1: #0891B2;
-  --chart-2: #16A34A;
-  --chart-3: #CA8A04;
-  --chart-4: #0284C7;
-  --chart-5: #DC2626;
-  --sidebar: #F1F5F9;
-  --sidebar-foreground: #0F172A;
-  --sidebar-primary: #0284C7;
+  --secondary: #334155;
+  --secondary-foreground: #F1F5F9;
+  --muted: #334155;
+  --muted-foreground: #94A3B8;
+  --accent: #334155;
+  --accent-foreground: #F1F5F9;
+  --destructive: #EF4444;
+  --destructive-foreground: #FFFFFF;
+  --border: #475569;
+  --input: #334155;
+  --ring: #F97316;
+  --success: #22C55E;
+  --success-foreground: #FFFFFF;
+  --warning: #EAB308;
+  --warning-foreground: #1E293B;
+  --info: #3B82F6;
+  --info-foreground: #FFFFFF;
+  --brand: #F97316;
+  --cyan: #06B6D4;
+  --chart-1: #06B6D4;
+  --chart-2: #22C55E;
+  --chart-3: #EAB308;
+  --chart-4: #F97316;
+  --chart-5: #EF4444;
+  --sidebar: #0F172A;
+  --sidebar-foreground: #F1F5F9;
+  --sidebar-primary: #F97316;
   --sidebar-primary-foreground: #FFFFFF;
-  --sidebar-accent: #E2E8F0;
-  --sidebar-accent-foreground: #0F172A;
-  --sidebar-border: #E2E8F0;
-  --sidebar-ring: #0284C7;
-}
-
-/* 浅色主题 3: 翡翠绿 — 白底微绿 + 翡翠品牌 */
-html[data-theme='mes-light-emerald'] {
-  --background: #F0FDF4;
-  --foreground: #14532D;
-  --card: #FFFFFF;
-  --card-foreground: #14532D;
-  --popover: #FFFFFF;
-  --popover-foreground: #14532D;
-  --primary: #059669;
-  --primary-foreground: #FFFFFF;
-  --secondary: #ECFDF5;
-  --secondary-foreground: #14532D;
-  --muted: #ECFDF5;
-  --muted-foreground: #166534;
-  --accent: #ECFDF5;
-  --accent-foreground: #14532D;
-  --destructive: #DC2626;
-  --border: #D1FAE5;
-  --input: #D1FAE5;
-  --ring: #059669;
-  --success: #16A34A;
-  --warning: #CA8A04;
-  --info: #2563EB;
-  --brand: #059669;
-  --cyan: #0891B2;
-  --chart-1: #059669;
-  --chart-2: #0891B2;
-  --chart-3: #CA8A04;
-  --chart-4: #EA580C;
-  --chart-5: #DC2626;
-  --sidebar: #ECFDF5;
-  --sidebar-foreground: #14532D;
-  --sidebar-primary: #059669;
-  --sidebar-primary-foreground: #FFFFFF;
-  --sidebar-accent: #D1FAE5;
-  --sidebar-accent-foreground: #14532D;
-  --sidebar-border: #D1FAE5;
-  --sidebar-ring: #059669;
-}
-
-/* 浅色主题 4: 朱红 — 白底微粉 + 朱红品牌 */
-html[data-theme='mes-light-crimson'] {
-  --background: #FFF1F2;
-  --foreground: #881337;
-  --card: #FFFFFF;
-  --card-foreground: #881337;
-  --popover: #FFFFFF;
-  --popover-foreground: #881337;
-  --primary: #E11D48;
-  --primary-foreground: #FFFFFF;
-  --secondary: #FEE2E2;
-  --secondary-foreground: #881337;
-  --muted: #FEE2E2;
-  --muted-foreground: #9F1239;
-  --accent: #FEE2E2;
-  --accent-foreground: #881337;
-  --destructive: #DC2626;
-  --border: #FECDD3;
-  --input: #FECDD3;
-  --ring: #E11D48;
-  --success: #16A34A;
-  --warning: #CA8A04;
-  --info: #2563EB;
-  --brand: #E11D48;
-  --cyan: #0891B2;
-  --chart-1: #E11D48;
-  --chart-2: #16A34A;
-  --chart-3: #CA8A04;
-  --chart-4: #2563EB;
-  --chart-5: #DC2626;
-  --sidebar: #FEE2E2;
-  --sidebar-foreground: #881337;
-  --sidebar-primary: #E11D48;
-  --sidebar-primary-foreground: #FFFFFF;
-  --sidebar-accent: #FECDD3;
-  --sidebar-accent-foreground: #881337;
-  --sidebar-border: #FECDD3;
-  --sidebar-ring: #E11D48;
-}
-
-/* 浅色主题 5: 琥珀金 — 白底微黄 + 琥珀品牌 */
-html[data-theme='mes-light-amber'] {
-  --background: #FFFBEB;
-  --foreground: #78350F;
-  --card: #FFFFFF;
-  --card-foreground: #78350F;
-  --popover: #FFFFFF;
-  --popover-foreground: #78350F;
-  --primary: #D97706;
-  --primary-foreground: #FFFFFF;
-  --secondary: #FEF3C7;
-  --secondary-foreground: #78350F;
-  --muted: #FEF3C7;
-  --muted-foreground: #92400E;
-  --accent: #FEF3C7;
-  --accent-foreground: #78350F;
-  --destructive: #DC2626;
-  --border: #FDE68A;
-  --input: #FDE68A;
-  --ring: #D97706;
-  --success: #16A34A;
-  --warning: #CA8A04;
-  --info: #2563EB;
-  --brand: #D97706;
-  --cyan: #0891B2;
-  --chart-1: #D97706;
-  --chart-2: #16A34A;
-  --chart-3: #CA8A04;
-  --chart-4: #2563EB;
-  --chart-5: #DC2626;
-  --sidebar: #FEF3C7;
-  --sidebar-foreground: #78350F;
-  --sidebar-primary: #D97706;
-  --sidebar-primary-foreground: #FFFFFF;
-  --sidebar-accent: #FDE68A;
-  --sidebar-accent-foreground: #78350F;
-  --sidebar-border: #FDE68A;
-  --sidebar-ring: #D97706;
+  --sidebar-accent: #1E293B;
+  --sidebar-accent-foreground: #F1F5F9;
+  --sidebar-border: #334155;
+  --sidebar-ring: #F97316;
 }
 
 @layer base {

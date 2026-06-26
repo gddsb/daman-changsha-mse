@@ -581,7 +581,7 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
 
   if (loading && !detail) {
     return (
-      <div className="flex h-[60vh] items-center justify-center text-slate-400">
+      <div className="flex h-[60vh] items-center justify-center text-muted-foreground">
         <Loader2 className="mr-2 h-5 w-5 animate-spin" />
         正在加载报工批次...
       </div>
@@ -591,7 +591,7 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
   if (!detail) {
     return (
       <div className="p-6">
-        <div className="text-rose-400">批次不存在或加载失败：{pageError}</div>
+        <div className="text-danger">批次不存在或加载失败：{pageError}</div>
         <Button variant="outline" className="mt-4" onClick={() => router.push("/reports")}>
           <ArrowLeft className="mr-2 h-4 w-4" /> 返回报工列表
         </Button>
@@ -604,30 +604,30 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
   return (
     <div className="flex flex-col gap-4 p-4">
       {/* 顶部抬头 */}
-      <Card className="border-slate-800 bg-slate-900">
+      <Card className="border-border bg-card">
         <CardHeader className="flex flex-row items-center justify-between gap-3 pb-3">
           <div className="flex flex-col gap-1">
-            <div className="flex items-center gap-2 text-xs text-slate-400">
-              <Button variant="ghost" size="sm" className="h-7 px-2 text-slate-300" onClick={() => router.push("/reports")}>
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Button variant="ghost" size="sm" className="h-7 px-2 text-muted-foreground" onClick={() => router.push("/reports")}>
                 <ArrowLeft className="mr-1 h-3.5 w-3.5" /> 返回列表
               </Button>
               <span>/</span>
               <span>报工批次 {detail.report_no}</span>
             </div>
-            <CardTitle className="flex items-center gap-3 text-slate-100">
+            <CardTitle className="flex items-center gap-3 text-foreground">
               <span className="font-mono text-lg">{detail.batch_no}</span>
-              <span className="text-sm text-slate-400">完工顺序 #{detail.completion_seq}</span>
+              <span className="text-sm text-muted-foreground">完工顺序 #{detail.completion_seq}</span>
               {detail.is_closed ? (
-                <span className="inline-flex items-center gap-1 rounded border border-slate-700 bg-slate-800 px-2 py-0.5 text-xs text-slate-300">
+                <span className="inline-flex items-center gap-1 rounded border border-border bg-muted px-2 py-0.5 text-xs text-muted-foreground">
                   <CheckCircle2 className="h-3.5 w-3.5" /> 已关闭
                 </span>
               ) : (
-                <span className="inline-flex items-center gap-1 rounded border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-xs text-emerald-300">
-                  <Circle className="h-3.5 w-3.5 fill-emerald-400" /> 进行中
+                <span className="inline-flex items-center gap-1 rounded border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-xs text-success">
+                  <Circle className="h-3.5 w-3.5 fill-success" /> 进行中
                 </span>
               )}
             </CardTitle>
-            <CardDescription className="text-slate-400">
+            <CardDescription className="text-muted-foreground">
               工单 {detail.work_order_no} · {workOrder?.product_name ?? "-"} · {workOrder?.specification ?? "-"}
             </CardDescription>
           </div>
@@ -637,7 +637,7 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
             </Button>
             <Button
               size="sm"
-              className="bg-rose-500 text-white hover:bg-rose-600"
+              className="bg-danger text-white hover:bg-danger"
               disabled={isClosed || saving}
               onClick={closeReport}
             >
@@ -645,7 +645,7 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
             </Button>
           </div>
         </CardHeader>
-        <CardContent className="grid grid-cols-2 gap-3 border-t border-slate-800 pt-3 text-sm md:grid-cols-4 lg:grid-cols-6">
+        <CardContent className="grid grid-cols-2 gap-3 border-t border-border pt-3 text-sm md:grid-cols-4 lg:grid-cols-6">
           <Field label="开工时间">{formatDateTime(detail.start_time)}</Field>
           <Field label="完工时间">{detail.end_time ? formatDateTime(detail.end_time) : "—"}</Field>
           <Field label="关闭类型">{detail.close_type ? (detail.close_type === "auto" ? "自动" : "手工") : "—"}</Field>
@@ -656,61 +656,61 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
           <Field label="累计投入">{formatNumber(aggregate.input)}</Field>
           <Field label="累计合格">{formatNumber(aggregate.pass)}</Field>
           <Field label="累计不良">
-            <span className="text-amber-400">{formatNumber(aggregate.fail)}</span>
-            <span className="ml-1 text-[10px] text-slate-500">（自动汇总）</span>
+            <span className="text-warning">{formatNumber(aggregate.fail)}</span>
+            <span className="ml-1 text-[10px] text-muted-foreground">（自动汇总）</span>
           </Field>
           <Field label="一致性（投=合+不良）">
             {consistencyOk === null ? (
-              <span className="text-slate-500">未录入</span>
+              <span className="text-muted-foreground">未录入</span>
             ) : consistencyOk ? (
-              <span className="text-emerald-400">通过</span>
+              <span className="text-success">通过</span>
             ) : (
-              <span className="text-rose-400">不合格</span>
+              <span className="text-danger">不合格</span>
             )}
           </Field>
         </CardContent>
       </Card>
 
       {pageError ? (
-        <div className="flex items-center gap-2 rounded border border-rose-800 bg-rose-950 px-3 py-2 text-sm text-rose-300">
+        <div className="flex items-center gap-2 rounded border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
           <AlertTriangle className="h-4 w-4" /> {pageError}
         </div>
       ) : null}
       {pageHint ? (
-        <div className="flex items-center gap-2 rounded border border-emerald-800 bg-emerald-950 px-3 py-2 text-sm text-emerald-300">
+        <div className="flex items-center gap-2 rounded border border-success/30 bg-success/10 px-3 py-2 text-sm text-success">
           <CheckCircle2 className="h-4 w-4" /> {pageHint}
         </div>
       ) : null}
 
       <Tabs defaultValue="operations" className="w-full">
-        <TabsList className="border-b border-slate-800 bg-slate-900">
-          <TabsTrigger value="operations" className="data-[state=active]:bg-slate-800">
+        <TabsList className="border-b border-border bg-card">
+          <TabsTrigger value="operations" className="data-[state=active]:bg-muted">
             <ClipboardList className="mr-1.5 h-4 w-4" /> 工序报工
           </TabsTrigger>
-          <TabsTrigger value="defects" className="data-[state=active]:bg-slate-800">
+          <TabsTrigger value="defects" className="data-[state=active]:bg-muted">
             <XCircle className="mr-1.5 h-4 w-4" /> 工序不良 ({detail.defects?.length ?? 0})
           </TabsTrigger>
-          <TabsTrigger value="downtimes" className="data-[state=active]:bg-slate-800">
+          <TabsTrigger value="downtimes" className="data-[state=active]:bg-muted">
             <Wrench className="mr-1.5 h-4 w-4" /> 异常工时 ({detail.downtimes?.length ?? 0})
           </TabsTrigger>
-          <TabsTrigger value="process" className="data-[state=active]:bg-slate-800">
+          <TabsTrigger value="process" className="data-[state=active]:bg-muted">
             <ImageIcon className="mr-1.5 h-4 w-4" /> 制程信息 ({detail.process_infos?.length ?? 0})
           </TabsTrigger>
         </TabsList>
 
         {/* 工序报工明细（纯汇总展示） */}
         <TabsContent value="operations" className="mt-3">
-          <Card className="border-slate-800 bg-slate-900">
+          <Card className="border-border bg-card">
             <CardHeader>
-              <CardTitle className="text-slate-100">工序报工明细</CardTitle>
-              <CardDescription className="text-slate-400">
+              <CardTitle className="text-foreground">工序报工明细</CardTitle>
+              <CardDescription className="text-muted-foreground">
                 投入数自动计算：首道=制程信息汇总，后续=上一道合格；不良按4类汇总自「工序不良」Tab
               </CardDescription>
             </CardHeader>
             <CardContent className="overflow-x-auto">
               <table className="w-full min-w-[1000px] border-collapse text-sm">
                 <thead>
-                  <tr className="border-b border-slate-700 bg-slate-800 text-xs uppercase text-slate-300">
+                  <tr className="border-b border-border bg-muted text-xs uppercase text-muted-foreground">
                     <th className="px-2 py-2 text-left">工序</th>
                     <th className="px-2 py-2 text-right">投入</th>
                     <th className="px-2 py-2 text-right">合格</th>
@@ -728,39 +728,39 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
                   {sortedSeq.map((seq) => {
                     const s = opSummary[seq];
                     return (
-                      <tr key={seq} className="border-b border-slate-800 text-slate-200">
+                      <tr key={seq} className="border-b border-border text-foreground">
                         <td className="px-2 py-2 align-top">
-                          <div className="font-mono text-xs text-slate-400">#{seq}</div>
-                          <div className="text-slate-100">{s.operation_name}</div>
+                          <div className="font-mono text-xs text-muted-foreground">#{seq}</div>
+                          <div className="text-foreground">{s.operation_name}</div>
                         </td>
-                        <td className="px-2 py-2 align-top text-right font-mono text-slate-100">
+                        <td className="px-2 py-2 align-top text-right font-mono text-foreground">
                           {formatNumber(s.input_quantity)}
                         </td>
-                        <td className="px-2 py-2 align-top text-right font-mono text-slate-100">
+                        <td className="px-2 py-2 align-top text-right font-mono text-foreground">
                           {formatNumber(s.pass_quantity)}
                         </td>
-                        <td className="px-2 py-2 align-top text-right font-mono text-amber-400">
+                        <td className="px-2 py-2 align-top text-right font-mono text-warning">
                           {formatNumber(s.fail_quantity)}
                         </td>
-                        <td className="px-2 py-2 align-top text-right font-mono text-slate-300">
+                        <td className="px-2 py-2 align-top text-right font-mono text-muted-foreground">
                           {formatNumber(s.incoming_piece)}
                         </td>
-                        <td className="px-2 py-2 align-top text-right font-mono text-slate-300">
+                        <td className="px-2 py-2 align-top text-right font-mono text-muted-foreground">
                           {formatNumber(s.incoming_cover)}
                         </td>
-                        <td className="px-2 py-2 align-top text-right font-mono text-slate-300">
+                        <td className="px-2 py-2 align-top text-right font-mono text-muted-foreground">
                           {formatNumber(s.process_piece)}
                         </td>
-                        <td className="px-2 py-2 align-top text-right font-mono text-slate-300">
+                        <td className="px-2 py-2 align-top text-right font-mono text-muted-foreground">
                           {formatNumber(s.process_cover)}
                         </td>
-                        <td className="px-2 py-2 align-top text-right font-mono text-amber-400">
+                        <td className="px-2 py-2 align-top text-right font-mono text-warning">
                           {s.fail_ratio !== null ? formatPercent(s.fail_ratio) : '-'}
                         </td>
-                        <td className="px-2 py-2 align-top text-right font-mono text-slate-300">
+                        <td className="px-2 py-2 align-top text-right font-mono text-muted-foreground">
                           {s.incoming_ratio !== null ? formatPercent(s.incoming_ratio) : '-'}
                         </td>
-                        <td className="px-2 py-2 align-top text-right font-mono text-slate-300">
+                        <td className="px-2 py-2 align-top text-right font-mono text-muted-foreground">
                           {s.process_ratio !== null ? formatPercent(s.process_ratio) : '-'}
                         </td>
                       </tr>
@@ -774,22 +774,22 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
 
         {/* 工序不良 — 按工序选择录入 */}
         <TabsContent value="defects" className="mt-3">
-          <Card className="border-slate-800 bg-slate-900">
+          <Card className="border-border bg-card">
             <CardHeader>
-              <CardTitle className="text-slate-100">工序不良登记</CardTitle>
-              <CardDescription className="text-slate-400">
+              <CardTitle className="text-foreground">工序不良登记</CardTitle>
+              <CardDescription className="text-muted-foreground">
                 选择工序 → 录入该工序的多条不良；该工序的「不良（自动汇总）」= SUM(defect_quantity)
               </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
               {/* 工序选择 */}
               <div className="flex flex-col gap-1.5 md:flex-row md:items-center md:gap-3">
-                <label className="text-xs uppercase tracking-wider text-slate-500 md:w-20">选择工序</label>
+                <label className="text-xs uppercase tracking-wider text-muted-foreground md:w-20">选择工序</label>
                 <div className="relative md:w-80">
                   <select
                     value={defectOpSeq === "" ? "" : defectOpSeq}
                     onChange={(e) => setDefectOpSeq(e.target.value ? Number(e.target.value) : "")}
-                    className="h-9 w-full appearance-none rounded border border-slate-700 bg-slate-950 px-2 pr-8 text-sm text-slate-100"
+                    className="h-9 w-full appearance-none rounded border border-border bg-background px-2 pr-8 text-sm text-foreground"
                   >
                     <option value="">-- 请选择工序 --</option>
                     {reportedOps.map((o) => (
@@ -798,21 +798,21 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
                       </option>
                     ))}
                   </select>
-                  <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                  <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 </div>
                 {defectOpSeq !== "" ? (
-                  <div className="flex items-center gap-2 text-xs text-slate-400">
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
                     <span>已选：</span>
-                    <span className="font-mono text-amber-400">
+                    <span className="font-mono text-warning">
                       #{defectOpSeq} {currentWoOp?.operation_name ?? ""}
                     </span>
                     <span>· 已登记不良：</span>
-                    <span className="font-mono text-amber-300">
+                    <span className="font-mono text-warning">
                       {formatNumber(currentDefects.reduce((s, d) => s + (d.defect_quantity ?? 0), 0))}
                     </span>
                   </div>
                 ) : (
-                  <div className="text-xs text-slate-500">
+                  <div className="text-xs text-muted-foreground">
                     {reportedOps.length === 0 ? "该工单暂无工序信息" : "请选择一道工序"}
                   </div>
                 )}
@@ -825,7 +825,7 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
                   value={newDefect.defect_category}
                   disabled={defectOpSeq === ""}
                   onChange={(e) => setNewDefect({ ...newDefect, defect_category: e.target.value as NewDefect["defect_category"] })}
-                  className="h-9 rounded border border-slate-700 bg-slate-950 px-2 text-sm text-slate-100 disabled:opacity-50"
+                  className="h-9 rounded border border-border bg-background px-2 text-sm text-foreground disabled:opacity-50"
                 >
                   <option value="制程不良">制程不良</option>
                   <option value="来料不良">来料不良</option>
@@ -836,7 +836,7 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
                   value={newDefect.defect_name}
                   disabled={defectOpSeq === ""}
                   onChange={(e) => setNewDefect({ ...newDefect, defect_name: e.target.value })}
-                  className="border-slate-700 bg-slate-950 text-slate-100 placeholder:text-slate-600 disabled:opacity-50"
+                  className="border-border bg-background text-foreground placeholder:text-muted-foreground disabled:opacity-50"
                 />
                 <Input
                   type="number"
@@ -845,20 +845,20 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
                   value={newDefect.defect_quantity || ""}
                   disabled={defectOpSeq === ""}
                   onChange={(e) => setNewDefect({ ...newDefect, defect_quantity: Number(e.target.value) || 0 })}
-                  className="border-slate-700 bg-slate-950 text-right text-slate-100 disabled:opacity-50"
+                  className="border-border bg-background text-right text-foreground disabled:opacity-50"
                 />
                 <select
                   value={newDefect.unit}
                   disabled={defectOpSeq === ""}
                   onChange={(e) => setNewDefect({ ...newDefect, unit: e.target.value as NewDefect["unit"] })}
-                  className="h-9 rounded border border-slate-700 bg-slate-950 px-2 text-sm text-slate-100 disabled:opacity-50"
+                  className="h-9 rounded border border-border bg-background px-2 text-sm text-foreground disabled:opacity-50"
                 >
                   <option value="小片">小片</option>
                   <option value="带盖">带盖</option>
                 </select>
                 <Button
                   size="sm"
-                  className="bg-orange-500 text-white hover:bg-orange-600 md:col-span-2 disabled:opacity-50"
+                  className="bg-primary text-white hover:bg-primary md:col-span-2 disabled:opacity-50"
                   onClick={addDefect}
                   disabled={saving || defectOpSeq === ""}
                 >
@@ -868,16 +868,16 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
               )}
 
               {/* 不良记录筛选 */}
-              <div className="border-t border-slate-800 pt-3">
+              <div className="border-t border-border pt-3">
                 <div className="mb-2 flex items-center justify-between">
-                  <span className="text-xs uppercase tracking-wider text-slate-500">
+                  <span className="text-xs uppercase tracking-wider text-muted-foreground">
                     不良记录 ({filteredDefects.length}/{(detail?.defects ?? []).length})
                   </span>
                   <div className="flex items-center gap-2">
                     <select
                       value={defectOpSeqFilter}
                       onChange={(e) => setDefectOpSeqFilter(e.target.value === "" ? "" : Number(e.target.value))}
-                      className="h-7 rounded border border-slate-700 bg-slate-950 px-2 text-xs text-slate-100"
+                      className="h-7 rounded border border-border bg-background px-2 text-xs text-foreground"
                     >
                       <option value="">全部工序</option>
                       {(detail?.work_order_operations ?? []).sort((a, b) => a.sequence - b.sequence).map(op => (
@@ -887,7 +887,7 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
                     <select
                       value={defectCategoryFilter}
                       onChange={(e) => setDefectCategoryFilter(e.target.value)}
-                      className="h-7 rounded border border-slate-700 bg-slate-950 px-2 text-xs text-slate-100"
+                      className="h-7 rounded border border-border bg-background px-2 text-xs text-foreground"
                     >
                       <option value="">全部分类</option>
                       <option value="制程不良">制程不良</option>
@@ -897,7 +897,7 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
                     <select
                       value={defectNameFilter}
                       onChange={(e) => setDefectNameFilter(e.target.value)}
-                      className="h-7 rounded border border-slate-700 bg-slate-950 px-2 text-xs text-slate-100"
+                      className="h-7 rounded border border-border bg-background px-2 text-xs text-foreground"
                     >
                       <option value="">全部名称</option>
                       {Array.from(new Set((detail?.defects ?? []).map(d => d.defect_name))).sort().map(name => (
@@ -914,10 +914,10 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
 
         {/* 异常工时 */}
         <TabsContent value="downtimes" className="mt-3">
-          <Card className="border-slate-800 bg-slate-900">
+          <Card className="border-border bg-card">
             <CardHeader>
-              <CardTitle className="text-slate-100">异常工时登记</CardTitle>
-              <CardDescription className="text-slate-400">设备故障/来料不良/其它原因停线记录</CardDescription>
+              <CardTitle className="text-foreground">异常工时登记</CardTitle>
+              <CardDescription className="text-muted-foreground">设备故障/来料不良/其它原因停线记录</CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
               {/* 新增异常工时表单 */}
@@ -926,7 +926,7 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
                 <select
                   value={newDowntime.anomaly_type}
                   onChange={(e) => setNewDowntime({ ...newDowntime, anomaly_type: e.target.value as NewDowntime["anomaly_type"] })}
-                  className="h-9 rounded border border-slate-700 bg-slate-950 px-2 text-sm text-slate-100"
+                  className="h-9 rounded border border-border bg-background px-2 text-sm text-foreground"
                 >
                   <option value="设备故障">设备故障</option>
                   <option value="来料不良">来料不良</option>
@@ -936,54 +936,54 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
                   placeholder="设备编号"
                   value={newDowntime.equipment_code}
                   onChange={(e) => setNewDowntime({ ...newDowntime, equipment_code: e.target.value })}
-                  className="border-slate-700 bg-slate-950 text-slate-100 placeholder:text-slate-600"
+                  className="border-border bg-background text-foreground placeholder:text-muted-foreground"
                 />
                 <Input
                   placeholder="停机类型"
                   value={newDowntime.downtime_type}
                   onChange={(e) => setNewDowntime({ ...newDowntime, downtime_type: e.target.value })}
-                  className="border-slate-700 bg-slate-950 text-slate-100 placeholder:text-slate-600"
+                  className="border-border bg-background text-foreground placeholder:text-muted-foreground"
                 />
                 <Input
                   placeholder="确认人"
                   value={newDowntime.confirmer}
                   onChange={(e) => setNewDowntime({ ...newDowntime, confirmer: e.target.value })}
-                  className="border-slate-700 bg-slate-950 text-slate-100 placeholder:text-slate-600"
+                  className="border-border bg-background text-foreground placeholder:text-muted-foreground"
                 />
                 <Input
                   type="datetime-local"
                   value={newDowntime.start_time}
                   onChange={(e) => setNewDowntime({ ...newDowntime, start_time: e.target.value })}
-                  className="border-slate-700 bg-slate-950 text-slate-100"
+                  className="border-border bg-background text-foreground"
                 />
                 <Input
                   type="datetime-local"
                   value={newDowntime.end_time}
                   onChange={(e) => setNewDowntime({ ...newDowntime, end_time: e.target.value })}
-                  className="border-slate-700 bg-slate-950 text-slate-100"
+                  className="border-border bg-background text-foreground"
                 />
                 <Input
                   placeholder="问题描述"
                   value={newDowntime.problem_description}
                   onChange={(e) => setNewDowntime({ ...newDowntime, problem_description: e.target.value })}
-                  className="md:col-span-1 border-slate-700 bg-slate-950 text-slate-100 placeholder:text-slate-600"
+                  className="md:col-span-1 border-border bg-background text-foreground placeholder:text-muted-foreground"
                 />
-                <Button size="sm" className="bg-orange-500 text-white hover:bg-orange-600" onClick={addDowntime} disabled={saving}>
+                <Button size="sm" className="bg-primary text-white hover:bg-primary" onClick={addDowntime} disabled={saving}>
                   <Save className="mr-1.5 h-4 w-4" /> 记录
                 </Button>
               </div>
               )}
               {/* 异常工时筛选 */}
-              <div className="border-t border-slate-800 pt-3">
+              <div className="border-t border-border pt-3">
                 <div className="mb-2 flex items-center justify-between">
-                  <span className="text-xs uppercase tracking-wider text-slate-500">
+                  <span className="text-xs uppercase tracking-wider text-muted-foreground">
                     异常工时记录 ({filteredDowntimes.length}/{(detail?.downtimes ?? []).length})
                   </span>
                   <div className="flex items-center gap-2">
                     <select
                       value={downtimeTypeFilter}
                       onChange={(e) => setDowntimeTypeFilter(e.target.value)}
-                      className="h-7 rounded border border-slate-700 bg-slate-950 px-2 text-xs text-slate-100"
+                      className="h-7 rounded border border-border bg-background px-2 text-xs text-foreground"
                     >
                       <option value="">全部类型</option>
                       <option value="设备故障">设备故障</option>
@@ -993,7 +993,7 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
                     <select
                       value={equipmentFilter}
                       onChange={(e) => setEquipmentFilter(e.target.value)}
-                      className="h-7 rounded border border-slate-700 bg-slate-950 px-2 text-xs text-slate-100"
+                      className="h-7 rounded border border-border bg-background px-2 text-xs text-foreground"
                     >
                       <option value="">全部设备</option>
                       {Array.from(new Set((detail?.downtimes ?? []).map(d => d.equipment_code))).sort().filter(Boolean).map(code => (
@@ -1010,10 +1010,10 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
 
         {/* 制程信息 */}
         <TabsContent value="process" className="mt-3">
-          <Card className="border-slate-800 bg-slate-900">
+          <Card className="border-border bg-card">
             <CardHeader>
-              <CardTitle className="text-slate-100">制程信息登记</CardTitle>
-              <CardDescription className="text-slate-400">物料批号/数量/图片留痕</CardDescription>
+              <CardTitle className="text-foreground">制程信息登记</CardTitle>
+              <CardDescription className="text-muted-foreground">物料批号/数量/图片留痕</CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
               {/* 新增制程信息表单 */}
@@ -1026,7 +1026,7 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
                     const op = reportedOps.find((o) => o.sequence === seq);
                     setNewPI({ ...newPI, operation_seq: seq, operation_name: op?.operation_name ?? "" });
                   }}
-                  className="h-9 rounded border border-slate-700 bg-slate-950 px-2 text-sm text-slate-100"
+                  className="h-9 rounded border border-border bg-background px-2 text-sm text-foreground"
                 >
                   {reportedOps.map((p) => (
                     <option key={p.id ?? p.sequence} value={p.sequence}>
@@ -1038,7 +1038,7 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
                   placeholder="物料批号"
                   value={newPI.material_batch_no}
                   onChange={(e) => setNewPI({ ...newPI, material_batch_no: e.target.value })}
-                  className="border-slate-700 bg-slate-950 text-slate-100 placeholder:text-slate-600"
+                  className="border-border bg-background text-foreground placeholder:text-muted-foreground"
                 />
                 <Input
                   type="number"
@@ -1046,42 +1046,42 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
                   placeholder="数量"
                   value={newPI.quantity || ""}
                   onChange={(e) => setNewPI({ ...newPI, quantity: Number(e.target.value) || 0 })}
-                  className="border-slate-700 bg-slate-950 text-right text-slate-100"
+                  className="border-border bg-background text-right text-foreground"
                 />
-                <Button size="sm" className="bg-orange-500 text-white hover:bg-orange-600" onClick={addPI} disabled={saving}>
+                <Button size="sm" className="bg-primary text-white hover:bg-primary" onClick={addPI} disabled={saving}>
                   <Save className="mr-1.5 h-4 w-4" /> 记录
                 </Button>
                 <textarea
                   placeholder="物料标签图片 URL（每行一个）"
                   value={(newPI.material_label_image ?? []).join("\n")}
                   onChange={(e) => setNewPI({ ...newPI, material_label_image: e.target.value.split("\n").filter(Boolean) })}
-                  className="md:col-span-2 h-16 rounded border border-slate-700 bg-slate-950 p-2 text-xs text-slate-100 placeholder:text-slate-600"
+                  className="md:col-span-2 h-16 rounded border border-border bg-background p-2 text-xs text-foreground placeholder:text-muted-foreground"
                 />
                 <textarea
                   placeholder="来料不良图片 URL（每行一个）"
                   value={(newPI.incoming_defect_image ?? []).join("\n")}
                   onChange={(e) => setNewPI({ ...newPI, incoming_defect_image: e.target.value.split("\n").filter(Boolean) })}
-                  className="h-16 rounded border border-slate-700 bg-slate-950 p-2 text-xs text-slate-100 placeholder:text-slate-600"
+                  className="h-16 rounded border border-border bg-background p-2 text-xs text-foreground placeholder:text-muted-foreground"
                 />
                 <textarea
                   placeholder="制程不良图片 URL（每行一个）"
                   value={(newPI.process_defect_image ?? []).join("\n")}
                   onChange={(e) => setNewPI({ ...newPI, process_defect_image: e.target.value.split("\n").filter(Boolean) })}
-                  className="h-16 rounded border border-slate-700 bg-slate-950 p-2 text-xs text-slate-100 placeholder:text-slate-600"
+                  className="h-16 rounded border border-border bg-background p-2 text-xs text-foreground placeholder:text-muted-foreground"
                 />
               </div>
               )}
               {/* 制程信息筛选 */}
-              <div className="border-t border-slate-800 pt-3">
+              <div className="border-t border-border pt-3">
                 <div className="mb-2 flex items-center justify-between">
-                  <span className="text-xs uppercase tracking-wider text-slate-500">
+                  <span className="text-xs uppercase tracking-wider text-muted-foreground">
                     制程信息记录 ({filteredProcessInfos.length}/{(detail?.process_infos ?? []).length})
                   </span>
                   <div className="flex gap-2">
                     <select
                       value={processOpSeqFilter}
                       onChange={(e) => setProcessOpSeqFilter(Number(e.target.value) || "")}
-                      className="h-7 rounded border border-slate-700 bg-slate-950 px-2 text-xs text-slate-100"
+                      className="h-7 rounded border border-border bg-background px-2 text-xs text-foreground"
                     >
                       <option value="">全部工序</option>
                       {processes.map((p) => (
@@ -1093,7 +1093,7 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
                     <select
                       value={batchNoFilter}
                       onChange={(e) => setBatchNoFilter(e.target.value)}
-                      className="h-7 rounded border border-slate-700 bg-slate-950 px-2 text-xs text-slate-100"
+                      className="h-7 rounded border border-border bg-background px-2 text-xs text-foreground"
                     >
                       <option value="">全部批号</option>
                       {Array.from(new Set((detail?.process_infos ?? []).map(pi => pi.material_batch_no).filter(Boolean))).map(bn => (
@@ -1115,20 +1115,20 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-0.5">
-      <div className="text-[10px] uppercase tracking-wider text-slate-500">{label}</div>
-      <div className="text-slate-100">{children}</div>
+      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</div>
+      <div className="text-foreground">{children}</div>
     </div>
   );
 }
 
 function DefectsTable({ defects, onRemove, isClosed }: { defects: OperationDefect[]; onRemove: (id: string) => void; isClosed: boolean }) {
   if (defects.length === 0) {
-    return <div className="rounded border border-dashed border-slate-700 p-4 text-center text-sm text-slate-500">该工序暂无不良记录</div>;
+    return <div className="rounded border border-dashed border-border p-4 text-center text-sm text-muted-foreground">该工序暂无不良记录</div>;
   }
   return (
     <table className="w-full border-collapse text-sm">
       <thead>
-        <tr className="border-b border-slate-700 bg-slate-800 text-xs uppercase text-slate-300">
+        <tr className="border-b border-border bg-muted text-xs uppercase text-muted-foreground">
           <th className="px-2 py-2 text-left">不良分类</th>
           <th className="px-2 py-2 text-left">不良名称</th>
           <th className="px-2 py-2 text-right">数量</th>
@@ -1139,15 +1139,15 @@ function DefectsTable({ defects, onRemove, isClosed }: { defects: OperationDefec
       </thead>
       <tbody>
         {defects.map((d) => (
-          <tr key={d.id} className="border-b border-slate-800 text-slate-200">
+          <tr key={d.id} className="border-b border-border text-foreground">
             <td className="px-2 py-1.5">{d.defect_category}</td>
             <td className="px-2 py-1.5">{d.defect_name}</td>
             <td className="px-2 py-1.5 text-right font-mono">{formatNumber(d.defect_quantity)}</td>
             <td className="px-2 py-1.5">{d.unit ?? "—"}</td>
-            <td className="px-2 py-1.5 text-slate-400">{formatDateTime(d.created_at)}</td>
+            <td className="px-2 py-1.5 text-muted-foreground">{formatDateTime(d.created_at)}</td>
             {!isClosed && (
               <td className="px-2 py-1.5 text-center">
-                <Button size="sm" variant="ghost" className="h-6 text-rose-400" onClick={() => onRemove(d.id)}>
+                <Button size="sm" variant="ghost" className="h-6 text-danger" onClick={() => onRemove(d.id)}>
                   删除
                 </Button>
               </td>
@@ -1161,12 +1161,12 @@ function DefectsTable({ defects, onRemove, isClosed }: { defects: OperationDefec
 
 function DowntimesTable({ rows, onRemove, isClosed }: { rows: EquipmentDowntime[]; onRemove: (id: string) => void; isClosed: boolean }) {
   if (rows.length === 0) {
-    return <div className="rounded border border-dashed border-slate-700 p-4 text-center text-sm text-slate-500">暂无异常工时</div>;
+    return <div className="rounded border border-dashed border-border p-4 text-center text-sm text-muted-foreground">暂无异常工时</div>;
   }
   return (
     <table className="w-full border-collapse text-sm">
       <thead>
-        <tr className="border-b border-slate-700 bg-slate-800 text-xs uppercase text-slate-300">
+        <tr className="border-b border-border bg-muted text-xs uppercase text-muted-foreground">
           <th className="px-2 py-2 text-left">异常类型</th>
           <th className="px-2 py-2 text-left">设备</th>
           <th className="px-2 py-2 text-left">停机类型</th>
@@ -1180,18 +1180,18 @@ function DowntimesTable({ rows, onRemove, isClosed }: { rows: EquipmentDowntime[
       </thead>
       <tbody>
         {rows.map((d) => (
-          <tr key={d.id} className="border-b border-slate-800 text-slate-200">
+          <tr key={d.id} className="border-b border-border text-foreground">
             <td className="px-2 py-1.5">{d.anomaly_type}</td>
             <td className="px-2 py-1.5 font-mono">{d.equipment_code || "—"}</td>
             <td className="px-2 py-1.5">{d.downtime_type || "—"}</td>
-            <td className="px-2 py-1.5 text-slate-400">{formatDateTime(d.start_time)}</td>
-            <td className="px-2 py-1.5 text-slate-400">{formatDateTime(d.end_time)}</td>
+            <td className="px-2 py-1.5 text-muted-foreground">{formatDateTime(d.start_time)}</td>
+            <td className="px-2 py-1.5 text-muted-foreground">{formatDateTime(d.end_time)}</td>
             <td className="px-2 py-1.5 text-right font-mono">{formatNumber(d.duration_minutes)}</td>
             <td className="px-2 py-1.5">{d.confirmer || "—"}</td>
-            <td className="px-2 py-1.5 text-slate-400">{d.problem_description || "—"}</td>
+            <td className="px-2 py-1.5 text-muted-foreground">{d.problem_description || "—"}</td>
             {!isClosed && (
               <td className="px-2 py-1.5 text-center">
-                <Button size="sm" variant="ghost" className="h-6 text-rose-400" onClick={() => onRemove(d.id)}>
+                <Button size="sm" variant="ghost" className="h-6 text-danger" onClick={() => onRemove(d.id)}>
                   删除
                 </Button>
               </td>
@@ -1213,12 +1213,12 @@ function ProcessInfoTable({ rows, onRemove, isClosed }: { rows: ProcessInfo[]; o
     ));
   };
   if (rows.length === 0) {
-    return <div className="rounded border border-dashed border-slate-700 p-4 text-center text-sm text-slate-500">暂无制程信息</div>;
+    return <div className="rounded border border-dashed border-border p-4 text-center text-sm text-muted-foreground">暂无制程信息</div>;
   }
   return (
     <table className="w-full border-collapse text-sm">
       <thead>
-        <tr className="border-b border-slate-700 bg-slate-800 text-xs uppercase text-slate-300">
+        <tr className="border-b border-border bg-muted text-xs uppercase text-muted-foreground">
           <th className="px-2 py-2 text-left">工序</th>
           <th className="px-2 py-2 text-left">物料批号</th>
           <th className="px-2 py-2 text-right">数量</th>
@@ -1230,19 +1230,19 @@ function ProcessInfoTable({ rows, onRemove, isClosed }: { rows: ProcessInfo[]; o
       </thead>
       <tbody>
         {rows.map((r) => (
-          <tr key={r.id} className="border-b border-slate-800 text-slate-200">
+          <tr key={r.id} className="border-b border-border text-foreground">
             <td className="px-2 py-1.5">
-              <div className="text-xs text-slate-400">#{r.operation_seq}</div>
+              <div className="text-xs text-muted-foreground">#{r.operation_seq}</div>
               <div>{r.operation_name}</div>
             </td>
             <td className="px-2 py-1.5 font-mono">{r.material_batch_no || "—"}</td>
             <td className="px-2 py-1.5 text-right font-mono">{formatNumber(r.quantity)}</td>
-            <td className="px-2 py-1.5 text-xs text-slate-400">{renderImages(r.material_label_image)}</td>
-            <td className="px-2 py-1.5 text-xs text-slate-400">{renderImages(r.incoming_defect_image)}</td>
-            <td className="px-2 py-1.5 text-xs text-slate-400">{renderImages(r.process_defect_image)}</td>
+            <td className="px-2 py-1.5 text-xs text-muted-foreground">{renderImages(r.material_label_image)}</td>
+            <td className="px-2 py-1.5 text-xs text-muted-foreground">{renderImages(r.incoming_defect_image)}</td>
+            <td className="px-2 py-1.5 text-xs text-muted-foreground">{renderImages(r.process_defect_image)}</td>
             {!isClosed && (
               <td className="px-2 py-1.5 text-center">
-                <Button size="sm" variant="ghost" className="h-6 text-rose-400" onClick={() => onRemove(r.id)}>
+                <Button size="sm" variant="ghost" className="h-6 text-danger" onClick={() => onRemove(r.id)}>
                   删除
                 </Button>
               </td>

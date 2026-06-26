@@ -104,13 +104,13 @@ export function ReportsView() {
   };
 
   return (
-    <div className="flex flex-col h-full bg-slate-950">
+    <div className="flex flex-col h-full bg-background">
       {/* 顶部 */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800">
+      <div className="flex items-center justify-between px-6 py-4 border-b border-border">
         <div className="flex items-center gap-3">
-          <FileText className="w-5 h-5 text-orange-500" />
-          <h1 className="text-xl font-semibold text-slate-100">生产报工</h1>
-          <span className="text-xs text-slate-400 ml-2">
+          <FileText className="w-5 h-5 text-primary" />
+          <h1 className="text-xl font-semibold text-foreground">生产报工</h1>
+          <span className="text-xs text-muted-foreground ml-2">
             工单开工后才能进行报工；同一工单已有进行中批次时需先关闭
           </span>
         </div>
@@ -126,21 +126,21 @@ export function ReportsView() {
       </div>
 
       {/* 统计 */}
-      <div className="grid grid-cols-3 gap-3 px-6 py-3 border-b border-slate-800">
-        <div className="bg-slate-900 border border-slate-800 rounded p-3">
-          <div className="text-xs text-slate-400">报工批次总数</div>
-          <div className="text-2xl font-mono tabular-nums text-slate-100 mt-1">{stats.total}</div>
+      <div className="grid grid-cols-3 gap-3 px-6 py-3 border-b border-border">
+        <div className="bg-card border border-border rounded p-3">
+          <div className="text-xs text-muted-foreground">报工批次总数</div>
+          <div className="text-2xl font-mono tabular-nums text-foreground mt-1">{stats.total}</div>
         </div>
-        <div className="bg-slate-900 border border-slate-800 rounded p-3">
-          <div className="text-xs text-slate-400">进行中</div>
-          <div className="text-2xl font-mono tabular-nums text-amber-500 mt-1 flex items-center gap-2">
+        <div className="bg-card border border-border rounded p-3">
+          <div className="text-xs text-muted-foreground">进行中</div>
+          <div className="text-2xl font-mono tabular-nums text-warning mt-1 flex items-center gap-2">
             <Clock className="w-4 h-4" />
             {stats.running}
           </div>
         </div>
-        <div className="bg-slate-900 border border-slate-800 rounded p-3">
-          <div className="text-xs text-slate-400">已关闭</div>
-          <div className="text-2xl font-mono tabular-nums text-emerald-500 mt-1 flex items-center gap-2">
+        <div className="bg-card border border-border rounded p-3">
+          <div className="text-xs text-muted-foreground">已关闭</div>
+          <div className="text-2xl font-mono tabular-nums text-success mt-1 flex items-center gap-2">
             <CheckCircle2 className="w-4 h-4" />
             {stats.closed}
           </div>
@@ -148,7 +148,7 @@ export function ReportsView() {
       </div>
 
       {/* 搜索和筛选 */}
-      <div className="flex flex-col gap-3 px-6 py-3 border-b border-slate-800">
+      <div className="flex flex-col gap-3 px-6 py-3 border-b border-border">
         {/* 关键词搜索 */}
         <div className="flex items-center gap-3">
           <input
@@ -156,14 +156,14 @@ export function ReportsView() {
             placeholder="搜索 工单号 / 生产批号 / 报工编号 / 产品编号 / 产品名称"
             value={keyword}
             onChange={(e) => setKeyword(e.target.value)}
-            className="flex-1 bg-slate-900 border border-slate-800 rounded px-3 py-1.5 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-orange-500/50"
+            className="flex-1 bg-card border border-border rounded px-3 py-1.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50"
           />
           {(keyword || filterWorkOrderNo || filterProductCode || filterSpecification || filterBatchNo || filterStatus) && (
             <Button
               variant="ghost"
               size="sm"
               onClick={clearFilters}
-              className="text-slate-400 hover:text-slate-200"
+              className="text-muted-foreground hover:text-foreground"
             >
               清除筛选
             </Button>
@@ -173,11 +173,11 @@ export function ReportsView() {
         {/* 列筛选下拉框 */}
         <div className="flex items-center gap-3 flex-wrap">
           <div className="flex items-center gap-1.5">
-            <span className="text-xs text-slate-500">工单号:</span>
+            <span className="text-xs text-muted-foreground">工单号:</span>
             <select
               value={filterWorkOrderNo}
               onChange={(e) => setFilterWorkOrderNo(e.target.value)}
-              className="bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-slate-100 focus:outline-none focus:border-orange-500/50 min-w-[120px]"
+              className="bg-card border border-border rounded px-2 py-1 text-xs text-foreground focus:outline-none focus:border-primary/50 min-w-[120px]"
             >
               <option value="">全部</option>
               {uniqueWorkOrderNos.map(no => (
@@ -187,11 +187,11 @@ export function ReportsView() {
           </div>
           
           <div className="flex items-center gap-1.5">
-            <span className="text-xs text-slate-500">产品编号:</span>
+            <span className="text-xs text-muted-foreground">产品编号:</span>
             <select
               value={filterProductCode}
               onChange={(e) => setFilterProductCode(e.target.value)}
-              className="bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-slate-100 focus:outline-none focus:border-orange-500/50 min-w-[100px]"
+              className="bg-card border border-border rounded px-2 py-1 text-xs text-foreground focus:outline-none focus:border-primary/50 min-w-[100px]"
             >
               <option value="">全部</option>
               {uniqueProductCodes.map(code => (
@@ -201,11 +201,11 @@ export function ReportsView() {
           </div>
           
           <div className="flex items-center gap-1.5">
-            <span className="text-xs text-slate-500">产品规格:</span>
+            <span className="text-xs text-muted-foreground">产品规格:</span>
             <select
               value={filterSpecification}
               onChange={(e) => setFilterSpecification(e.target.value)}
-              className="bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-slate-100 focus:outline-none focus:border-orange-500/50 min-w-[80px]"
+              className="bg-card border border-border rounded px-2 py-1 text-xs text-foreground focus:outline-none focus:border-primary/50 min-w-[80px]"
             >
               <option value="">全部</option>
               {uniqueSpecifications.map(spec => (
@@ -215,11 +215,11 @@ export function ReportsView() {
           </div>
           
           <div className="flex items-center gap-1.5">
-            <span className="text-xs text-slate-500">生产批号:</span>
+            <span className="text-xs text-muted-foreground">生产批号:</span>
             <select
               value={filterBatchNo}
               onChange={(e) => setFilterBatchNo(e.target.value)}
-              className="bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-slate-100 focus:outline-none focus:border-orange-500/50 min-w-[100px]"
+              className="bg-card border border-border rounded px-2 py-1 text-xs text-foreground focus:outline-none focus:border-primary/50 min-w-[100px]"
             >
               <option value="">全部</option>
               {uniqueBatchNos.map(no => (
@@ -229,11 +229,11 @@ export function ReportsView() {
           </div>
           
           <div className="flex items-center gap-1.5">
-            <span className="text-xs text-slate-500">状态:</span>
+            <span className="text-xs text-muted-foreground">状态:</span>
             <select
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
-              className="bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs text-slate-100 focus:outline-none focus:border-orange-500/50 min-w-[80px]"
+              className="bg-card border border-border rounded px-2 py-1 text-xs text-foreground focus:outline-none focus:border-primary/50 min-w-[80px]"
             >
               <option value="">全部</option>
               <option value="进行中">进行中</option>
@@ -241,7 +241,7 @@ export function ReportsView() {
             </select>
           </div>
           
-          <span className="text-xs text-slate-500 ml-2">
+          <span className="text-xs text-muted-foreground ml-2">
             筛选结果: {filtered.length} 条
           </span>
         </div>
@@ -252,21 +252,21 @@ export function ReportsView() {
         {loading ? (
           <div className="space-y-2">
             {Array.from({ length: 6 }).map((_, i) => (
-              <Skeleton key={i} className="h-12 w-full bg-slate-900" />
+              <Skeleton key={i} className="h-12 w-full bg-card" />
             ))}
           </div>
         ) : filtered.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-slate-400">
-            <FileText className="w-10 h-10 mb-2 text-slate-500" />
+          <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+            <FileText className="w-10 h-10 mb-2 text-muted-foreground" />
             <div className="text-sm">暂无报工数据</div>
-            <div className="text-xs text-slate-500 mt-1">
+            <div className="text-xs text-muted-foreground mt-1">
               请到「工单管理」→ 选择已开工的工单 → 点击「开始报工」按钮
             </div>
           </div>
         ) : (
-          <div className="bg-slate-900 border border-slate-800 rounded overflow-hidden">
+          <div className="bg-card border border-border rounded overflow-hidden">
             {/* 表头：固定列宽，产品名称自适应换行 */}
-            <div className="grid grid-cols-[130px_160px_110px_minmax(150px,1fr)_80px_50px_110px_100px_100px_200px_60px_100px_120px] gap-0 bg-slate-800 border-b border-slate-800 text-xs text-slate-300 font-medium">
+            <div className="grid grid-cols-[130px_160px_110px_minmax(150px,1fr)_80px_50px_110px_100px_100px_200px_60px_100px_120px] gap-0 bg-muted border-b border-border text-xs text-muted-foreground font-medium">
               <div className="px-3 py-2.5">报工编号</div>
               <div className="px-3 py-2.5">工单号</div>
               <div className="px-3 py-2.5">产品编号</div>
@@ -286,44 +286,44 @@ export function ReportsView() {
               return (
                 <div
                   key={r.id}
-                  className={`grid grid-cols-[130px_160px_110px_minmax(150px,1fr)_80px_50px_110px_100px_100px_200px_60px_100px_120px] gap-0 border-b border-slate-800/60 text-xs items-center ${
+                  className={`grid grid-cols-[130px_160px_110px_minmax(150px,1fr)_80px_50px_110px_100px_100px_200px_60px_100px_120px] gap-0 border-b border-border/60 text-xs items-center ${
                     openable
-                      ? "hover:bg-slate-700/60 cursor-pointer"
-                      : "hover:bg-slate-800/40"
+                      ? "hover:bg-accent/60 cursor-pointer"
+                      : "hover:bg-muted/40"
                   }`}
                   onClick={() => {
                     if (openable) router.push(`/reports/${r.id}`);
                   }}
                 >
-                  <div className="px-3 py-2.5 font-mono text-xs text-slate-300 truncate" title={r.report_no}>
+                  <div className="px-3 py-2.5 font-mono text-xs text-muted-foreground truncate" title={r.report_no}>
                     {r.report_no}
                   </div>
-                  <div className="px-3 py-2.5 font-mono text-slate-100 truncate">{r.work_order_no}</div>
-                  <div className="px-3 py-2.5 font-mono text-slate-100 truncate">{r.product_code}</div>
-                  <div className="px-3 py-2.5 text-slate-100 break-words">{r.product_name}</div>
-                  <div className="px-3 py-2.5 text-slate-300 truncate text-xs">{r.specification}</div>
-                  <div className="px-3 py-2.5 font-mono text-slate-100">#{r.completion_seq}</div>
-                  <div className="px-3 py-2.5 font-mono text-slate-100 truncate">{r.batch_no}</div>
-                  <div className="px-3 py-2.5 font-mono text-xs text-slate-300">
+                  <div className="px-3 py-2.5 font-mono text-foreground truncate">{r.work_order_no}</div>
+                  <div className="px-3 py-2.5 font-mono text-foreground truncate">{r.product_code}</div>
+                  <div className="px-3 py-2.5 text-foreground break-words">{r.product_name}</div>
+                  <div className="px-3 py-2.5 text-muted-foreground truncate text-xs">{r.specification}</div>
+                  <div className="px-3 py-2.5 font-mono text-foreground">#{r.completion_seq}</div>
+                  <div className="px-3 py-2.5 font-mono text-foreground truncate">{r.batch_no}</div>
+                  <div className="px-3 py-2.5 font-mono text-xs text-muted-foreground">
                     {r.start_time ? formatDate(r.start_time) : "—"}
                   </div>
-                  <div className="px-3 py-2.5 font-mono text-xs text-slate-300">
+                  <div className="px-3 py-2.5 font-mono text-xs text-muted-foreground">
                     {r.end_time ? formatDate(r.end_time) : "—"}
                   </div>
-                  <div className="px-3 py-2.5 font-mono tabular-nums text-slate-100 text-right text-xs whitespace-nowrap">
+                  <div className="px-3 py-2.5 font-mono tabular-nums text-foreground text-right text-xs whitespace-nowrap">
                     {r.input_quantity} / {r.pass_quantity} / {r.fail_quantity}
                   </div>
-                  <div className="px-3 py-2.5 font-mono text-xs text-slate-300 text-center">
+                  <div className="px-3 py-2.5 font-mono text-xs text-muted-foreground text-center">
                     {r.skilled_worker_count + r.regular_worker_count + r.contract_worker_count + r.other_worker_count}
                   </div>
                   <div className="px-3 py-2.5 text-center">
                     {r.is_closed ? (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-sm border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 text-xs">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-sm border border-success/30 bg-success/10 text-success text-xs">
                         <CheckCircle2 className="w-3 h-3" />
                         已关闭
                       </span>
                     ) : (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-sm border border-amber-500/30 bg-amber-500/10 text-amber-400 text-xs">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-sm border border-warning/30 bg-warning/10 text-warning text-xs">
                         <Clock className="w-3 h-3" />
                         进行中
                       </span>
@@ -334,7 +334,7 @@ export function ReportsView() {
                       <Button
                         size="sm"
                         variant="outline"
-                        className="h-7 border-orange-500/40 bg-orange-500/10 text-orange-300 hover:bg-orange-500/20 hover:text-orange-200"
+                        className="h-7 border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 hover:text-primary-foreground"
                         onClick={(e) => {
                           e.stopPropagation();
                           router.push(`/reports/${r.id}`);
@@ -347,7 +347,7 @@ export function ReportsView() {
                       <Button
                         size="sm"
                         variant="ghost"
-                        className="h-7 text-slate-400 hover:text-slate-200"
+                        className="h-7 text-muted-foreground hover:text-foreground"
                         onClick={(e) => {
                           e.stopPropagation();
                           router.push(`/reports/${r.id}`);

@@ -50,13 +50,13 @@ const TONE_MAP: Record<string, { dot: string; text: string; bg: string; border: 
   // 偏中性的状态
   neutral: { dot: 'bg-muted-foreground', text: 'text-muted-foreground', bg: 'bg-muted/30', border: 'border-border' },
   // 蓝色/信息
-  info: { dot: 'bg-sky-400', text: 'text-sky-300', bg: 'bg-sky-500/10', border: 'border-sky-500/30' },
+  info: { dot: 'bg-info', text: 'text-info', bg: 'bg-info/10', border: 'border-info/30' },
   // 绿色/正常/合格
-  success: { dot: 'bg-emerald-400', text: 'text-emerald-300', bg: 'bg-emerald-500/10', border: 'border-emerald-500/30' },
+  success: { dot: 'bg-success', text: 'text-success', bg: 'bg-success/10', border: 'border-success/30' },
   // 黄色/警告/暂停/让步
-  warning: { dot: 'bg-amber-400', text: 'text-amber-300', bg: 'bg-amber-500/10', border: 'border-amber-500/30' },
+  warning: { dot: 'bg-warning', text: 'text-warning', bg: 'bg-warning/10', border: 'border-warning/30' },
   // 红色/危险/不良/故障
-  danger: { dot: 'bg-rose-400', text: 'text-rose-300', bg: 'bg-rose-500/10', border: 'border-rose-500/30' },
+  danger: { dot: 'bg-destructive', text: 'text-destructive', bg: 'bg-destructive/10', border: 'border-destructive/30' },
 };
 
 function toneFor(kind: BadgeKind, value: string): keyof typeof TONE_MAP {

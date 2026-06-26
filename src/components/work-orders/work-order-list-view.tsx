@@ -131,8 +131,8 @@ export function WorkOrderListView() {
     <div className="space-y-4 p-4">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-slate-100">工单管理</h1>
-          <p className="mt-0.5 text-xs text-slate-500">U9 同步制罐生产订单 · 13 道连续工序 · 双击行可编辑计划</p>
+          <h1 className="text-xl font-semibold text-foreground">工单管理</h1>
+          <p className="mt-0.5 text-xs text-muted-foreground">U9 同步制罐生产订单 · 13 道连续工序 · 双击行可编辑计划</p>
         </div>
         <div className="flex items-center gap-2">
           <Button
@@ -143,7 +143,7 @@ export function WorkOrderListView() {
               load();
             }}
             disabled={refreshing}
-            className="border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800"
+            className="border-border bg-card text-foreground hover:bg-muted"
           >
             <RefreshCcw className={`mr-1.5 h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
             刷新
@@ -151,7 +151,7 @@ export function WorkOrderListView() {
           <Button
             size="sm"
             onClick={() => setShowCreate(true)}
-            className="bg-orange-500 text-white hover:bg-orange-600"
+            className="bg-primary text-white hover:bg-primary"
           >
             <Plus className="mr-1.5 h-3.5 w-3.5" />
             新增工单
@@ -168,24 +168,24 @@ export function WorkOrderListView() {
         </div>
       )}
 
-      <Card className="border-slate-800 bg-slate-900/60">
+      <Card className="border-border bg-card/60">
         <CardContent className="p-3">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
             <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
+              <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
               <Input
                 placeholder="搜索 MO 号 / 销售订单号 / 料号 / 料名"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="border-slate-800 bg-slate-950 pl-8 text-slate-200 placeholder:text-slate-600"
+                className="border-border bg-background pl-8 text-slate-200 placeholder:text-muted-foreground"
               />
             </div>
-            <div className="flex flex-wrap items-center gap-3 border border-slate-800 bg-slate-950/40 px-2 py-1.5">
-              <span className="font-mono text-[10px] uppercase tracking-wider text-slate-500">状态</span>
+            <div className="flex flex-wrap items-center gap-3 border border-border bg-background/40 px-2 py-1.5">
+              <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">状态</span>
               {(["开立", "下发", "生产中", "暂停", "完工", "超期完工"] as const).map((s) => {
                 const checked = statusFilter.has(s);
                 return (
-                  <label key={s} className="flex cursor-pointer items-center gap-1 font-mono text-[11px] text-slate-300 hover:text-slate-100">
+                  <label key={s} className="flex cursor-pointer items-center gap-1 font-mono text-[11px] text-muted-foreground hover:text-foreground">
                     <input
                       type="checkbox"
                       checked={checked}
@@ -206,17 +206,17 @@ export function WorkOrderListView() {
               <button
                 type="button"
                 onClick={() => setStatusFilter(new Set())}
-                className="ml-1 border border-slate-800 px-1.5 font-mono text-[10px] text-slate-500 hover:border-slate-600 hover:text-slate-300"
+                className="ml-1 border border-slate-800 px-1.5 font-mono text-[10px] text-muted-foreground hover:border-slate-600 hover:text-muted-foreground"
               >
                 清空
               </button>
             </div>
-            <div className="flex flex-wrap items-center gap-3 border border-slate-800 bg-slate-950/40 px-2 py-1.5">
-              <span className="font-mono text-[10px] uppercase tracking-wider text-slate-500">产线</span>
+            <div className="flex flex-wrap items-center gap-3 border border-border bg-background/40 px-2 py-1.5">
+              <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">产线</span>
               {lines.map((l) => {
                 const checked = lineFilter.has(l);
                 return (
-                  <label key={l} className="flex cursor-pointer items-center gap-1 font-mono text-[11px] text-slate-300 hover:text-slate-100">
+                  <label key={l} className="flex cursor-pointer items-center gap-1 font-mono text-[11px] text-muted-foreground hover:text-foreground">
                     <input
                       type="checkbox"
                       checked={checked}
@@ -237,7 +237,7 @@ export function WorkOrderListView() {
               <button
                 type="button"
                 onClick={() => setLineFilter(new Set())}
-                className="ml-1 border border-slate-800 px-1.5 font-mono text-[10px] text-slate-500 hover:border-slate-600 hover:text-slate-300"
+                className="ml-1 border border-slate-800 px-1.5 font-mono text-[10px] text-muted-foreground hover:border-slate-600 hover:text-muted-foreground"
               >
                 清空
               </button>
@@ -249,28 +249,28 @@ export function WorkOrderListView() {
       {loading ? (
         <Skeleton className="h-96 bg-slate-800/40" />
       ) : filtered.length === 0 ? (
-        <Card className="border-slate-800 bg-slate-900/60">
-          <CardContent className="flex h-40 flex-col items-center justify-center gap-2 text-slate-500">
+        <Card className="border-border bg-card/60">
+          <CardContent className="flex h-40 flex-col items-center justify-center gap-2 text-muted-foreground">
             <ClipboardList className="h-6 w-6 opacity-30" />
             <p className="text-xs">没有符合条件的工单</p>
           </CardContent>
         </Card>
       ) : (
-        <Card className="border-slate-800 bg-slate-900/60">
+        <Card className="border-border bg-card/60">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[1080px] border-collapse text-xs">
               <thead>
-                <tr className="border-b border-slate-800 bg-slate-950/60 text-left">
+                <tr className="border-b border-border bg-background/60 text-left">
                   <Th onClick={() => toggleSort("order_no")} active={sortKey === "order_no"} dir={sortDir}>MO 号</Th>
                   <Th onClick={() => toggleSort("line_name")} active={sortKey === "line_name"} dir={sortDir}>产线</Th>
                   <Th onClick={() => toggleSort("product_name")} active={sortKey === "product_name"} dir={sortDir}>产品</Th>
-                  <th className="px-3 py-2 text-left font-mono text-[11px] uppercase tracking-wider text-slate-500">规格</th>
+                  <th className="px-3 py-2 text-left font-mono text-[11px] uppercase tracking-wider text-muted-foreground">规格</th>
                   <Th onClick={() => toggleSort("quantity")} active={sortKey === "quantity"} dir={sortDir} align="right">计划(罐)</Th>
                   <Th onClick={() => toggleSort("completed_quantity")} active={sortKey === "completed_quantity"} dir={sortDir} align="right">已完成</Th>
-                  <th className="px-3 py-2 text-right font-mono text-[11px] uppercase tracking-wider text-slate-500">完工率</th>
+                  <th className="px-3 py-2 text-right font-mono text-[11px] uppercase tracking-wider text-muted-foreground">完工率</th>
                   <Th onClick={() => toggleSort("status")} active={sortKey === "status"} dir={sortDir}>状态</Th>
                   <Th onClick={() => toggleSort("planned_start_date")} active={sortKey === "planned_start_date"} dir={sortDir}>计划起止</Th>
-                  <th className="px-3 py-2 text-right font-mono text-[11px] uppercase tracking-wider text-slate-500">操作</th>
+                  <th className="px-3 py-2 text-right font-mono text-[11px] uppercase tracking-wider text-muted-foreground">操作</th>
                 </tr>
               </thead>
               <tbody>
@@ -346,7 +346,7 @@ function Th({
       onClick={onClick}
       className={`px-3 py-2 font-mono text-[11px] uppercase tracking-wider ${
         onClick ? "cursor-pointer select-none hover:text-slate-200" : ""
-      } ${active ? "text-orange-400" : "text-slate-500"} ${alignCls}`}
+      } ${active ? "text-orange-400" : "text-muted-foreground"} ${alignCls}`}
     >
       <span className="inline-flex items-center gap-0.5">
         {children}
@@ -370,7 +370,7 @@ function WorkOrderRow({
   hasPlan: boolean;
 }) {
   const rate = wo.quantity > 0 ? (wo.completed_quantity / wo.quantity) * 100 : 0;
-  const tone = WO_STATUS_TONE[wo.status] ?? "border-slate-700 text-slate-400";
+  const tone = WO_STATUS_TONE[wo.status] ?? "border-border text-slate-400";
   const st = wo.status;
   const canRelease = st === "开立";
   const canStart = (st === "下发" || st === "暂停") && hasPlan;
@@ -384,19 +384,19 @@ function WorkOrderRow({
       className="cursor-pointer border-b border-slate-800/60 transition hover:bg-slate-900/80"
     >
       <td className="px-3 py-2 font-mono text-[11px] text-orange-400">{wo.order_no}</td>
-      <td className="px-3 py-2 font-mono text-[11px] text-slate-300">{wo.line_name ?? "—"}</td>
+      <td className="px-3 py-2 font-mono text-[11px] text-muted-foreground">{wo.line_name ?? "—"}</td>
       <td className="px-3 py-2">
         <div className="truncate text-xs text-slate-200" title={wo.product_name}>{wo.product_name}</div>
-        <div className="font-mono text-[10px] text-slate-500">{wo.product_code}</div>
+        <div className="font-mono text-[10px] text-muted-foreground">{wo.product_code}</div>
       </td>
       <td className="px-3 py-2 text-slate-400">{wo.specification && wo.specification !== "—" ? wo.specification : "—"}</td>
       <td className="px-3 py-2 text-right font-mono tabular-nums text-slate-200">{wo.quantity.toLocaleString()}</td>
       <td className="px-3 py-2 text-right font-mono tabular-nums text-emerald-300">{wo.completed_quantity.toLocaleString()}</td>
       <td className="px-3 py-2">
         <div className="flex items-center justify-end gap-2">
-          <span className="font-mono tabular-nums text-[11px] text-slate-300">{rate.toFixed(1)}%</span>
+          <span className="font-mono tabular-nums text-[11px] text-muted-foreground">{rate.toFixed(1)}%</span>
           <div className="h-1 w-12 overflow-hidden bg-slate-800">
-            <div className="h-full bg-orange-500" style={{ width: `${Math.min(100, rate)}%` }} />
+            <div className="h-full bg-primary" style={{ width: `${Math.min(100, rate)}%` }} />
           </div>
         </div>
       </td>
@@ -405,7 +405,7 @@ function WorkOrderRow({
       </td>
       <td className="px-3 py-2 font-mono text-[10px] text-slate-400">
         <div>{formatDate(wo.planned_start_date)}</div>
-        <div className="text-slate-500">~ {formatDate(wo.planned_end_date)}</div>
+        <div className="text-muted-foreground">~ {formatDate(wo.planned_end_date)}</div>
       </td>
       <td className="px-3 py-2 text-right" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-end gap-1.5">
@@ -420,7 +420,7 @@ function WorkOrderRow({
           {canStart && (
             <button
               onClick={() => onAction("start")}
-              className="border border-orange-500/50 px-1.5 py-0.5 font-mono text-[10px] text-orange-300 hover:bg-orange-500/15"
+              className="border border-orange-500/50 px-1.5 py-0.5 font-mono text-[10px] text-orange-300 hover:bg-primary/15"
             >
               {st === "暂停" ? "重新开工" : "开工"}
             </button>
@@ -519,12 +519,12 @@ function ProductCodeCombobox({
           }
         }}
         placeholder="输入料号/料名/规格关键字筛选"
-        className="border-slate-800 bg-slate-900 font-mono text-xs text-slate-200 placeholder:text-slate-600"
+        className="border-border bg-card font-mono text-xs text-slate-200 placeholder:text-muted-foreground"
       />
       {open && (
-        <div className="absolute z-30 mt-1 max-h-60 w-full overflow-y-auto border border-slate-700 bg-slate-950 shadow-lg">
+        <div className="absolute z-30 mt-1 max-h-60 w-full overflow-y-auto border border-border bg-slate-950 shadow-lg">
           {matched.length === 0 && (
-            <div className="px-3 py-2 text-xs text-slate-500">无匹配产品，可在参数设置中新增</div>
+            <div className="px-3 py-2 text-xs text-muted-foreground">无匹配产品，可在参数设置中新增</div>
           )}
           {matched.map((p, i) => (
             <button
@@ -537,13 +537,13 @@ function ProductCodeCombobox({
               }`}
             >
               <div className="font-mono text-orange-300">{p.code}</div>
-              <div className="mt-0.5 truncate text-slate-300">
+              <div className="mt-0.5 truncate text-muted-foreground">
                 {p.name}
                 {p.specification && p.specification !== "—" && (
-                  <span className="ml-2 text-slate-500">· {p.specification}</span>
+                  <span className="ml-2 text-muted-foreground">· {p.specification}</span>
                 )}
                 {p.default_line_name && (
-                  <span className="ml-2 text-slate-500">· 默认 {p.default_line_name}</span>
+                  <span className="ml-2 text-muted-foreground">· 默认 {p.default_line_name}</span>
                 )}
               </div>
             </button>
@@ -717,10 +717,10 @@ function CreateWorkOrderDialog({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <Card className="w-full max-w-2xl border-slate-800 bg-slate-950">
+      <Card className="w-full max-w-2xl border-border bg-background">
         <div className="flex items-center justify-between border-b border-slate-800 px-4 py-3">
-          <h2 className="font-mono text-sm font-semibold text-slate-100">新增工单</h2>
-          <button onClick={onClose} className="text-slate-500 hover:text-slate-200">
+          <h2 className="font-mono text-sm font-semibold text-foreground">新增工单</h2>
+          <button onClick={onClose} className="text-muted-foreground hover:text-slate-200">
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -729,7 +729,7 @@ function CreateWorkOrderDialog({
             label={
               <span className="flex items-center gap-2">
                 MO 号
-                <span className="font-mono text-[10px] text-slate-500">
+                <span className="font-mono text-[10px] text-muted-foreground">
                   {orderNoAuto ? "(留空将自动按 MO-16+YYMMDD+流水 生成)" : "(已手动填写)"}
                 </span>
               </span>
@@ -743,14 +743,14 @@ function CreateWorkOrderDialog({
                   setOrderNoAuto(e.target.value.trim().length === 0);
                 }}
                 placeholder={orderNoPreview}
-                className="flex-1 border-slate-800 bg-slate-900 font-mono text-slate-200"
+                className="flex-1 border-border bg-card font-mono text-slate-200"
               />
               <Button
                 type="button"
                 size="sm"
                 variant="outline"
                 onClick={fillNextOrderNo}
-                className="border-slate-700 bg-slate-900 font-mono text-[11px] text-slate-300 hover:border-orange-500/60 hover:text-orange-300"
+                className="border-border bg-slate-900 font-mono text-[11px] text-muted-foreground hover:border-orange-500/60 hover:text-orange-300"
                 title="取下一个 MO 号填入"
               >
                 自动生成
@@ -776,7 +776,7 @@ function CreateWorkOrderDialog({
               <Input
                 value={form.product_name}
                 readOnly
-                className="cursor-not-allowed border-slate-800 bg-slate-900/40 text-slate-400"
+                className="cursor-not-allowed border-border bg-card/40 text-slate-400"
                 placeholder="选择料号后自动带入"
               />
             </Field>
@@ -784,7 +784,7 @@ function CreateWorkOrderDialog({
               <Input
                 value={form.specification}
                 readOnly
-                className="cursor-not-allowed border-slate-800 bg-slate-900/40 text-slate-400"
+                className="cursor-not-allowed border-border bg-card/40 text-slate-400"
                 placeholder="选择料号后自动带入"
               />
             </Field>
@@ -798,7 +798,7 @@ function CreateWorkOrderDialog({
                 value={form.planned_quantity}
                 onChange={(e) => setForm({ ...form, planned_quantity: e.target.value })}
                 placeholder="0"
-                className="border-slate-800 bg-slate-900 text-slate-200"
+                className="border-border bg-card text-slate-200"
               />
             </Field>
             <Field label="产线（自动带入）" required>
@@ -815,7 +815,7 @@ function CreateWorkOrderDialog({
                   }));
                 }}
                 disabled={form.order_type === "返工" ? false : true}
-                className="h-9 w-full cursor-not-allowed rounded-sm border border-slate-800 bg-slate-900/40 px-2 font-mono text-xs text-slate-400 outline-none focus:border-orange-500 disabled:opacity-70"
+                className="h-9 w-full cursor-not-allowed rounded-sm border border-border bg-card/40 px-2 font-mono text-xs text-slate-400 outline-none focus:border-orange-500 disabled:opacity-70"
               >
                 <option value="">请选择产线</option>
                 {lines.map((l) => (
@@ -835,7 +835,7 @@ function CreateWorkOrderDialog({
                 min={today}
                 value={form.planned_start_date}
                 onChange={(e) => setForm({ ...form, planned_start_date: e.target.value })}
-                className="border-slate-800 bg-slate-900 text-slate-200"
+                className="border-border bg-card text-slate-200"
               />
             </Field>
             <Field label="计划结束日期" required>
@@ -844,7 +844,7 @@ function CreateWorkOrderDialog({
                 min={form.planned_start_date}
                 value={form.planned_end_date}
                 onChange={(e) => setForm({ ...form, planned_end_date: e.target.value })}
-                className="border-slate-800 bg-slate-900 text-slate-200"
+                className="border-border bg-card text-slate-200"
               />
             </Field>
           </div>
@@ -854,7 +854,7 @@ function CreateWorkOrderDialog({
               <select
                 value={form.order_type}
                 onChange={(e) => changeOrderType(e.target.value)}
-                className="h-9 w-full rounded-sm border border-slate-800 bg-slate-900 px-2 font-mono text-xs text-slate-200 outline-none focus:border-orange-500"
+                className="h-9 w-full rounded-sm border border-border bg-card px-2 font-mono text-xs text-slate-200 outline-none focus:border-orange-500"
               >
                 <option value="制罐生产订单">制罐生产订单</option>
                 <option value="返工">返工</option>
@@ -865,7 +865,7 @@ function CreateWorkOrderDialog({
               <Input
                 value={form.customer_name}
                 onChange={(e) => setForm({ ...form, customer_name: e.target.value })}
-                className="border-slate-800 bg-slate-900 text-slate-200"
+                className="border-border bg-card text-slate-200"
               />
             </Field>
           </div>
@@ -881,7 +881,7 @@ function CreateWorkOrderDialog({
               value={form.notes}
               onChange={(e) => setForm({ ...form, notes: e.target.value })}
               rows={2}
-              className="w-full rounded-sm border border-slate-800 bg-slate-900 px-2 py-1.5 font-mono text-xs text-slate-200 outline-none focus:border-orange-500"
+              className="w-full rounded-sm border border-border bg-card px-2 py-1.5 font-mono text-xs text-slate-200 outline-none focus:border-orange-500"
             />
           </Field>
 
@@ -891,7 +891,7 @@ function CreateWorkOrderDialog({
 
           <div className="flex items-center justify-end gap-2 border-t border-slate-800 pt-3">
             <Button variant="ghost" size="sm" onClick={onClose}>取消</Button>
-            <Button size="sm" onClick={submit} disabled={submitting} className="bg-orange-500 text-white hover:bg-orange-600">
+            <Button size="sm" onClick={submit} disabled={submitting} className="bg-primary text-white hover:bg-primary">
               {submitting ? "创建中..." : "创建工单"}
             </Button>
           </div>
@@ -950,30 +950,30 @@ function EditWorkOrderDialog({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onDoubleClick={(e) => e.stopPropagation()}>
-      <Card className="w-full max-w-md border-slate-800 bg-slate-950">
+      <Card className="w-full max-w-md border-border bg-background">
         <div className="flex items-center justify-between border-b border-slate-800 px-4 py-3">
           <div>
-            <h2 className="font-mono text-sm font-semibold text-slate-100">编辑工单计划</h2>
-            <p className="mt-0.5 text-[11px] text-slate-500">{order.order_no} · {order.product_name}</p>
+            <h2 className="font-mono text-sm font-semibold text-foreground">编辑工单计划</h2>
+            <p className="mt-0.5 text-[11px] text-muted-foreground">{order.order_no} · {order.product_name}</p>
           </div>
-          <button onClick={onClose} className="text-slate-500 hover:text-slate-200">
+          <button onClick={onClose} className="text-muted-foreground hover:text-slate-200">
             <X className="h-4 w-4" />
           </button>
         </div>
         <CardContent className="space-y-3 p-4">
           <div className="grid grid-cols-3 gap-3">
             <Field label="当前状态">
-              <div className="flex h-9 items-center border border-slate-800 bg-slate-900 px-2 text-xs text-slate-300">
+              <div className="flex h-9 items-center border border-border bg-card px-2 text-xs text-muted-foreground">
                 {WO_STATUS_LABELS[order.status] ?? order.status}
               </div>
             </Field>
             <Field label="产线">
-              <div className="flex h-9 items-center border border-slate-800 bg-slate-900 px-2 text-xs text-slate-300">
+              <div className="flex h-9 items-center border border-border bg-card px-2 text-xs text-muted-foreground">
                 {order.line_name ?? "—"}
               </div>
             </Field>
             <Field label="已完成/计划">
-              <div className="flex h-9 items-center border border-slate-800 bg-slate-900 px-2 font-mono text-xs text-slate-300">
+              <div className="flex h-9 items-center border border-border bg-card px-2 font-mono text-xs text-muted-foreground">
                 {order.completed_quantity.toLocaleString()} / {order.quantity.toLocaleString()}
               </div>
             </Field>
@@ -985,7 +985,7 @@ function EditWorkOrderDialog({
               min={1}
               value={form.planned_quantity}
               onChange={(e) => setForm({ ...form, planned_quantity: e.target.value })}
-              className="border-slate-800 bg-slate-900 text-slate-200"
+              className="border-border bg-card text-slate-200"
             />
           </Field>
 
@@ -996,7 +996,7 @@ function EditWorkOrderDialog({
                 min={today}
                 value={form.planned_start_date}
                 onChange={(e) => setForm({ ...form, planned_start_date: e.target.value })}
-                className="border-slate-800 bg-slate-900 text-slate-200"
+                className="border-border bg-card text-slate-200"
               />
             </Field>
             <Field label="计划完成日期" required>
@@ -1005,7 +1005,7 @@ function EditWorkOrderDialog({
                 min={form.planned_start_date}
                 value={form.planned_end_date}
                 onChange={(e) => setForm({ ...form, planned_end_date: e.target.value })}
-                className="border-slate-800 bg-slate-900 text-slate-200"
+                className="border-border bg-card text-slate-200"
               />
             </Field>
           </div>
@@ -1014,7 +1014,7 @@ function EditWorkOrderDialog({
 
           <div className="flex items-center justify-end gap-2 border-t border-slate-800 pt-3">
             <Button variant="ghost" size="sm" onClick={onClose}>取消</Button>
-            <Button size="sm" onClick={submit} disabled={submitting} className="bg-orange-500 text-white hover:bg-orange-600">
+            <Button size="sm" onClick={submit} disabled={submitting} className="bg-primary text-white hover:bg-primary">
               {submitting ? "保存中..." : "保存"}
             </Button>
           </div>
@@ -1027,7 +1027,7 @@ function EditWorkOrderDialog({
 function Field({ label, required, children }: { label: React.ReactNode; required?: boolean; children: React.ReactNode }) {
   return (
     <div>
-      <div className="mb-1 font-mono text-[11px] text-slate-500">
+      <div className="mb-1 font-mono text-[11px] text-muted-foreground">
         {label}{required && <span className="ml-1 text-rose-400">*</span>}
       </div>
       {children}
@@ -1038,9 +1038,9 @@ function Field({ label, required, children }: { label: React.ReactNode; required
 function SummaryCell({ label, value, tone = "slate" }: { label: string; value: number; tone?: "slate" | "amber" | "emerald" }) {
   const color = { slate: "text-slate-200", amber: "text-amber-400", emerald: "text-emerald-400" }[tone];
   return (
-    <div className="border border-slate-800 bg-slate-900/60 p-3">
+    <div className="border border-border bg-card/60 p-3">
       <div className={`font-mono text-2xl tabular-nums ${color}`}>{value}</div>
-      <div className="mt-0.5 text-[11px] text-slate-500">{label}</div>
+      <div className="mt-0.5 text-[11px] text-muted-foreground">{label}</div>
     </div>
   );
 }
@@ -1051,8 +1051,8 @@ function FilterChip({ label, active, onClick }: { label: string; active: boolean
       onClick={onClick}
       className={`border px-2.5 py-0.5 font-mono text-[10px] transition ${
         active
-          ? "border-orange-500/60 bg-orange-500/10 text-orange-300"
-          : "border-slate-800 bg-slate-900 text-slate-400 hover:border-slate-700 hover:text-slate-200"
+          ? "border-orange-500/60 bg-primary/10 text-orange-300"
+          : "border-border bg-card text-slate-400 hover:border-border hover:text-slate-200"
       }`}
     >
       {label}

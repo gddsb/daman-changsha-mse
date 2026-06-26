@@ -4,20 +4,19 @@ import { cn } from '@/lib/utils';
 
 interface ProgressBarProps {
   value: number; // 0-100
-  variant?: 'success' | 'warning' | 'destructive' | 'info' | 'primary' | 'cyan' | 'auto';
+  variant?: 'success' | 'warning' | 'destructive' | 'info' | 'primary' | 'auto';
   showLabel?: boolean;
   height?: number;
   className?: string;
 }
 
 const VARIANT_CLASS: Record<string, string> = {
-  success: 'bg-emerald-500',
-  warning: 'bg-amber-500',
-  destructive: 'bg-rose-500',
-  info: 'bg-sky-500',
-  primary: 'bg-amber-500',
-  cyan: 'bg-cyan-500',
-  auto: 'bg-amber-500',
+  success: 'bg-success',
+  warning: 'bg-warning',
+  destructive: 'bg-destructive',
+  info: 'bg-info',
+  primary: 'bg-primary',
+  auto: 'bg-warning',
 };
 
 export function ProgressBar({
@@ -29,20 +28,20 @@ export function ProgressBar({
 }: ProgressBarProps) {
   const pct = Math.min(100, Math.max(0, value));
 
-  // auto: 根据完成度变色（>90 绿，>60 黄，否则琥珀色）
+  // auto: 根据完成度变色（>90 绿，>60 黄，否则红色）
   const resolvedVariant =
     variant === 'auto'
       ? pct >= 90
         ? 'success'
         : pct >= 30
-        ? 'auto'
+        ? 'warning'
         : 'destructive'
       : variant;
 
   return (
     <div className={cn('w-full', className)}>
       <div
-        className="w-full overflow-hidden border border-border/30 bg-background/40"
+        className="w-full overflow-hidden border border-border/30 bg-muted/40"
         style={{ height: `${height}px` }}
       >
         <div
