@@ -800,117 +800,27 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
               </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
-              {/* 工序不良登记表单 — 一行布局：选择工序 | 不良分类 | 不良名称 | 不良数量+单位 | 图片上传 | 新增按钮 */}
+              {/* 工序选择 — 关闭后不显示 */}
               {!isClosed && (
-              <div className="flex flex-wrap items-end gap-3">
-                {/* 选择工序 */}
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs text-muted-foreground">选择工序</label>
-                  <div className="relative w-32">
-                    <select
-                      value={defectOpSeq === "" ? "" : defectOpSeq}
-                      onChange={(e) => setDefectOpSeq(e.target.value ? Number(e.target.value) : "")}
-                      className="h-9 w-full appearance-none rounded border border-border bg-background px-2 pr-8 text-sm text-foreground"
-                    >
-                      <option value="">-- 请选择 --</option>
-                      {reportedOps.map((o) => (
-                        <option key={o.sequence} value={o.sequence}>
-                          #{o.sequence} {o.operation_name}
-                        </option>
-                      ))}
-                    </select>
-                    <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  </div>
-                </div>
-                {/* 不良分类 */}
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs text-muted-foreground">不良分类</label>
+              <div className="flex flex-col gap-1.5 md:flex-row md:items-center md:gap-3">
+                <label className="text-xs uppercase tracking-wider text-muted-foreground md:w-20">选择工序</label>
+                <div className="relative md:w-80">
                   <select
-                    value={newDefect.defect_category}
-                    disabled={defectOpSeq === ""}
-                    onChange={(e) => setNewDefect({ ...newDefect, defect_category: e.target.value as NewDefect["defect_category"] })}
-                    className="h-9 w-20 rounded border border-border bg-background px-2 text-sm text-foreground disabled:opacity-50"
+                    value={defectOpSeq === "" ? "" : defectOpSeq}
+                    onChange={(e) => setDefectOpSeq(e.target.value ? Number(e.target.value) : "")}
+                    className="h-9 w-full appearance-none rounded border border-border bg-background px-2 pr-8 text-sm text-foreground"
                   >
-                    <option value="制程不良">制程不良</option>
-                    <option value="来料不良">来料不良</option>
-                    <option value="检验报废">检验报废</option>
+                    <option value="">-- 请选择工序 --</option>
+                    {reportedOps.map((o) => (
+                      <option key={o.sequence} value={o.sequence}>
+                        #{o.sequence} {o.operation_name}
+                      </option>
+                    ))}
                   </select>
+                  <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 </div>
-                {/* 不良名称 */}
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs text-muted-foreground">不良名称</label>
-                  <Input
-                    placeholder="名称"
-                    value={newDefect.defect_name}
-                    disabled={defectOpSeq === ""}
-                    onChange={(e) => setNewDefect({ ...newDefect, defect_name: e.target.value })}
-                    className="h-9 w-24 border-border bg-background text-foreground placeholder:text-muted-foreground disabled:opacity-50"
-                  />
-                </div>
-                {/* 不良数量 + 单位 */}
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs text-muted-foreground">不良数量</label>
-                  <div className="flex items-center gap-1">
-                    <Input
-                      type="number"
-                      min={0}
-                      placeholder="数量"
-                      value={newDefect.defect_quantity || ""}
-                      disabled={defectOpSeq === ""}
-                      onChange={(e) => setNewDefect({ ...newDefect, defect_quantity: Number(e.target.value) || 0 })}
-                      className="h-9 w-16 border-border bg-background text-right text-foreground disabled:opacity-50"
-                    />
-                    <select
-                      value={newDefect.unit}
-                      disabled={defectOpSeq === ""}
-                      onChange={(e) => setNewDefect({ ...newDefect, unit: e.target.value as NewDefect["unit"] })}
-                      className="h-9 w-16 rounded border border-border bg-background px-1 text-sm text-foreground disabled:opacity-50"
-                    >
-                      <option value="小片">小片</option>
-                      <option value="带盖">带盖</option>
-                    </select>
-                  </div>
-                </div>
-                {/* 不良图片 */}
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs text-muted-foreground">不良图片</label>
-                  <div className="relative w-20">
-                    <input
-                      type="file"
-                      accept="image/*"
-                      multiple
-                      disabled={defectOpSeq === ""}
-                      onChange={(e) => {
-                        const files = Array.from(e.target.files || []);
-                        if (files.length + newDefect.images.length > 7) {
-                          alert("最多上传7张图片");
-                          return;
-                        }
-                        files.forEach(file => {
-                          if (file.size > 5 * 1024 * 1024) {
-                            alert(`图片 ${file.name} 大于5M，请压缩后上传`);
-                            return;
-                          }
-                          const url = URL.createObjectURL(file);
-                          setNewDefect(prev => ({ ...prev, images: [...prev.images, url] }));
-                        });
-                      }}
-                      className="h-9 w-full rounded border border-border bg-background px-1 text-xs text-foreground disabled:opacity-50"
-                    />
-                  </div>
-                </div>
-                {/* 新增按钮 */}
-                <Button
-                  size="sm"
-                  className="h-9 bg-primary text-white hover:bg-primary disabled:opacity-50"
-                  onClick={addDefect}
-                  disabled={saving || defectOpSeq === ""}
-                >
-                  <ListChecks className="mr-1 h-4 w-4" /> 新增
-                </Button>
-                {/* 已选工序汇总信息 */}
-                {defectOpSeq !== "" && (
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground ml-2">
+                {defectOpSeq !== "" ? (
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
                     <span>已选：</span>
                     <span className="font-mono text-warning">
                       #{defectOpSeq} {currentWoOp?.operation_name ?? ""}
@@ -920,22 +830,99 @@ export function ReportDetailView({ reportId }: { reportId: string }) {
                       {formatNumber(currentDefects.reduce((s, d) => s + (d.defect_quantity ?? 0), 0))}
                     </span>
                   </div>
+                ) : (
+                  <div className="text-xs text-muted-foreground">
+                    {reportedOps.length === 0 ? "该工单暂无工序信息" : "请选择一道工序"}
+                  </div>
                 )}
               </div>
               )}
-              {/* 图片预览 */}
-              {!isClosed && newDefect.images.length > 0 && (
-                <div className="flex gap-2 mt-1">
-                  {newDefect.images.map((url, idx) => (
-                    <div key={idx} className="relative">
-                      <img src={url} alt={`不良图片${idx+1}`} className="h-16 w-16 rounded border border-border object-cover" />
-                      <button
-                        onClick={() => setNewDefect(prev => ({ ...prev, images: prev.images.filter((_, i) => i !== idx) }))}
-                        className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-danger text-white text-xs flex items-center justify-center"
-                      >×</button>
+
+              {/* 新增不良表单 */}
+              {!isClosed && (
+              <div className="grid grid-cols-1 gap-2 md:grid-cols-6">
+                <select
+                  value={newDefect.defect_category}
+                  disabled={defectOpSeq === ""}
+                  onChange={(e) => setNewDefect({ ...newDefect, defect_category: e.target.value as NewDefect["defect_category"] })}
+                  className="h-9 rounded border border-border bg-background px-2 text-sm text-foreground disabled:opacity-50"
+                >
+                  <option value="制程不良">制程不良</option>
+                  <option value="来料不良">来料不良</option>
+                  <option value="检验报废">检验报废</option>
+                </select>
+                <Input
+                  placeholder="不良名称"
+                  value={newDefect.defect_name}
+                  disabled={defectOpSeq === ""}
+                  onChange={(e) => setNewDefect({ ...newDefect, defect_name: e.target.value })}
+                  className="border-border bg-background text-foreground placeholder:text-muted-foreground disabled:opacity-50"
+                />
+                <Input
+                  type="number"
+                  min={0}
+                  placeholder="数量"
+                  value={newDefect.defect_quantity || ""}
+                  disabled={defectOpSeq === ""}
+                  onChange={(e) => setNewDefect({ ...newDefect, defect_quantity: Number(e.target.value) || 0 })}
+                  className="border-border bg-background text-right text-foreground disabled:opacity-50"
+                />
+                <select
+                  value={newDefect.unit}
+                  disabled={defectOpSeq === ""}
+                  onChange={(e) => setNewDefect({ ...newDefect, unit: e.target.value as NewDefect["unit"] })}
+                  className="h-9 rounded border border-border bg-background px-2 text-sm text-foreground disabled:opacity-50"
+                >
+                  <option value="小片">小片</option>
+                  <option value="带盖">带盖</option>
+                </select>
+                {/* 不良图片上传（最多7张） */}
+                <div className="flex flex-col gap-1">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    disabled={defectOpSeq === ""}
+                    onChange={(e) => {
+                      const files = Array.from(e.target.files || []);
+                      if (files.length + newDefect.images.length > 7) {
+                        alert("最多上传7张图片");
+                        return;
+                      }
+                      files.forEach(file => {
+                        if (file.size > 5 * 1024 * 1024) {
+                          alert(`图片 ${file.name} 大于5M，请压缩后上传`);
+                          return;
+                        }
+                        const url = URL.createObjectURL(file);
+                        setNewDefect({ ...newDefect, images: [...newDefect.images, url] });
+                      });
+                    }}
+                    className="h-9 rounded border border-border bg-background px-2 text-sm text-foreground disabled:opacity-50"
+                  />
+                  {newDefect.images.length > 0 && (
+                    <div className="flex gap-1">
+                      {newDefect.images.map((url, idx) => (
+                        <div key={idx} className="relative">
+                          <img src={url} alt={`不良图片${idx+1}`} className="h-6 w-6 rounded border border-border object-cover" />
+                          <button
+                            onClick={() => setNewDefect({ ...newDefect, images: newDefect.images.filter((_, i) => i !== idx) })}
+                            className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-danger text-white text-xs"
+                          >×</button>
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                  )}
                 </div>
+                <Button
+                  size="sm"
+                  className="bg-primary text-white hover:bg-primary md:col-span-1 disabled:opacity-50"
+                  onClick={addDefect}
+                  disabled={saving || defectOpSeq === ""}
+                >
+                  <ListChecks className="mr-1.5 h-4 w-4" /> 新增不良（按工序）
+                </Button>
+              </div>
               )}
 
               {/* 不良记录筛选 */}
