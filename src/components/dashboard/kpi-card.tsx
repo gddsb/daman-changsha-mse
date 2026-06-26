@@ -12,28 +12,28 @@ import type { ReactNode } from "react";
 type Tone = "emerald" | "amber" | "rose" | "sky" | "slate" | "orange";
 
 const TONE_BG: Record<Tone, string> = {
-  emerald: "border-emerald-500/20 bg-emerald-500/5",
-  amber: "border-amber-500/20 bg-amber-500/5",
-  rose: "border-rose-500/20 bg-rose-500/5",
-  sky: "border-sky-500/20 bg-sky-500/5",
+  emerald: "border-[var(--success)]/20 bg-[var(--success)]/10",
+  amber: "border-[var(--warning)]/20 bg-[var(--warning)]/10",
+  rose: "border-[var(--danger)]/20 bg-[var(--danger)]/10",
+  sky: "border-[var(--info)]/20 bg-[var(--info)]/10",
   slate: "border-border bg-card",
-  orange: "border-orange-500/20 bg-orange-500/5",
+  orange: "border-[var(--brand)]/20 bg-[var(--brand)]/10",
 };
 const TONE_FG: Record<Tone, string> = {
-  emerald: "text-emerald-400",
-  amber: "text-amber-400",
-  rose: "text-rose-400",
-  sky: "text-sky-400",
+  emerald: "text-[var(--success)]",
+  amber: "text-[var(--warning)]",
+  rose: "text-[var(--danger)]",
+  sky: "text-[var(--info)]",
   slate: "text-foreground/80",
-  orange: "text-orange-400",
+  orange: "text-[var(--brand)]",
 };
 const TONE_BAR: Record<Tone, string> = {
-  emerald: "[&>div]:bg-emerald-500",
-  amber: "[&>div]:bg-amber-500",
-  rose: "[&>div]:bg-rose-500",
-  sky: "[&>div]:bg-sky-500",
+  emerald: "[&>div]:bg-[var(--success)]",
+  amber: "[&>div]:bg-[var(--warning)]",
+  rose: "[&>div]:bg-[var(--danger)]",
+  sky: "[&>div]:bg-[var(--info)]",
   slate: "[&>div]:bg-muted-foreground",
-  orange: "[&>div]:bg-orange-500",
+  orange: "[&>div]:bg-[var(--brand)]",
 };
 
 export function KpiCard({
@@ -73,7 +73,7 @@ export function KpiCard({
           {trend !== undefined && (
             <div
               className={`flex items-center gap-0.5 font-mono text-[10px] ${
-                trendUp ? "text-emerald-400" : trendDown ? "text-rose-400" : "text-muted-foreground/70"
+                trendUp ? "text-[var(--success)]" : trendDown ? "text-[var(--danger)]" : "text-muted-foreground/70"
               }`}
             >
               {trendUp ? (

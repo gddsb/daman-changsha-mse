@@ -11,10 +11,10 @@ import { Activity } from "lucide-react";
 import type { LineStatusItem } from "@/types/mes";
 
 const STATUS_TONE: Record<string, string> = {
-  运行: "border-emerald-500/30 bg-emerald-500/10 text-emerald-400",
+  运行: "border-[var(--success)]/30 bg-[var(--success)]/10 text-[var(--success)]",
   停机: "border-border bg-muted/60 text-muted-foreground",
-  维保: "border-amber-500/30 bg-amber-500/10 text-amber-400",
-  故障: "border-rose-500/30 bg-rose-500/10 text-rose-400",
+  维保: "border-[var(--warning)]/30 bg-[var(--warning)]/10 text-[var(--warning)]",
+  故障: "border-[var(--danger)]/30 bg-[var(--danger)]/10 text-[var(--danger)]",
 };
 
 export function LineStatusCard({ lines }: { lines: LineStatusItem[] }) {
@@ -64,10 +64,10 @@ export function LineStatusCard({ lines }: { lines: LineStatusItem[] }) {
                   <div
                     className={`mt-0.5 font-mono ${
                       l.todayPassRate >= 99
-                        ? "text-emerald-400"
+                        ? "text-[var(--success)]"
                         : l.todayPassRate >= 95
-                          ? "text-amber-400"
-                          : "text-rose-400"
+                          ? "text-[var(--warning)]"
+                          : "text-[var(--danger)]"
                     }`}
                   >
                     {l.todayPassRate.toFixed(2)}%
@@ -82,7 +82,7 @@ export function LineStatusCard({ lines }: { lines: LineStatusItem[] }) {
                 </div>
                 <Progress
                   value={Math.min(pct, 100)}
-                  className="h-1 bg-muted [&>div]:bg-orange-500"
+                  className="h-1 bg-muted [&>div]:bg-[var(--brand)]"
                 />
               </div>
             </div>

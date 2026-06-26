@@ -54,7 +54,7 @@ export function DashboardView() {
 
   if (loading || !data) {
     return (
-      <div className="flex h-[60vh] items-center justify-center text-muted-foreground/70">
+      <div className="flex h-[60vh] items-center justify-center text-muted-foreground">
         <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
         加载中...
       </div>
@@ -67,7 +67,7 @@ export function DashboardView() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold text-foreground">生产看板</h1>
-          <p className="mt-0.5 text-xs text-muted-foreground/70">
+          <p className="mt-0.5 text-xs text-muted-foreground">
             数据更新于 {lastRefresh.toLocaleTimeString("zh-CN")} · 自动 30 秒刷新
           </p>
         </div>
@@ -132,7 +132,7 @@ export function DashboardView() {
               </CardTitle>
               <Badge
                 variant="outline"
-                className="border-orange-500/40 bg-orange-500/10 text-orange-400"
+                className="border-[var(--brand)]/40 bg-[var(--brand)]/10 text-[var(--brand)]"
               >
                 <TrendingUp className="mr-1 h-3 w-3" />
                 滚动
@@ -155,8 +155,8 @@ export function DashboardView() {
           </CardHeader>
           <CardContent className="pt-2 px-3 pb-3">
             <div className="grid grid-cols-[1fr_2.2fr] gap-x-2 gap-y-1 text-[11px]">
-              <div className="text-muted-foreground/70 font-medium pb-1 border-b border-border">工序</div>
-              <div className="grid grid-cols-3 gap-1 pb-1 border-b border-border text-muted-foreground/70 font-medium">
+              <div className="text-muted-foreground font-medium pb-1 border-b border-border">工序</div>
+              <div className="grid grid-cols-3 gap-1 pb-1 border-b border-border text-muted-foreground font-medium">
                 <span className="text-center">今日</span>
                 <span className="text-center">昨日</span>
                 <span className="text-center">本月</span>
@@ -164,12 +164,12 @@ export function DashboardView() {
               {data.processDefectStats.slice(0, 3).map((p) => {
                 const tone = (r: number) =>
                   r > 2
-                    ? "text-rose-400"
+                    ? "text-[var(--danger)]"
                     : r > 0.5
-                      ? "text-amber-400"
+                      ? "text-[var(--warning)]"
                       : r > 0
-                        ? "text-emerald-400"
-                        : "text-muted-foreground/50";
+                        ? "text-[var(--success)]"
+                        : "text-muted-foreground";
                 const fmtRate = (r: number) =>
                   r > 0 ? `${r.toFixed(2)}%` : "—";
                 const renderCell = (scrap: number, rate: number) => (
@@ -184,7 +184,7 @@ export function DashboardView() {
                 );
                 return (
                   <Fragment key={p.process}>
-                    <div className="text-foreground/80 truncate py-1.5 border-b border-border">
+                    <div className="text-foreground truncate py-1.5 border-b border-border">
                       {p.process}
                     </div>
                     <div className="grid grid-cols-3 gap-1 py-1 border-b border-border">
@@ -212,7 +212,7 @@ export function DashboardView() {
           <CardContent className="p-0">
             <div className="divide-y divide-border">
               {data.activeWorkOrders.length === 0 && (
-                <p className="px-4 py-6 text-center text-xs text-muted-foreground/70">
+                <p className="px-4 py-6 text-center text-xs text-muted-foreground">
                   暂无在制工单
                 </p>
               )}
@@ -222,32 +222,32 @@ export function DashboardView() {
                 return (
                   <div
                     key={wo.id}
-                    className="flex items-center gap-3 px-4 py-2.5 hover:bg-muted/60"
+                    className="flex items-center gap-3 px-4 py-2.5 hover:bg-muted"
                   >
                     <Badge
                       variant="outline"
-                      className="border-border bg-muted font-mono text-[10px] text-foreground/80"
+                      className="border-border bg-muted font-mono text-[10px] text-foreground"
                     >
                       {wo.line_code ?? "--"}
                     </Badge>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
-                        <span className="font-mono text-xs text-orange-400">
+                        <span className="font-mono text-xs text-[var(--brand)]">
                           {wo.order_no}
                         </span>
-                        <span className="truncate text-xs text-foreground/80">
+                        <span className="truncate text-xs text-foreground">
                           {wo.product_name}
                         </span>
                       </div>
-                      <div className="mt-0.5 flex items-center gap-2 text-[10px] text-muted-foreground/70">
+                      <div className="mt-0.5 flex items-center gap-2 text-[10px] text-muted-foreground">
                         <span className="font-mono">
                           {wo.completed_quantity.toLocaleString()} / {wo.quantity.toLocaleString()} 罐
                         </span>
                         <Progress
                           value={pct}
-                          className="h-1 flex-1 bg-muted [&>div]:bg-orange-500"
+                          className="h-1 flex-1 bg-muted [&>div]:bg-[var(--brand)]"
                         />
-                        <span className="font-mono text-muted-foreground">
+                        <span className="font-mono">
                           {pct.toFixed(0)}%
                         </span>
                       </div>
@@ -265,7 +265,7 @@ export function DashboardView() {
         <Card className="border-border bg-card">
           <CardHeader className="border-b border-border pb-2">
             <CardTitle className="flex items-center gap-2 text-sm font-medium text-foreground">
-              <AlertTriangle className="h-4 w-4 text-rose-400" />
+              <AlertTriangle className="h-4 w-4 text-[var(--danger)]" />
               最近不良事件
             </CardTitle>
           </CardHeader>
@@ -276,18 +276,18 @@ export function DashboardView() {
                   key={d.id}
                   className="flex items-center gap-3 px-4 py-2 text-xs"
                 >
-                  <span className="font-mono text-orange-400">{d.work_order_no}</span>
-                  <span className="text-foreground/80">{d.product_name}</span>
+                  <span className="font-mono text-[var(--brand)]">{d.work_order_no}</span>
+                  <span className="text-foreground">{d.product_name}</span>
                   <Badge
                     variant="outline"
                     className="border-border text-[10px] text-muted-foreground"
                   >
                     {d.line_name ?? "--"} · {d.process_name}
                   </Badge>
-                  <span className="font-mono text-rose-400">
+                  <span className="font-mono text-[var(--danger)]">
                     报废 {d.scrap_quantity}
                   </span>
-                  <span className="ml-auto font-mono text-[10px] text-muted-foreground/70">
+                  <span className="ml-auto font-mono text-[10px] text-muted-foreground">
                     {d.reported_at?.slice(0, 16).replace("T", " ")}
                   </span>
                 </div>

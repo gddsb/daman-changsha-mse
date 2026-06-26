@@ -59,9 +59,11 @@
     'Times New Roman', Times, serif;
 }
 
+/* ===========================================================
+ *  基础变量（fallback）
+ * =========================================================== */
 :root {
   --radius: 0.25rem;
-  /* 浅色 fallback（不实际使用，但 shadcn 组件需要这些变量存在） */
   --background: #0A0E1A;
   --foreground: #E8ECF4;
   --card: #111726;
@@ -101,9 +103,7 @@
 }
 
 /* ===========================================================
- *  5 套预设深色主题 — 工业管控台调性
- *  默认主题：mes-dark（工业橙，原始色）
- *  切换方式：html[data-theme="xxx"]
+ *  5 套深色主题 — 工业管控台调性
  * =========================================================== */
 
 /* 主题 1: 工业橙（默认）— 长沙大满品牌色 */
@@ -126,16 +126,17 @@ html[data-theme='mes-dark'] {
   --border: #1F2738;
   --input: #1F2738;
   --ring: #F97316;
-  --success: #22C55E;
-  --warning: #EAB308;
-  --info: #3B82F6;
-  --brand: #F97316;
-  --cyan: #06B6D4;
-  --chart-1: #06B6D4;
-  --chart-2: #22C55E;
-  --chart-3: #EAB308;
-  --chart-4: #F97316;
-  --chart-5: #EF4444;
+  --success: #4ADE80;
+  --warning: #FBBF24;
+  --danger: #FB7185;
+  --info: #60A5FA;
+  --brand: #FB923C;
+  --cyan: #22D3EE;
+  --chart-1: #22D3EE;
+  --chart-2: #4ADE80;
+  --chart-3: #FBBF24;
+  --chart-4: #FB923C;
+  --chart-5: #FB7185;
   --sidebar: #0A0E1A;
   --sidebar-foreground: #E8ECF4;
   --sidebar-primary: #F97316;
@@ -168,6 +169,7 @@ html[data-theme='mes-cyan'] {
   --ring: #38BDF8;
   --success: #34D399;
   --warning: #FBBF24;
+  --danger: #F87171;
   --info: #60A5FA;
   --brand: #38BDF8;
   --cyan: #22D3EE;
@@ -208,6 +210,7 @@ html[data-theme='mes-emerald'] {
   --ring: #10B981;
   --success: #22C55E;
   --warning: #FBBF24;
+  --danger: #F87171;
   --info: #38BDF8;
   --brand: #10B981;
   --cyan: #22D3EE;
@@ -248,6 +251,7 @@ html[data-theme='mes-crimson'] {
   --ring: #F43F5E;
   --success: #34D399;
   --warning: #FBBF24;
+  --danger: #FB7185;
   --info: #60A5FA;
   --brand: #F43F5E;
   --cyan: #22D3EE;
@@ -288,6 +292,7 @@ html[data-theme='mes-amber'] {
   --ring: #F59E0B;
   --success: #34D399;
   --warning: #FBBF24;
+  --danger: #FB7185;
   --info: #60A5FA;
   --brand: #F59E0B;
   --cyan: #22D3EE;
@@ -308,50 +313,56 @@ html[data-theme='mes-amber'] {
 
 /* ===========================================================
  *  浅色模式 — data-mode="light"
- *  5 套配色在浅色模式下复用同一套基底，仅 brand/primary 不同
+ *  5 套配色复用同一套基底，仅 brand/primary 及强调色不同
  * =========================================================== */
 
+/* 浅色基底 */
 html[data-mode='light'] {
   --background: #FFFFFF;
-  --foreground: #1F2937;
-  --card: #F9FAFB;
-  --card-foreground: #1F2937;
+  --foreground: #111827;
+  --card: #F8FAFC;
+  --card-foreground: #111827;
   --popover: #FFFFFF;
-  --popover-foreground: #1F2937;
-  --secondary: #F3F4F6;
-  --secondary-foreground: #374151;
-  --muted: #F3F4F6;
-  --muted-foreground: #6B7280;
-  --accent: #F3F4F6;
-  --accent-foreground: #374151;
-  --destructive: #EF4444;
-  --border: #E5E7EB;
-  --input: #E5E7EB;
-  --success: #22C55E;
-  --warning: #EAB308;
-  --info: #3B82F6;
-  --cyan: #06B6D4;
-  --chart-1: #06B6D4;
-  --chart-2: #22C55E;
-  --chart-3: #EAB308;
-  --chart-4: #F97316;
-  --chart-5: #EF4444;
-  --sidebar: #F9FAFB;
-  --sidebar-foreground: #1F2937;
-  --sidebar-accent: #F3F4F6;
-  --sidebar-accent-foreground: #374151;
-  --sidebar-border: #E5E7EB;
+  --popover-foreground: #111827;
+  --primary: #F97316;
+  --primary-foreground: #FFFFFF;
+  --secondary: #F1F5F9;
+  --secondary-foreground: #334155;
+  --muted: #F1F5F9;
+  --muted-foreground: #475569;
+  --accent: #F1F5F9;
+  --accent-foreground: #334155;
+  --destructive: #DC2626;
+  --border: #E2E8F0;
+  --input: #E2E8F0;
+  --ring: #F97316;
+  --success: #15803D;
+  --warning: #B45309;
+  --danger: #BE123C;
+  --info: #1D4ED8;
+  --brand: #C2410C;
+  --cyan: #0891B2;
+  --chart-1: #0891B2;
+  --chart-2: #15803D;
+  --chart-3: #B45309;
+  --chart-4: #C2410C;
+  --chart-5: #BE123C;
+  --sidebar: #F8FAFC;
+  --sidebar-foreground: #111827;
+  --sidebar-accent: #F1F5F9;
+  --sidebar-accent-foreground: #334155;
+  --sidebar-border: #E2E8F0;
 }
 
 /* 浅色 + 工业橙（默认） */
 html[data-mode='light'][data-theme='mes-dark'] {
-  --primary: #F97316;
+  --primary: #EA580C;
   --primary-foreground: #FFFFFF;
-  --ring: #F97316;
-  --brand: #F97316;
-  --sidebar-primary: #F97316;
+  --ring: #EA580C;
+  --brand: #C2410C;
+  --sidebar-primary: #EA580C;
   --sidebar-primary-foreground: #FFFFFF;
-  --sidebar-ring: #F97316;
+  --sidebar-ring: #EA580C;
 }
 
 /* 浅色 + 冰蓝 */
@@ -359,7 +370,7 @@ html[data-mode='light'][data-theme='mes-cyan'] {
   --primary: #0284C7;
   --primary-foreground: #FFFFFF;
   --ring: #0284C7;
-  --brand: #0284C7;
+  --brand: #0369A1;
   --sidebar-primary: #0284C7;
   --sidebar-primary-foreground: #FFFFFF;
   --sidebar-ring: #0284C7;
@@ -370,7 +381,7 @@ html[data-mode='light'][data-theme='mes-emerald'] {
   --primary: #059669;
   --primary-foreground: #FFFFFF;
   --ring: #059669;
-  --brand: #059669;
+  --brand: #047857;
   --sidebar-primary: #059669;
   --sidebar-primary-foreground: #FFFFFF;
   --sidebar-ring: #059669;
@@ -381,7 +392,7 @@ html[data-mode='light'][data-theme='mes-crimson'] {
   --primary: #E11D48;
   --primary-foreground: #FFFFFF;
   --ring: #E11D48;
-  --brand: #E11D48;
+  --brand: #BE123C;
   --sidebar-primary: #E11D48;
   --sidebar-primary-foreground: #FFFFFF;
   --sidebar-ring: #E11D48;
@@ -392,7 +403,7 @@ html[data-mode='light'][data-theme='mes-amber'] {
   --primary: #D97706;
   --primary-foreground: #FFFFFF;
   --ring: #D97706;
-  --brand: #D97706;
+  --brand: #B45309;
   --sidebar-primary: #D97706;
   --sidebar-primary-foreground: #FFFFFF;
   --sidebar-ring: #D97706;

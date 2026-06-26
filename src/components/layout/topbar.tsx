@@ -55,12 +55,12 @@ export function Topbar() {
       {/* 右侧操作 */}
       <div className="flex items-center gap-3">
         {syncMsg && (
-          <span className="text-xs text-emerald-400">{syncMsg}</span>
+          <span className="text-xs text-[var(--success)]">{syncMsg}</span>
         )}
         <button
           onClick={handleU9Sync}
           disabled={syncing}
-          className="flex items-center gap-1.5 border border-border bg-card px-3 py-1.5 text-xs text-muted-foreground transition hover:border-amber-500/60 hover:text-foreground disabled:opacity-50"
+          className="flex items-center gap-1.5 border border-border bg-card px-3 py-1.5 text-xs text-muted-foreground transition hover:border-[var(--warning)] hover:text-foreground disabled:opacity-50"
         >
           <RefreshCcw className={`h-3.5 w-3.5 ${syncing ? 'animate-spin' : ''}`} />
           {syncing ? '同步中...' : '同步 U9'}
